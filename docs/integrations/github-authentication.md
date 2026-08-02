@@ -49,7 +49,7 @@ Accept: application/vnd.github+json
 
 Thiết lập trong Postman: tab **Authorization** → **Auth Type = Bearer Token** → token lưu trong biến environment, không gõ token thật vào file/collection rồi commit.
 
- ![Kết quả xác thực GitHub API thành công](./docs/integrations/assets/github-response.png)
+ ![Kết quả xác thực GitHub API thành công](./assets/github-response.png)
 
 ## 6. Lỗi xác thực thường gặp
 
