@@ -1,0 +1,38 @@
+# Java
+*.class
+*.jar
+*.war
+
+# Maven
+target/
+
+# Gradle
+.gradle/
+build/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+out/
+
+# Eclipse
+.project
+.classpath
+.settings/
+
+# VS Code
+.vscode/
+
+# Environment and secrets
+.env
+.env.*
+application-local.properties
+application-local.yml
+
+# Logs
+*.log
+logs/
+
+# Operating system
+.DS_Store
+Thumbs.db
