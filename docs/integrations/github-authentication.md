@@ -10,10 +10,10 @@
 
 1. GitHub → **Settings → Developer settings → Personal access tokens**.
 2. Chọn **Fine-grained tokens** (khuyến nghị) → *Generate new token*.
-3. Đặt **Expiration** (bắt buộc có hạn, tránh "No expiration").
+3. Đặt **Expiration** (Khuyến nghị đặt Expiration, tránh "No expiration").
 4. Chọn **Repository access** (repo cụ thể cần tích hợp) và **Permissions** cần dùng.
 5. **Generate token** → token chỉ hiện **một lần**, phải lưu ngay.
-6. Dùng Postman: tab **Authorization** → **Auth Type: Bearer Token** → dán token vào ô Token.
+6. Dùng Postman: tab Authorization: Bearer {{github_token}} → dán token vào ô Token.
 
 **Fine-grained vs Classic token:**
 
