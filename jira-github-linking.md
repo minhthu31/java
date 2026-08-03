@@ -112,7 +112,7 @@ CNPM-30 Refactor authentication service
 
 ### Mô tả Pull Request
 
-Mỗi Pull Request nên bao gồm các nội dung sau:
+Mỗi Pull Request phải bao gồm các nội dung sau:
 
 **Jira Issue**
 ```
@@ -182,3 +182,15 @@ Không được tự động gán commit vào bất kỳ Jira Issue nào khi kh�
 | PR Title | `CNPM-15 Complete login feature` | `Complete login feature` |
 | Issue Key | `CNPM-15` | `CNPM15`, `cnpm-15`, `#15` |
 
+## 8. Phạm vi áp dụng
+
+Quy ước này áp dụng cho toàn bộ thành viên của nhóm phát triển kể từ thời điểm được Team Leader và các thành viên thống nhất thông qua.
+
+Mọi branch, commit message và Pull Request được tạo sau thời điểm áp dụng đều phải tuân thủ các quy ước được quy định trong tài liệu này nhằm:
+
+- Đảm bảo khả năng liên kết chính xác giữa GitHub và Jira.
+- Thống nhất cách đặt tên và quản lý mã nguồn trong toàn nhóm.
+- Hỗ trợ theo dõi tiến độ, truy vết thay đổi và kiểm tra lịch sử phát triển.
+- Tăng tính nhất quán trong quá trình review, kiểm thử và triển khai.
+
+Trong trường hợp cần thay đổi hoặc bổ sung quy ước, các nội dung mới phải được Team Leader và các thành viên thống nhất trước khi áp dụng.
