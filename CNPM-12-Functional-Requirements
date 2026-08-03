@@ -1,42 +1,24 @@
 # Functional Requirements – Hệ thống quản lý dự án
 
-## 1. Mục tiêu
-
-Xác định và mô tả các Functional Requirements của Hệ thống quản lý dự án.
-
-Hệ thống được xây dựng nhằm hỗ trợ nhóm dự án quản lý tập trung thông tin dự án, thành viên, công việc, tiến độ, tài liệu và báo cáo. Bên cạnh đó, hệ thống có các chức năng liên quan đến Jira và GitHub, đặc biệt là liên kết và đồng bộ thông tin công việc giữa quá trình quản lý trên Jira và quá trình phát triển trên GitHub.
-
-## 2. Yêu cầu thực hiện
-
-- Xác định các chức năng mà hệ thống phải cung cấp.
-- Hệ thống hỗ trợ quản lý dự án, thành viên và công việc.
-- Hệ thống hỗ trợ các chức năng liên quan đến Jira và GitHub.
-- Hệ thống hỗ trợ đồng bộ công việc giữa Jira và GitHub.
-- Hệ thống hỗ trợ quản lý báo cáo dự án.
-- Hệ thống hỗ trợ quản lý tài liệu SRS.
-- Nội dung phải bám đúng phạm vi của đề tài Hệ thống quản lý dự án.
-
-## 3. Functional Requirements
-
-### FR-01 – Đăng nhập hệ thống
+## FR-01 – Đăng nhập hệ thống
 
 **Tên yêu cầu:** Đăng nhập hệ thống.
 
 **Mô tả yêu cầu:**  
-Hệ thống cho phép người dùng đăng nhập bằng tài khoản đã được đăng ký hoặc được cấp quyền. Sau khi đăng nhập thành công, hệ thống xác định vai trò của người dùng và cung cấp các chức năng phù hợp với quyền hạn.
+Hệ thống cho phép người dùng đăng nhập bằng tài khoản đã được cấp. Sau khi đăng nhập thành công, hệ thống xác định vai trò của người dùng và hiển thị các chức năng tương ứng với quyền hạn của từng Actor.
 
-**Actor liên quan:** Admin, Project Manager, Thành viên dự án.
+**Actor liên quan:** Admin, Lecturer, Team Leader, Team Member.
 
 **Mức độ ưu tiên:** Cao.
 
 ---
 
-### FR-02 – Quản lý tài khoản và phân quyền
+## FR-02 – Quản lý tài khoản và phân quyền
 
 **Tên yêu cầu:** Quản lý tài khoản và phân quyền người dùng.
 
 **Mô tả yêu cầu:**  
-Hệ thống cho phép Admin quản lý tài khoản người dùng, bao gồm tạo, cập nhật, khóa hoặc mở khóa tài khoản. Hệ thống phân quyền người dùng theo vai trò để đảm bảo mỗi người chỉ được sử dụng các chức năng phù hợp.
+Hệ thống cho phép Admin tạo, cập nhật, khóa hoặc mở khóa tài khoản người dùng. Admin có thể phân quyền người dùng theo từng vai trò để đảm bảo mỗi Actor chỉ sử dụng được các chức năng được cấp phép.
 
 **Actor liên quan:** Admin.
 
@@ -44,225 +26,222 @@ Hệ thống cho phép Admin quản lý tài khoản người dùng, bao gồm t
 
 ---
 
-### FR-03 – Quản lý dự án
+## FR-03 – Quản lý nhóm sinh viên
 
-**Tên yêu cầu:** Tạo và quản lý thông tin dự án.
+**Tên yêu cầu:** Quản lý nhóm sinh viên.
 
 **Mô tả yêu cầu:**  
-Project Manager có thể tạo dự án mới, cập nhật thông tin dự án và theo dõi trạng thái của dự án. Thông tin có thể bao gồm tên dự án, mã dự án, mô tả, thời gian bắt đầu, thời gian kết thúc dự kiến và trạng thái.
+Hệ thống cho phép Admin tạo, cập nhật và quản lý các nhóm sinh viên. Admin có thể phân công giảng viên phụ trách cho từng nhóm.
 
-**Actor liên quan:** Project Manager.
+**Actor liên quan:** Admin.
 
 **Mức độ ưu tiên:** Cao.
 
 ---
 
-### FR-04 – Quản lý thành viên
+## FR-04 – Quản lý thành viên nhóm
 
-**Tên yêu cầu:** Quản lý thành viên tham gia dự án.
+**Tên yêu cầu:** Quản lý thành viên trong nhóm.
 
 **Mô tả yêu cầu:**  
-Project Manager có thể thêm thành viên vào dự án, cập nhật vai trò hoặc loại bỏ thành viên khi cần. Hệ thống hiển thị danh sách thành viên và vai trò của từng người trong dự án.
+Lecturer có thể xem và quản lý danh sách sinh viên trong các nhóm được phân công. Hệ thống hiển thị đầy đủ thông tin của từng thành viên trong nhóm.
 
-**Actor liên quan:** Project Manager.
+**Actor liên quan:** Lecturer.
 
 **Mức độ ưu tiên:** Cao.
 
 ---
 
-### FR-05 – Quản lý công việc
+## FR-05 – Quản lý Requirement
 
-**Tên yêu cầu:** Tạo và quản lý công việc của dự án.
+**Tên yêu cầu:** Quản lý Requirement.
 
 **Mô tả yêu cầu:**  
-Hệ thống cho phép tạo công việc và quản lý các thông tin như mã công việc, tên công việc, mô tả, người thực hiện, thời hạn, mức độ ưu tiên và trạng thái.
+Team Leader có thể tạo, chỉnh sửa và xóa Requirement của nhóm. Requirement là cơ sở để tạo và quản lý các Task.
 
-**Actor liên quan:** Project Manager, Thành viên dự án.
+**Actor liên quan:** Team Leader.
 
 **Mức độ ưu tiên:** Cao.
 
 ---
 
-### FR-06 – Phân công công việc
+## FR-06 – Quản lý Task
 
-**Tên yêu cầu:** Phân công công việc cho thành viên.
+**Tên yêu cầu:** Quản lý Task.
 
 **Mô tả yêu cầu:**  
-Project Manager có thể phân công công việc cho thành viên phù hợp. Thành viên có thể xem nội dung, thời hạn, mức độ ưu tiên và các yêu cầu liên quan đến công việc được giao.
+Team Leader có thể tạo, chỉnh sửa và xóa Task. Mỗi Task bao gồm tên, mô tả, người thực hiện, thời hạn, mức độ ưu tiên và trạng thái.
 
-**Actor liên quan:** Project Manager, Thành viên dự án.
+**Actor liên quan:** Team Leader.
 
 **Mức độ ưu tiên:** Cao.
 
 ---
 
-### FR-07 – Theo dõi trạng thái công việc
+## FR-07 – Phân công Task
 
-**Tên yêu cầu:** Cập nhật và theo dõi trạng thái công việc.
+**Tên yêu cầu:** Phân công Task.
 
 **Mô tả yêu cầu:**  
-Thành viên có thể cập nhật trạng thái công việc trong quá trình thực hiện. Hệ thống hỗ trợ theo dõi các trạng thái như To Do, In Progress, In Review và Done. Project Manager có thể theo dõi tình trạng công việc để đánh giá tiến độ dự án.
+Team Leader có thể phân công Task cho Team Member. Thành viên được giao có thể xem đầy đủ thông tin của Task.
 
-**Actor liên quan:** Thành viên dự án, Project Manager.
+**Actor liên quan:** Team Leader.
 
 **Mức độ ưu tiên:** Cao.
 
 ---
 
-### FR-08 – Quản lý công việc trên Jira
+## FR-08 – Cập nhật trạng thái Task
 
-**Tên yêu cầu:** Liên kết công việc của hệ thống với Jira.
+**Tên yêu cầu:** Cập nhật trạng thái Task.
 
 **Mô tả yêu cầu:**  
-Hệ thống cho phép liên kết công việc của dự án với issue tương ứng trên Jira. Các thông tin như mã issue, tiêu đề, trạng thái và người thực hiện được sử dụng để xác định mối quan hệ giữa công việc trong hệ thống và Jira.
+Team Leader và Team Member có thể cập nhật trạng thái Task như To Do, In Progress, In Review và Done.
 
-**Actor liên quan:** Project Manager, Thành viên dự án, Jira.
+**Actor liên quan:** Team Leader, Team Member.
 
 **Mức độ ưu tiên:** Cao.
 
 ---
 
-### FR-09 – Kết nối Jira và GitHub
+## FR-09 – Cấu hình kết nối Jira
 
-**Tên yêu cầu:** Thiết lập kết nối giữa Jira và GitHub.
+**Tên yêu cầu:** Cấu hình kết nối Jira.
 
 **Mô tả yêu cầu:**  
-Hệ thống cho phép thiết lập kết nối giữa dự án trên Jira và repository tương ứng trên GitHub. Khi kết nối thành công, hệ thống có thể sử dụng thông tin từ hai nền tảng để phục vụ việc liên kết và theo dõi công việc.
+Admin có thể thiết lập và quản lý kết nối giữa hệ thống với Jira thông qua API để phục vụ việc đồng bộ dữ liệu.
 
-**Actor liên quan:** Project Manager, Admin, Jira, GitHub.
+**Actor liên quan:** Admin.
 
 **Mức độ ưu tiên:** Cao.
 
 ---
 
-### FR-10 – Đồng bộ công việc giữa Jira và GitHub
+## FR-10 – Cấu hình kết nối GitHub
 
-**Tên yêu cầu:** Đồng bộ thông tin công việc giữa Jira và GitHub.
+**Tên yêu cầu:** Cấu hình kết nối GitHub.
 
 **Mô tả yêu cầu:**  
-Hệ thống hỗ trợ liên kết công việc trên Jira với hoạt động phát triển trên GitHub thông qua mã công việc hoặc thông tin liên kết phù hợp. Các hoạt động như tạo branch, commit hoặc Pull Request có thể được liên kết với công việc tương ứng.
+Admin có thể thiết lập và quản lý kết nối giữa hệ thống với GitHub để phục vụ việc theo dõi và đồng bộ dữ liệu.
 
-Chức năng này giúp kết nối quá trình quản lý công việc với quá trình phát triển phần mềm và giúp nhóm theo dõi tiến độ thuận tiện hơn.
-
-**Actor liên quan:** Project Manager, Thành viên dự án, Jira, GitHub.
+**Actor liên quan:** Admin.
 
 **Mức độ ưu tiên:** Cao.
 
 ---
 
-### FR-11 – Liên kết Commit với công việc
+## FR-11 – Đồng bộ Jira
 
-**Tên yêu cầu:** Theo dõi Commit liên quan đến công việc.
+**Tên yêu cầu:** Đồng bộ dữ liệu Jira.
 
 **Mô tả yêu cầu:**  
-Hệ thống cho phép liên kết các commit trên GitHub với công việc tương ứng trong dự án hoặc issue Jira. Thông tin commit có thể bao gồm mã commit, người thực hiện, thời gian và nội dung commit.
+Team Leader có thể đồng bộ Requirement và Task giữa hệ thống và Jira nhằm đảm bảo dữ liệu luôn được cập nhật.
 
-**Actor liên quan:** Thành viên dự án, Project Manager, GitHub.
+**Actor liên quan:** Team Leader.
 
 **Mức độ ưu tiên:** Cao.
 
 ---
 
-### FR-12 – Liên kết Pull Request với công việc
+## FR-12 – Đồng bộ GitHub
 
-**Tên yêu cầu:** Theo dõi Pull Request liên quan đến công việc.
+**Tên yêu cầu:** Đồng bộ dữ liệu GitHub.
 
 **Mô tả yêu cầu:**  
-Hệ thống cho phép liên kết Pull Request trên GitHub với công việc tương ứng. Thông tin Pull Request giúp người dùng theo dõi thay đổi mã nguồn, người thực hiện và công việc có liên quan.
+Team Leader có thể đồng bộ Commit, Branch và Pull Request từ GitHub về hệ thống.
 
-**Actor liên quan:** Thành viên dự án, Project Manager, GitHub.
+**Actor liên quan:** Team Leader.
 
 **Mức độ ưu tiên:** Cao.
 
 ---
 
-### FR-13 – Quản lý Repository và Branch
+## FR-13 – Theo dõi Commit GitHub
 
-**Tên yêu cầu:** Quản lý thông tin Repository và Branch liên quan đến dự án.
+**Tên yêu cầu:** Theo dõi Commit GitHub.
 
 **Mô tả yêu cầu:**  
-Hệ thống cho phép lưu trữ hoặc liên kết repository GitHub tương ứng với dự án. Các branch được sử dụng để phát triển chức năng hoặc xử lý công việc có thể được liên kết với công việc tương ứng.
+Hệ thống hiển thị danh sách Commit liên quan đến từng Task và thống kê số lượng Commit của từng thành viên.
 
-**Actor liên quan:** Thành viên dự án, Project Manager, GitHub.
+**Actor liên quan:** Admin, Lecturer, Team Leader, Team Member.
+
+**Mức độ ưu tiên:** Cao.
+
+---
+
+## FR-14 – Commit mã nguồn lên GitHub
+
+**Tên yêu cầu:** Commit mã nguồn lên GitHub.
+
+**Mô tả yêu cầu:**  
+Team Leader và Team Member có thể Commit mã nguồn lên GitHub. Hệ thống ghi nhận thông tin Commit phục vụ việc theo dõi tiến độ.
+
+**Actor liên quan:** Team Leader, Team Member.
+
+**Mức độ ưu tiên:** Cao.
+
+---
+
+## FR-15 – Theo dõi tiến độ dự án
+
+**Tên yêu cầu:** Theo dõi tiến độ dự án.
+
+**Mô tả yêu cầu:**  
+Hệ thống hiển thị tiến độ thực hiện dự án dựa trên trạng thái Requirement, Task và dữ liệu đồng bộ từ Jira, GitHub.
+
+**Actor liên quan:** Admin, Lecturer, Team Leader, Team Member.
+
+**Mức độ ưu tiên:** Cao.
+
+---
+
+## FR-16 – Xem báo cáo tiến độ
+
+**Tên yêu cầu:** Xem báo cáo tiến độ.
+
+**Mô tả yêu cầu:**  
+Hệ thống cung cấp báo cáo tổng hợp về tiến độ dự án, bao gồm tỷ lệ hoàn thành Task, Requirement và thống kê Commit GitHub.
+
+**Actor liên quan:** Admin, Lecturer, Team Leader.
+
+**Mức độ ưu tiên:** Cao.
+
+---
+
+## FR-17 – Xem thống kê Commit GitHub
+
+**Tên yêu cầu:** Xem thống kê Commit GitHub.
+
+**Mô tả yêu cầu:**  
+Hệ thống thống kê số lượng Commit theo thành viên, theo nhóm và theo khoảng thời gian nhằm hỗ trợ đánh giá tiến độ thực hiện dự án.
+
+**Actor liên quan:** Admin, Lecturer, Team Leader, Team Member.
+
+**Mức độ ưu tiên:** Cao.
+
+---
+
+## FR-18 – Kiểm tra trạng thái kết nối
+
+**Tên yêu cầu:** Kiểm tra trạng thái kết nối Jira và GitHub.
+
+**Mô tả yêu cầu:**  
+Admin có thể kiểm tra trạng thái kết nối giữa hệ thống với Jira và GitHub, đồng thời xem các thông báo lỗi nếu có.
+
+**Actor liên quan:** Admin.
 
 **Mức độ ưu tiên:** Trung bình.
 
 ---
 
-### FR-14 – Quản lý báo cáo
+## FR-19 – Theo dõi lịch sử hoạt động
 
-**Tên yêu cầu:** Tạo và quản lý báo cáo dự án.
-
-**Mô tả yêu cầu:**  
-Hệ thống hỗ trợ quản lý các báo cáo liên quan đến dự án. Báo cáo có thể thể hiện tiến độ, số lượng công việc, công việc đã hoàn thành, công việc đang thực hiện và các vấn đề cần xử lý.
-
-**Actor liên quan:** Project Manager, Thành viên dự án.
-
-**Mức độ ưu tiên:** Cao.
-
----
-
-### FR-15 – Quản lý tài liệu SRS
-
-**Tên yêu cầu:** Quản lý tài liệu Software Requirements Specification.
+**Tên yêu cầu:** Theo dõi lịch sử hoạt động.
 
 **Mô tả yêu cầu:**  
-Hệ thống hỗ trợ quản lý và liên kết tài liệu SRS của dự án. Tài liệu SRS mô tả các yêu cầu của hệ thống và là cơ sở để nhóm phát triển, kiểm thử và đánh giá sản phẩm.
+Hệ thống lưu lại lịch sử các thao tác như tạo Requirement, tạo Task, phân công Task, cập nhật trạng thái Task, đồng bộ Jira/GitHub và Commit mã nguồn nhằm phục vụ việc theo dõi và kiểm tra.
 
-**Actor liên quan:** Project Manager, Thành viên dự án.
-
-**Mức độ ưu tiên:** Cao.
-
----
-
-### FR-16 – Theo dõi tiến độ dự án
-
-**Tên yêu cầu:** Theo dõi tiến độ tổng thể của dự án.
-
-**Mô tả yêu cầu:**  
-Hệ thống cung cấp thông tin tổng quan về tiến độ dự án dựa trên trạng thái của các công việc. Project Manager có thể xem số lượng công việc đã hoàn thành, đang thực hiện, chưa bắt đầu hoặc đang chờ xử lý.
-
-**Actor liên quan:** Project Manager.
-
-**Mức độ ưu tiên:** Cao.
-
----
-
-### FR-17 – Kiểm tra trạng thái đồng bộ
-
-**Tên yêu cầu:** Kiểm tra trạng thái đồng bộ Jira và GitHub.
-
-**Mô tả yêu cầu:**  
-Hệ thống cho phép người dùng có quyền kiểm tra tình trạng kết nối và đồng bộ giữa Jira và GitHub. Hệ thống thể hiện trạng thái kết nối thành công, đang đồng bộ hoặc xảy ra lỗi.
-
-**Actor liên quan:** Project Manager, Admin, Jira, GitHub.
-
-**Mức độ ưu tiên:** Cao.
-
----
-
-### FR-18 – Xử lý lỗi đồng bộ
-
-**Tên yêu cầu:** Xử lý lỗi trong quá trình đồng bộ.
-
-**Mô tả yêu cầu:**  
-Khi xảy ra lỗi trong quá trình kết nối hoặc đồng bộ giữa Jira và GitHub, hệ thống ghi nhận trạng thái lỗi và thông báo cho người dùng có liên quan. Lỗi có thể liên quan đến kết nối, xác thực, repository hoặc dữ liệu không hợp lệ.
-
-**Actor liên quan:** Admin, Project Manager, Jira, GitHub.
+**Actor liên quan:** Admin, Team Leader.
 
 **Mức độ ưu tiên:** Trung bình.
 
----
-
-### FR-19 – Theo dõi lịch sử hoạt động
-
-**Tên yêu cầu:** Theo dõi lịch sử hoạt động của dự án.
-
-**Mô tả yêu cầu:**  
-Hệ thống lưu lại các hoạt động quan trọng như tạo hoặc cập nhật công việc, thay đổi trạng thái, phân công người thực hiện và các hoạt động liên quan đến GitHub. Lịch sử giúp người quản lý kiểm tra quá trình thực hiện dự án.
-
-**Actor liên quan:** Project Manager, Admin.
-
-**Mức độ ưu tiên:** Trung bình.
-
----
