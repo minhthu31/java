@@ -12,7 +12,7 @@
     - Nhiệm vụ
         + Quản lý tài khoản người dùng.
         + Quản lý danh sách giảng viên.
-        + Quản lý nhóm sinh viên.
+        + Quản lý nhóm sinh viên. 
         + Phân công giảng viên cho từng nhóm.
         + Thiết lập và quản lý kết nối Jira.
         + Thiết lập và quản lý kết nối GitHub.
@@ -21,14 +21,14 @@
     - Quyền hạn
         + Toàn quyền quản trị hệ thống.
         + Có thể xem, thêm, sửa, xóa dữ liệu quản trị.
-        + Có quyền truy cập mọi thông tin của hệ thống.
+        + Có quyền quản trị và cấu hình hệ thống.
 - Lecturer
     + Nhiệm vụ
-        + Quản lý sinh viên trong các nhóm
+        + Xem danh sách sinh viên trong các nhóm được phân công.
         + Xem danh sách Requirement của nhóm
         + Xem danh sách Task của nhóm
         + Theo dõi tiến độ thực hiện dự án
-        + Xem báo cáo bà thống kê tiến bộ dự án qua commit GitHub
+        + Xem báo cáo tiến độ và thống kê commit GitHub.
     + Quyền hạn
         + Chỉ được xem dữ liệu của các nhóm phụ trách.
         + Không được tạo hoặc chỉnh sửa cấu hình hệ thống.
@@ -43,7 +43,7 @@
         + Theo dõi báo cáo tiến độ của nhóm.
     + Quyền hạn
         + Chỉ được quản lý các nhóm được phân công
-        + Chỉ được thao tác trên dữ liệu trên dữ liệu của nhóm 
+        + Chỉ được thao tác trên dữ liệu của nhóm.
         + Được phép quản lý Requirement, Task của nhóm
 - Team Member
     + Nhiệm vụ
@@ -61,11 +61,11 @@
 
 # Actor – Permission Matrix
 | Chức năng                     | Admin | Lecturer | Team Leader | Team Member |
-| ----------------------------- | ----- | -------- | ----------- | ----------- |
+|-------------------------------| ----- | -------- | ----------- | ----------- |
 | Đăng nhập hệ thống            | Y     | Y        | Y           | Y           |
 | Quản lý tài khoản             | Y     | N        | N           | N           |
 | Quản lý giảng viên            | Y     | N        | N           | N           |
-| Quản lý nhóm sinh viên        | Y     | N        | N           | N           |
+| Quản lý sinh viên             | Y     | N        | N           | N           |
 | Gán giảng viên cho nhóm       | Y     | N        | N           | N           |
 | Cấu hình Jira                 | Y     | N        | N           | N           |
 | Cấu hình GitHub               | Y     | N        | N           | N           |
@@ -88,7 +88,7 @@
 1. Admin
     + Đăng nhập.
     + Quản lý tài khoản giảng viên.
-    + Quản lý nhóm sinh viên.
+    + Quản lý nhóm sinh viên. 
     + Gán giảng viên cho nhóm.
     + Cấu hình tích hợp GitHub.
     + Cấu hình tích hợp Jira.
