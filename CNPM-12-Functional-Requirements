@@ -1,247 +1,227 @@
 # Functional Requirements – Hệ thống quản lý dự án
 
 ## FR-01 – Đăng nhập hệ thống
+**Tên yêu cầu:** Đăng nhập hệ thống
 
-**Tên yêu cầu:** Đăng nhập hệ thống.
+**Mô tả yêu cầu:**
+Hệ thống cho phép người dùng đăng nhập bằng tài khoản đã được cấp. Sau khi đăng nhập thành công, hệ thống xác thực thông tin người dùng, xác định vai trò và hiển thị các chức năng tương ứng với quyền của từng Actor.
 
-**Mô tả yêu cầu:**  
-Hệ thống cho phép người dùng đăng nhập bằng tài khoản đã được cấp. Sau khi đăng nhập thành công, hệ thống xác định vai trò của người dùng và hiển thị các chức năng tương ứng với quyền hạn của từng Actor.
+**Actor:** Admin, Lecturer, Team Leader, Team Member
 
-**Actor liên quan:** Admin, Lecturer, Team Leader, Team Member.
-
-**Mức độ ưu tiên:** Cao.
+**Mức độ ưu tiên:** Cao
 
 ---
 
 ## FR-02 – Quản lý tài khoản và phân quyền
+**Tên yêu cầu:** Quản lý tài khoản và phân quyền
 
-**Tên yêu cầu:** Quản lý tài khoản và phân quyền người dùng.
+**Mô tả yêu cầu:**
+Admin có thể tạo, cập nhật, khóa, mở khóa tài khoản và phân quyền người dùng theo từng vai trò.
 
-**Mô tả yêu cầu:**  
-Hệ thống cho phép Admin tạo, cập nhật, khóa hoặc mở khóa tài khoản người dùng. Admin có thể phân quyền người dùng theo từng vai trò để đảm bảo mỗi Actor chỉ sử dụng được các chức năng được cấp phép.
+**Actor:** Admin
 
-**Actor liên quan:** Admin.
-
-**Mức độ ưu tiên:** Cao.
+**Mức độ ưu tiên:** Cao
 
 ---
 
 ## FR-03 – Quản lý nhóm sinh viên
+**Tên yêu cầu:** Quản lý nhóm sinh viên
 
-**Tên yêu cầu:** Quản lý nhóm sinh viên.
+**Mô tả yêu cầu:**
+Admin tạo, chỉnh sửa, xóa và quản lý các nhóm sinh viên; phân công giảng viên phụ trách cho từng nhóm.
 
-**Mô tả yêu cầu:**  
-Hệ thống cho phép Admin tạo, cập nhật và quản lý các nhóm sinh viên. Admin có thể phân công giảng viên phụ trách cho từng nhóm.
+**Actor:** Admin
 
-**Actor liên quan:** Admin.
-
-**Mức độ ưu tiên:** Cao.
+**Mức độ ưu tiên:** Cao
 
 ---
 
 ## FR-04 – Quản lý thành viên nhóm
+**Tên yêu cầu:** Quản lý thành viên nhóm
 
-**Tên yêu cầu:** Quản lý thành viên trong nhóm.
+**Mô tả yêu cầu:**
+Lecturer xem danh sách thành viên của các nhóm được phân công và theo dõi thông tin của từng sinh viên.
 
-**Mô tả yêu cầu:**  
-Lecturer có thể xem và quản lý danh sách sinh viên trong các nhóm được phân công. Hệ thống hiển thị đầy đủ thông tin của từng thành viên trong nhóm.
+**Actor:** Lecturer
 
-**Actor liên quan:** Lecturer.
-
-**Mức độ ưu tiên:** Cao.
+**Mức độ ưu tiên:** Cao
 
 ---
 
 ## FR-05 – Quản lý Requirement
+**Tên yêu cầu:** Quản lý Requirement
 
-**Tên yêu cầu:** Quản lý Requirement.
+**Mô tả yêu cầu:**
+Team Leader tạo, cập nhật, chỉnh sửa và xóa Requirement của dự án.
 
-**Mô tả yêu cầu:**  
-Team Leader có thể tạo, chỉnh sửa và xóa Requirement của nhóm. Requirement là cơ sở để tạo và quản lý các Task.
+**Actor:** Team Leader
 
-**Actor liên quan:** Team Leader.
-
-**Mức độ ưu tiên:** Cao.
+**Mức độ ưu tiên:** Cao
 
 ---
 
 ## FR-06 – Quản lý Task
+**Tên yêu cầu:** Quản lý Task
 
-**Tên yêu cầu:** Quản lý Task.
+**Mô tả yêu cầu:**
+Team Leader tạo, chỉnh sửa, xóa Task và thiết lập tên, mô tả, người thực hiện, thời hạn, mức ưu tiên và trạng thái.
 
-**Mô tả yêu cầu:**  
-Team Leader có thể tạo, chỉnh sửa và xóa Task. Mỗi Task bao gồm tên, mô tả, người thực hiện, thời hạn, mức độ ưu tiên và trạng thái.
+**Actor:** Team Leader
 
-**Actor liên quan:** Team Leader.
-
-**Mức độ ưu tiên:** Cao.
+**Mức độ ưu tiên:** Cao
 
 ---
 
 ## FR-07 – Phân công Task
+**Tên yêu cầu:** Phân công Task
 
-**Tên yêu cầu:** Phân công Task.
+**Mô tả yêu cầu:**
+Team Leader phân công Task cho Team Member và theo dõi người thực hiện.
 
-**Mô tả yêu cầu:**  
-Team Leader có thể phân công Task cho Team Member. Thành viên được giao có thể xem đầy đủ thông tin của Task.
+**Actor:** Team Leader
 
-**Actor liên quan:** Team Leader.
-
-**Mức độ ưu tiên:** Cao.
+**Mức độ ưu tiên:** Cao
 
 ---
 
 ## FR-08 – Cập nhật trạng thái Task
+**Tên yêu cầu:** Cập nhật trạng thái Task
 
-**Tên yêu cầu:** Cập nhật trạng thái Task.
+**Mô tả yêu cầu:**
+Team Leader và Team Member cập nhật trạng thái Task (To Do, In Progress, In Review, Done).
 
-**Mô tả yêu cầu:**  
-Team Leader và Team Member có thể cập nhật trạng thái Task như To Do, In Progress, In Review và Done.
+**Actor:** Team Leader, Team Member
 
-**Actor liên quan:** Team Leader, Team Member.
-
-**Mức độ ưu tiên:** Cao.
+**Mức độ ưu tiên:** Cao
 
 ---
 
 ## FR-09 – Cấu hình kết nối Jira
+**Tên yêu cầu:** Cấu hình kết nối Jira
 
-**Tên yêu cầu:** Cấu hình kết nối Jira.
+**Mô tả yêu cầu:**
+Admin thiết lập và quản lý kết nối giữa hệ thống với Jira thông qua API.
 
-**Mô tả yêu cầu:**  
-Admin có thể thiết lập và quản lý kết nối giữa hệ thống với Jira thông qua API để phục vụ việc đồng bộ dữ liệu.
+**Actor:** Admin
 
-**Actor liên quan:** Admin.
-
-**Mức độ ưu tiên:** Cao.
+**Mức độ ưu tiên:** Cao
 
 ---
 
 ## FR-10 – Cấu hình kết nối GitHub
+**Tên yêu cầu:** Cấu hình kết nối GitHub
 
-**Tên yêu cầu:** Cấu hình kết nối GitHub.
+**Mô tả yêu cầu:**
+Admin thiết lập và quản lý kết nối giữa hệ thống với GitHub thông qua API.
 
-**Mô tả yêu cầu:**  
-Admin có thể thiết lập và quản lý kết nối giữa hệ thống với GitHub để phục vụ việc theo dõi và đồng bộ dữ liệu.
+**Actor:** Admin
 
-**Actor liên quan:** Admin.
-
-**Mức độ ưu tiên:** Cao.
-
----
-
-## FR-11 – Đồng bộ Jira
-
-**Tên yêu cầu:** Đồng bộ dữ liệu Jira.
-
-**Mô tả yêu cầu:**  
-Team Leader có thể đồng bộ Requirement và Task giữa hệ thống và Jira nhằm đảm bảo dữ liệu luôn được cập nhật.
-
-**Actor liên quan:** Team Leader.
-
-**Mức độ ưu tiên:** Cao.
+**Mức độ ưu tiên:** Cao
 
 ---
 
-## FR-12 – Đồng bộ GitHub
+## FR-11 – Đồng bộ dữ liệu Jira
+**Tên yêu cầu:** Đồng bộ Jira
 
-**Tên yêu cầu:** Đồng bộ dữ liệu GitHub.
+**Mô tả yêu cầu:**
+Team Leader đồng bộ Requirement và Task giữa hệ thống và Jira.
 
-**Mô tả yêu cầu:**  
-Team Leader có thể đồng bộ Commit, Branch và Pull Request từ GitHub về hệ thống.
+**Actor:** Team Leader
 
-**Actor liên quan:** Team Leader.
+**Mức độ ưu tiên:** Cao
 
-**Mức độ ưu tiên:** Cao.
+---
+
+## FR-12 – Đồng bộ dữ liệu GitHub
+**Tên yêu cầu:** Đồng bộ GitHub
+
+**Mô tả yêu cầu:**
+Team Leader đồng bộ Commit, Branch và Pull Request giữa GitHub và hệ thống.
+
+**Actor:** Team Leader
+
+**Mức độ ưu tiên:** Cao
 
 ---
 
 ## FR-13 – Theo dõi Commit GitHub
+**Tên yêu cầu:** Theo dõi Commit GitHub
 
-**Tên yêu cầu:** Theo dõi Commit GitHub.
+**Mô tả yêu cầu:**
+Hệ thống hiển thị danh sách Commit theo từng Task và thống kê số lượng Commit của các thành viên.
 
-**Mô tả yêu cầu:**  
-Hệ thống hiển thị danh sách Commit liên quan đến từng Task và thống kê số lượng Commit của từng thành viên.
+**Actor:** Admin, Lecturer, Team Leader, Team Member
 
-**Actor liên quan:** Admin, Lecturer, Team Leader, Team Member.
-
-**Mức độ ưu tiên:** Cao.
+**Mức độ ưu tiên:** Cao
 
 ---
 
 ## FR-14 – Commit mã nguồn lên GitHub
+**Tên yêu cầu:** Commit mã nguồn lên GitHub
 
-**Tên yêu cầu:** Commit mã nguồn lên GitHub.
+**Mô tả yêu cầu:**
+Team Leader và Team Member thực hiện Commit mã nguồn lên GitHub. Hệ thống ghi nhận lịch sử Commit để theo dõi tiến độ.
 
-**Mô tả yêu cầu:**  
-Team Leader và Team Member có thể Commit mã nguồn lên GitHub. Hệ thống ghi nhận thông tin Commit phục vụ việc theo dõi tiến độ.
+**Actor:** Team Leader, Team Member
 
-**Actor liên quan:** Team Leader, Team Member.
-
-**Mức độ ưu tiên:** Cao.
+**Mức độ ưu tiên:** Cao
 
 ---
 
 ## FR-15 – Theo dõi tiến độ dự án
+**Tên yêu cầu:** Theo dõi tiến độ dự án
 
-**Tên yêu cầu:** Theo dõi tiến độ dự án.
+**Mô tả yêu cầu:**
+Hệ thống hiển thị tiến độ dự án dựa trên Requirement, Task và dữ liệu đồng bộ từ Jira, GitHub.
 
-**Mô tả yêu cầu:**  
-Hệ thống hiển thị tiến độ thực hiện dự án dựa trên trạng thái Requirement, Task và dữ liệu đồng bộ từ Jira, GitHub.
+**Actor:** Admin, Lecturer, Team Leader, Team Member
 
-**Actor liên quan:** Admin, Lecturer, Team Leader, Team Member.
-
-**Mức độ ưu tiên:** Cao.
+**Mức độ ưu tiên:** Cao
 
 ---
 
 ## FR-16 – Xem báo cáo tiến độ
+**Tên yêu cầu:** Xem báo cáo tiến độ
 
-**Tên yêu cầu:** Xem báo cáo tiến độ.
+**Mô tả yêu cầu:**
+Hệ thống cung cấp báo cáo tổng hợp về tiến độ thực hiện dự án, tỷ lệ hoàn thành Requirement, Task và thống kê Commit.
 
-**Mô tả yêu cầu:**  
-Hệ thống cung cấp báo cáo tổng hợp về tiến độ dự án, bao gồm tỷ lệ hoàn thành Task, Requirement và thống kê Commit GitHub.
+**Actor:** Admin, Lecturer, Team Leader
 
-**Actor liên quan:** Admin, Lecturer, Team Leader.
-
-**Mức độ ưu tiên:** Cao.
+**Mức độ ưu tiên:** Cao
 
 ---
 
-## FR-17 – Xem thống kê Commit GitHub
+## FR-17 – Thống kê Commit GitHub
+**Tên yêu cầu:** Thống kê Commit GitHub
 
-**Tên yêu cầu:** Xem thống kê Commit GitHub.
+**Mô tả yêu cầu:**
+Hệ thống thống kê Commit theo thành viên, theo nhóm và theo khoảng thời gian.
 
-**Mô tả yêu cầu:**  
-Hệ thống thống kê số lượng Commit theo thành viên, theo nhóm và theo khoảng thời gian nhằm hỗ trợ đánh giá tiến độ thực hiện dự án.
+**Actor:** Admin, Lecturer, Team Leader, Team Member
 
-**Actor liên quan:** Admin, Lecturer, Team Leader, Team Member.
-
-**Mức độ ưu tiên:** Cao.
+**Mức độ ưu tiên:** Cao
 
 ---
 
 ## FR-18 – Kiểm tra trạng thái kết nối
+**Tên yêu cầu:** Kiểm tra trạng thái kết nối Jira và GitHub
 
-**Tên yêu cầu:** Kiểm tra trạng thái kết nối Jira và GitHub.
+**Mô tả yêu cầu:**
+Admin kiểm tra trạng thái kết nối giữa hệ thống với Jira và GitHub, đồng thời xem các thông báo lỗi nếu có.
 
-**Mô tả yêu cầu:**  
-Admin có thể kiểm tra trạng thái kết nối giữa hệ thống với Jira và GitHub, đồng thời xem các thông báo lỗi nếu có.
+**Actor:** Admin
 
-**Actor liên quan:** Admin.
-
-**Mức độ ưu tiên:** Trung bình.
+**Mức độ ưu tiên:** Trung bình
 
 ---
 
 ## FR-19 – Theo dõi lịch sử hoạt động
+**Tên yêu cầu:** Theo dõi lịch sử hoạt động
 
-**Tên yêu cầu:** Theo dõi lịch sử hoạt động.
+**Mô tả yêu cầu:**
+Hệ thống lưu lịch sử các thao tác của người dùng như tạo Requirement, Task, phân công, cập nhật trạng thái, đồng bộ Jira/GitHub và Commit mã nguồn.
 
-**Mô tả yêu cầu:**  
-Hệ thống lưu lại lịch sử các thao tác như tạo Requirement, tạo Task, phân công Task, cập nhật trạng thái Task, đồng bộ Jira/GitHub và Commit mã nguồn nhằm phục vụ việc theo dõi và kiểm tra.
+**Actor:** Admin, Team Leader
 
-**Actor liên quan:** Admin, Team Leader.
-
-**Mức độ ưu tiên:** Trung bình.
-
+**Mức độ ưu tiên:** Trung bình
