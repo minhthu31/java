@@ -24,6 +24,7 @@ Hệ thống được xây dựng nhằm hỗ trợ nhóm dự án quản lý t�
 
 ### FR-01 – Đăng nhập hệ thống
 
+
 **Tên yêu cầu:** Đăng nhập hệ thống.
 
 **Mô tả yêu cầu:**
@@ -37,6 +38,7 @@ Hệ thống cho phép người dùng đăng nhập bằng tài khoản đã đ�
 ---
 
 ## FR-02 – Quản lý tài khoản và phân quyền
+
 
 **Tên yêu cầu:** Quản lý tài khoản và phân quyền.
 
@@ -52,6 +54,7 @@ Admin có thể tạo, cập nhật, khóa, mở khóa tài khoản và phân qu
 
 ## FR-03 – Quản lý nhóm sinh viên
 
+
 **Tên yêu cầu:** Quản lý nhóm sinh viên.
 
 **Mô tả yêu cầu:**
@@ -65,6 +68,7 @@ Admin tạo, chỉnh sửa, xóa và quản lý các nhóm sinh viên; phân cô
 ---
 
 ## FR-04 – Quản lý thành viên nhóm
+
 
 **Tên yêu cầu:** Quản lý thành viên nhóm.
 
@@ -80,6 +84,7 @@ Lecturer xem danh sách thành viên của các nhóm được phân công và t
 
 ## FR-05 – Quản lý Requirement
 
+
 **Tên yêu cầu:** Quản lý Requirement.
 
 **Mô tả yêu cầu:**
@@ -93,6 +98,7 @@ Team Leader tạo, cập nhật, chỉnh sửa và xóa Requirement của dự �
 ---
 
 ## FR-06 – Quản lý Task
+
 
 **Tên yêu cầu:** Quản lý Task.
 
@@ -108,6 +114,7 @@ Team Leader tạo, chỉnh sửa, xóa Task và thiết lập tên, mô tả, ng
 
 ## FR-07 – Phân công Task
 
+
 **Tên yêu cầu:** Phân công Task.
 
 **Mô tả yêu cầu:**
@@ -121,6 +128,7 @@ Team Leader phân công Task cho Team Member và theo dõi người thực hiệ
 ---
 
 ## FR-08 – Cập nhật trạng thái Task
+
 
 **Tên yêu cầu:** Cập nhật trạng thái Task.
 
@@ -136,6 +144,7 @@ Team Leader và Team Member cập nhật trạng thái Task (To Do, In Progress,
 
 ## FR-09 – Cấu hình kết nối Jira
 
+
 **Tên yêu cầu:** Cấu hình kết nối Jira.
 
 **Mô tả yêu cầu:**
@@ -149,6 +158,7 @@ Admin thiết lập và quản lý kết nối giữa hệ thống với Jira th
 ---
 
 ## FR-10 – Cấu hình kết nối GitHub
+
 
 **Tên yêu cầu:** Cấu hình kết nối GitHub.
 
@@ -164,6 +174,7 @@ Admin thiết lập và quản lý kết nối giữa hệ thống với GitHub 
 
 ## FR-11 – Đồng bộ dữ liệu Jira
 
+
 **Tên yêu cầu:** Đồng bộ Jira.
 
 **Mô tả yêu cầu:**
@@ -177,6 +188,7 @@ Team Leader đồng bộ Requirement và Task giữa hệ thống và Jira.
 ---
 
 ## FR-12 – Đồng bộ dữ liệu GitHub
+
 
 **Tên yêu cầu:** Đồng bộ GitHub.
 
@@ -192,6 +204,7 @@ Team Leader đồng bộ Commit, Branch và Pull Request giữa GitHub và hệ 
 
 ## FR-13 – Theo dõi Commit GitHub
 
+
 **Tên yêu cầu:** Theo dõi Commit GitHub.
 
 **Mô tả yêu cầu:**
@@ -204,6 +217,7 @@ Hệ thống hiển thị danh sách Commit theo từng Task và thống kê s�
 ---
 
 ## FR-14 – Commit mã nguồn lên GitHub
+
 
 **Tên yêu cầu:** Commit mã nguồn lên GitHub.
 
@@ -219,6 +233,7 @@ Team Leader và Team Member thực hiện Commit mã nguồn lên GitHub. Hệ t
 
 ## FR-15 – Theo dõi tiến độ dự án
 
+
 **Tên yêu cầu:** Theo dõi tiến độ dự án.
 
 **Mô tả yêu cầu:**
@@ -232,6 +247,7 @@ Hệ thống hiển thị tiến độ dự án dựa trên Requirement, Task v�
 ---
 
 ## FR-16 – Xem báo cáo tiến độ
+
 
 **Tên yêu cầu:** Xem báo cáo tiến độ.
 
@@ -247,6 +263,7 @@ Hệ thống cung cấp báo cáo tổng hợp về tiến độ thực hiện d
 
 ## FR-17 – Thống kê Commit GitHub
 
+
 **Tên yêu cầu:** Thống kê Commit GitHub.
 
 **Mô tả yêu cầu:**
@@ -261,6 +278,7 @@ Hệ thống thống kê Commit theo thành viên, theo nhóm và theo khoảng 
 
 ## FR-18 – Kiểm tra trạng thái kết nối
 
+
 **Tên yêu cầu:** Kiểm tra trạng thái kết nối Jira và GitHub.
 
 **Mô tả yêu cầu:**
@@ -274,6 +292,7 @@ Admin kiểm tra trạng thái kết nối giữa hệ thống với Jira và Gi
 ---
 
 ## FR-19 – Theo dõi lịch sử hoạt động
+
 
 **Tên yêu cầu:** Theo dõi lịch sử hoạt động.
 
