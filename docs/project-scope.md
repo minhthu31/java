@@ -502,6 +502,24 @@ Hệ thống cũng cần phát hiện các trường hợp:
 - Commit được tạo bởi người khác với assignee.
 - Pull Request chưa được merge.
 - Auto test thất bại.
+  
+Xử lý Jira Issue Key không hợp lệ
+
+Khi branch, commit hoặc Pull Request không chứa Jira Issue Key,
+chứa sai định dạng hoặc chứa Issue Key không tồn tại, hệ thống:
+
+- Không tự động liên kết hoạt động GitHub với bất kỳ Jira task nào.
+- Đánh dấu commit hoặc Pull Request là chưa liên kết.
+- Hiển thị cảnh báo để Team Leader kiểm tra.
+- Cho phép liên kết thủ công với Jira task phù hợp khi cần.
+- Không tự động đoán hoặc gán dữ liệu vào một Jira Issue khác.
+
+Ví dụ:
+
+- Hợp lệ: `CNPM-15 Implement login API`
+- Sai định dạng: `CNPM15 Implement login API`
+- Sai Issue Key: `CNPM-51 Implement login API` khi `CNPM-51`
+  không tồn tại.
 ### 6.8. Báo cáo tiến độ dự án
 
 Hệ thống hiển thị các thông tin:
