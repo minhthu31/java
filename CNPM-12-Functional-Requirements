@@ -9,17 +9,12 @@ Hệ thống được xây dựng nhằm hỗ trợ nhóm dự án quản lý t�
 ## 2. Yêu cầu thực hiện
 
 - Xác định các chức năng mà hệ thống phải cung cấp.
-
 - Hệ thống hỗ trợ quản lý dự án, thành viên và công việc.
-
 - Hệ thống hỗ trợ đồng bộ công việc giữa Jira và GitHub.
-
 - Hệ thống hỗ trợ quản lý báo cáo dự án.
-
 - Hệ thống hỗ trợ quản lý tài liệu SRS.
-
 - Nội dung phải bám đúng phạm vi của đề tài Hệ thống quản lý dự án.
-
+- Hệ thống hỗ trợ các chức năng liên quan đến Jira và Github
 ## 3. Functional Requirements
 
 ### FR-01 – Đăng nhập hệ thống
