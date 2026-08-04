@@ -79,6 +79,12 @@ Các chức năng chính của hệ thống:
 - Quản lý tài khoản.
 - Phân quyền người dùng.
 
+### Group Mângement 
+- Tạo nhóm dự án 
+- Cập nhật thông tin nhóm
+- Quản lý thành viên viên nhóm 
+- Phân công giảng viên phụ trách nhóm 
+
 ### Requirement Management
 
 - Tạo Requirement.
@@ -98,6 +104,12 @@ Các chức năng chính của hệ thống:
 - Hiển thị tiến độ dự án.
 - Thống kê Task.
 - Thống kê Requirement.
+
+### Reporting 
+- Xem báo cáo tiến độ dự án 
+- Thống kê số lượng task 
+- Thống kê Requirement 
+- Thống kê Commit Github 
 
 ### GitHub Integration
 
@@ -394,6 +406,10 @@ Mỗi Task phải thuộc một Requirement.
 ## BR-06
 
 GitHub và Jira chỉ được đồng bộ khi xác thực thành công.
+
+## BR-07
+
+Chỉ Team Leader được tạo và phân công task.Team Menber chỉ được cập nhật trạng thái các Task đã được giao.
 
 ---
 
