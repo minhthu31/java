@@ -1,189 +1,223 @@
 # Use Case ID: UC-01
-# Tên Use Case: Đăng nhập
+# Use Case Name: Đăng nhập
 
-# Tác nhân chính
+# Primary Actor
     + Admin
     + Lecturer
     + Team Leader
     + Team Member
-# Mô tả
+
+# Description
     Hệ thống cho phép người dùng đăng nhập để truy cập các chức năng tương ứng với quyền hạn của mình.
-# Tiền điều kiện
+
+# Preconditions
     + Người dùng đã có tài khoản.
     + Tài khoản đang ở trạng thái hoạt động.
-# Hậu điều kiện
+
+# Postconditions
     + Người dùng đăng nhập thành công.
     + Hệ thống chuyển hướng đến trang chủ.
-# Luồng sự kiện chính
-    1 Người dùng truy cập trang đăng nhập.
-    2 Hệ thống hiển thị biểu mẫu đăng nhập.
-    3 Người dùng nhập tên đăng nhập và mật khẩu.
-    4 Người dùng nhấn nút Đăng nhập.
-    5 Hệ thống xác thực thông tin.
-    6 Hệ thống chuyển người dùng đến giao diện phù hợp với vai trò của họ.
-# Luồng sự kiện phụ
+
+# Main Flow
+    1. Người dùng truy cập trang đăng nhập.
+    2. Hệ thống hiển thị biểu mẫu đăng nhập.
+    3. Người dùng nhập tên đăng nhập và mật khẩu.
+    4. Người dùng nhấn nút Đăng nhập.
+    5. Hệ thống xác thực thông tin.
+    6. Hệ thống chuyển người dùng đến giao diện phù hợp với vai trò.
+
+# Alternative Flow
     3A. Người dùng quên mật khẩu.
     4A. Người dùng chọn hiển thị mật khẩu.
 
-# Luồng ngoại lệk
+# Exception Flow
     5E. Tên đăng nhập hoặc mật khẩu không chính xác.
     6E. Tài khoản bị khóa.
 
 
 # Use Case ID: UC-02
-# Tên Use Case: Tạo và giao task
+# Use Case Name: Tạo Task
 
-# Tác nhân chính
+# Primary Actor
     + Team Leader
 
-# Mô tả
-Team Leader tạo nhiệm vụ mới và phân công cho các thành viên trong nhóm.
+# Description
+    Team Leader tạo nhiệm vụ mới cho dự án.
 
-# Tiền điều kiện
+# Preconditions
     + Người dùng đã đăng nhập.
     + Requirement đã được tạo.
-    + Hậu điều kiện
+
+# Postconditions
     + Task được tạo thành công.
-    + Thành viên được nhận thông báo.
-# Luồng sự kiện chính
-    1. Team Leader truy cập chức năng quản lý task.
-    2. Hệ thống hiển thị danh sách task.
-    3. Team Leader chọn tạo task mới.
-    4. Người dùng nhập thông tin task.
-    5. Người dùng phân công task.
-    6. Hệ thống lưu dữ liệu.
-    7. Hệ thống gửi thông báo.
-# Luồng sự kiện phụ
-4A. Người dùng lưu bản nháp.
-# Luồng ngoại lệ
-4E. Thiếu thông tin bắt buộc.
-5E. Thành viên không tồn tại.
+
+# Main Flow
+    1. Team Leader truy cập chức năng quản lý Task.
+    2. Hệ thống hiển thị danh sách Task.
+    3. Team Leader chọn tạo Task mới.
+    4. Người dùng nhập thông tin Task.
+    5. Hệ thống kiểm tra dữ liệu.
+    6. Hệ thống lưu Task.
+
+# Alternative Flow
+    4A. Người dùng lưu bản nháp.
+
+# Exception Flow
+    4E. Thiếu thông tin bắt buộc.
+    5E. Dữ liệu không hợp lệ.
 
 
 # Use Case ID: UC-03
+# Use Case Name: Cấu hình Jira
 
-#Tên Use Case: Đẩy task lên Jira
+# Primary Actor
+    + Admin
 
-# Tác nhân chính
-    + Team Leader
-# Mô tả
-Hệ thống gửi thông tin task từ hệ thống nội bộ lên Jira.
+# Description
+    Admin cấu hình kết nối giữa hệ thống và Jira.
 
-# Tiền điều kiện
-    + Người dùng đã đăng nhập.
-    + Jira đã được cấu hình.
-    + Hậu điều kiện
-    + Task xuất hiện trên Jira.
-# Luồng sự kiện chính
-    1. Người dùng chọn task.
-    2. Người dùng nhấn nút đẩy lên Jira.
-    3. Hệ thống kết nối với Jira.
-    4. Hệ thống gửi dữ liệu.
-    5. Hệ thống hiển thị thông báo thành công.
-# Luồng sự kiện phụ
-2A. Người dùng đẩy nhiều task cùng lúc.
-# Luồng ngoại lệ
-3E. Không thể kết nối đến Jira.
-4E. Dữ liệu không hợp lệ.
+# Preconditions
+    + Admin đã đăng nhập.
+    + Có thông tin kết nối Jira.
+
+# Postconditions
+    + Cấu hình Jira được lưu thành công.
+
+# Main Flow
+    1. Admin truy cập chức năng Cấu hình Jira.
+    2. Hệ thống hiển thị biểu mẫu cấu hình.
+    3. Admin nhập thông tin kết nối.
+    4. Hệ thống kiểm tra kết nối.
+    5. Hệ thống lưu cấu hình.
+
+# Alternative Flow
+    3A. Admin cập nhật thông tin cấu hình hiện có.
+
+# Exception Flow
+    4E. Không thể kết nối đến Jira.
+    5E. Thông tin cấu hình không hợp lệ.
 
 
 # Use Case ID: UC-04
-# Tên Use Case: Đồng bộ Jira
+# Use Case Name: Cấu hình GitHub
 
-# Tác nhân chính
+# Primary Actor
     + Admin
-    + Team Leader
-# Mô tả
-Hệ thống đồng bộ trạng thái giữa hệ thống và Jira.
 
-# Tiền điều kiện
-    + Tài khoản Jira đã được cấu hình.
-    + Hậu điều kiện
-    + Dữ liệu được cập nhật.
-# Luồng sự kiện chính
-    1. Người dùng chọn chức năng đồng bộ.
-    2. Hệ thống kết nối với Jira.
-    3. Hệ thống lấy dữ liệu.
-    4. Hệ thống cập nhật dữ liệu.
-# Luồng sự kiện phụ
-3A. Chỉ đồng bộ dữ liệu mới.
+# Description
+    Admin cấu hình kết nối giữa hệ thống và GitHub.
 
-# Luồng ngoại lệ
-2E. Kết nối thất bại.
+# Preconditions
+    + Admin đã đăng nhập.
+    + Có thông tin kết nối GitHub.
+
+# Postconditions
+    + Cấu hình GitHub được lưu thành công.
+
+# Main Flow
+    1. Admin truy cập chức năng Cấu hình GitHub.
+    2. Hệ thống hiển thị biểu mẫu cấu hình.
+    3. Admin nhập thông tin kết nối.
+    4. Hệ thống kiểm tra kết nối.
+    5. Hệ thống lưu cấu hình.
+
+# Alternative Flow
+    3A. Admin cập nhật thông tin cấu hình.
+
+# Exception Flow
+    4E. Không thể kết nối đến GitHub.
+    5E. Thông tin cấu hình không hợp lệ.
+
 
 # Use Case ID: UC-05
-# Tên Use Case: Đồng bộ GitHub
+# Use Case Name: Xem thống kê commit GitHub
 
-# Tác nhân chính
-    + Admin
-    + Team Leader
-# Mô tả
-Hệ thống lấy dữ liệu commit từ GitHub.
-
-# Tiền điều kiện
-    + GitHub đã được cấu hình.
-    + Hậu điều kiện
-    + Thông tin commit được cập nhật.
-# Luồng sự kiện chính
-    1. Người dùng chọn chức năng đồng bộ GitHub.
-    2. Hệ thống kết nối với GitHub.
-    3. Hệ thống lấy dữ liệu commit.
-    4. Hệ thống lưu dữ liệu.
-# Luồng sự kiện phụ
-3A. Chỉ đồng bộ commit mới.
-
-# Luồng ngoại lệ
-2E. Không thể kết nối GitHub.
-
-
-# Use Case ID: UC-06
-# Tên Use Case: Liên kết task với commit
-
-# Tác nhân chính
-    + Team Leader
-    + Team Member
-# Mô tả
-Hệ thống liên kết commit với task tương ứng.
-
-# Tiền điều kiện
-    + Task đã được tạo.
-    + Thành viên đã thực hiện commit.
-# Hậu điều kiện
-Commit được liên kết với task.
-# Luồng sự kiện chính
-    1. Thành viên tạo commit.
-    2. Hệ thống nhận mã commit.
-    3. Hệ thống đối chiếu mã task.
-    4. Hệ thống lưu liên kết.
-# Luồng sự kiện phụ
-3A. Người dùng liên kết thủ công.
-
-# Luồng ngoại lệ
-3E. Không tìm thấy task.
-
-
-# Use Case ID: UC-07
-# Tên Use Case: Xem báo cáo tiến độ
-
-# Tác nhân chính
+# Primary Actor
     + Admin
     + Lecturer
     + Team Leader
-# Mô tả
-Người dùng xem tiến độ thực hiện của dự án.
+    + Team Member
 
-# Tiền điều kiện
-    Dữ liệu task và commit đã được cập nhật.
-# Hậu điều kiện
-    Báo cáo được hiển thị.
-# Luồng sự kiện chính
+# Description
+    Người dùng xem thống kê commit từ GitHub.
+
+# Preconditions
+    + Dữ liệu commit đã được cập nhật.
+
+# Postconditions
+    + Thống kê commit được hiển thị.
+
+# Main Flow
+    1. Người dùng truy cập chức năng thống kê commit.
+    2. Hệ thống lấy dữ liệu commit.
+    3. Hệ thống hiển thị thống kê commit.
+    4. Người dùng xem kết quả.
+
+# Alternative Flow
+    2A. Người dùng lọc dữ liệu theo thời gian.
+
+# Exception Flow
+    2E. Không có dữ liệu commit.
+
+
+# Use Case ID: UC-06
+# Use Case Name: Cập nhật trạng thái Task
+
+# Primary Actor
+    + Team Leader
+    + Team Member
+
+# Description
+    Người dùng cập nhật trạng thái của Task.
+
+# Preconditions
+    + Người dùng đã đăng nhập.
+    + Task đã được tạo và phân công.
+
+# Postconditions
+    + Trạng thái Task được cập nhật thành công.
+
+# Main Flow
+    1. Người dùng mở danh sách Task.
+    2. Người dùng chọn Task cần cập nhật.
+    3. Người dùng chọn trạng thái mới.
+    4. Hệ thống lưu thay đổi.
+    5. Hệ thống cập nhật trạng thái Task.
+
+# Alternative Flow
+    3A. Người dùng hủy thao tác cập nhật.
+
+# Exception Flow
+    2E. Không tìm thấy Task.
+    4E. Không thể cập nhật trạng thái Task.
+
+
+# Use Case ID: UC-07
+# Use Case Name: Xem báo cáo tiến độ
+
+# Primary Actor
+    + Admin
+    + Lecturer
+    + Team Leader
+
+# Description
+    Người dùng xem báo cáo tiến độ của dự án.
+
+# Preconditions
+    + Dữ liệu Task và Commit đã được cập nhật.
+
+# Postconditions
+    + Báo cáo tiến độ được hiển thị.
+
+# Main Flow
     1. Người dùng truy cập chức năng báo cáo.
     2. Hệ thống hiển thị danh sách dự án.
     3. Người dùng lựa chọn dự án.
-    4. Hệ thống hiển thị biểu đồ thống kê.
+    4. Hệ thống hiển thị báo cáo tiến độ.
     5. Người dùng xem kết quả.
-# Luồng sự kiện phụ
-3A. Người dùng lọc dữ liệu theo thời gian.
 
-# Luồng ngoại lệ
-4E. Không có dữ liệu.
+# Alternative Flow
+    3A. Người dùng lọc dữ liệu theo thời gian.
+
+# Exception Flow
+    4E. Không có dữ liệu báo cáo.
