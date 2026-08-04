@@ -9,19 +9,25 @@ Hệ thống được xây dựng nhằm hỗ trợ nhóm dự án quản lý t�
 ## 2. Yêu cầu thực hiện
 
 - Xác định các chức năng mà hệ thống phải cung cấp.
+
 - Hệ thống hỗ trợ quản lý dự án, thành viên và công việc.
-- Hệ thống hỗ trợ các chức năng liên quan đến Jira và GitHub.
+
 - Hệ thống hỗ trợ đồng bộ công việc giữa Jira và GitHub.
+
 - Hệ thống hỗ trợ quản lý báo cáo dự án.
+
 - Hệ thống hỗ trợ quản lý tài liệu SRS.
+
 - Nội dung phải bám đúng phạm vi của đề tài Hệ thống quản lý dự án.
 
 ## 3. Functional Requirements
 
 ### FR-01 – Đăng nhập hệ thống
+
 **Tên yêu cầu:** Đăng nhập hệ thống.
 
 **Mô tả yêu cầu:**
+
 Hệ thống cho phép người dùng đăng nhập bằng tài khoản đã được đăng ký hoặc được cấp quyền. Sau khi đăng nhập thành công, hệ thống xác định vai trò của người dùng và cung cấp các chức năng phù hợp với quyền hạn.
 
 **Actor liên quan:** Admin, Lecturer, Team Leader, Team Member.
@@ -31,9 +37,11 @@ Hệ thống cho phép người dùng đăng nhập bằng tài khoản đã đ�
 ---
 
 ## FR-02 – Quản lý tài khoản và phân quyền
+
 **Tên yêu cầu:** Quản lý tài khoản và phân quyền.
 
 **Mô tả yêu cầu:**
+
 Admin có thể tạo, cập nhật, khóa, mở khóa tài khoản và phân quyền người dùng theo từng vai trò.
 
 **Actor:** Admin.
@@ -43,9 +51,11 @@ Admin có thể tạo, cập nhật, khóa, mở khóa tài khoản và phân qu
 ---
 
 ## FR-03 – Quản lý nhóm sinh viên
+
 **Tên yêu cầu:** Quản lý nhóm sinh viên.
 
 **Mô tả yêu cầu:**
+
 Admin tạo, chỉnh sửa, xóa và quản lý các nhóm sinh viên; phân công giảng viên phụ trách cho từng nhóm.
 
 **Actor:** Admin.
@@ -55,9 +65,11 @@ Admin tạo, chỉnh sửa, xóa và quản lý các nhóm sinh viên; phân cô
 ---
 
 ## FR-04 – Quản lý thành viên nhóm
+
 **Tên yêu cầu:** Quản lý thành viên nhóm.
 
 **Mô tả yêu cầu:**
+
 Lecturer xem danh sách thành viên của các nhóm được phân công và theo dõi thông tin của từng sinh viên.
 
 **Actor:** Lecturer.
@@ -67,9 +79,11 @@ Lecturer xem danh sách thành viên của các nhóm được phân công và t
 ---
 
 ## FR-05 – Quản lý Requirement
+
 **Tên yêu cầu:** Quản lý Requirement.
 
 **Mô tả yêu cầu:**
+
 Team Leader tạo, cập nhật, chỉnh sửa và xóa Requirement của dự án.
 
 **Actor:** Team Leader.
@@ -79,9 +93,11 @@ Team Leader tạo, cập nhật, chỉnh sửa và xóa Requirement của dự �
 ---
 
 ## FR-06 – Quản lý Task
+
 **Tên yêu cầu:** Quản lý Task.
 
 **Mô tả yêu cầu:**
+
 Team Leader tạo, chỉnh sửa, xóa Task và thiết lập tên, mô tả, người thực hiện, thời hạn, mức ưu tiên và trạng thái.
 
 **Actor:** Team Leader.
@@ -91,9 +107,11 @@ Team Leader tạo, chỉnh sửa, xóa Task và thiết lập tên, mô tả, ng
 ---
 
 ## FR-07 – Phân công Task
+
 **Tên yêu cầu:** Phân công Task.
 
 **Mô tả yêu cầu:**
+
 Team Leader phân công Task cho Team Member và theo dõi người thực hiện.
 
 **Actor:** Team Leader.
@@ -103,9 +121,11 @@ Team Leader phân công Task cho Team Member và theo dõi người thực hiệ
 ---
 
 ## FR-08 – Cập nhật trạng thái Task
+
 **Tên yêu cầu:** Cập nhật trạng thái Task.
 
 **Mô tả yêu cầu:**
+
 Team Leader và Team Member cập nhật trạng thái Task (To Do, In Progress, In Review, Done).
 
 **Actor:** Team Leader, Team Member.
@@ -115,9 +135,11 @@ Team Leader và Team Member cập nhật trạng thái Task (To Do, In Progress,
 ---
 
 ## FR-09 – Cấu hình kết nối Jira
+
 **Tên yêu cầu:** Cấu hình kết nối Jira.
 
 **Mô tả yêu cầu:**
+
 Admin thiết lập và quản lý kết nối giữa hệ thống với Jira thông qua API.
 
 **Actor:** Admin.
@@ -127,9 +149,11 @@ Admin thiết lập và quản lý kết nối giữa hệ thống với Jira th
 ---
 
 ## FR-10 – Cấu hình kết nối GitHub
+
 **Tên yêu cầu:** Cấu hình kết nối GitHub.
 
 **Mô tả yêu cầu:**
+
 Admin thiết lập và quản lý kết nối giữa hệ thống với GitHub thông qua API.
 
 **Actor:** Admin.
@@ -139,9 +163,11 @@ Admin thiết lập và quản lý kết nối giữa hệ thống với GitHub 
 ---
 
 ## FR-11 – Đồng bộ dữ liệu Jira
+
 **Tên yêu cầu:** Đồng bộ Jira.
 
 **Mô tả yêu cầu:**
+
 Team Leader đồng bộ Requirement và Task giữa hệ thống và Jira.
 
 **Actor:** Team Leader.
@@ -151,9 +177,11 @@ Team Leader đồng bộ Requirement và Task giữa hệ thống và Jira.
 ---
 
 ## FR-12 – Đồng bộ dữ liệu GitHub
+
 **Tên yêu cầu:** Đồng bộ GitHub.
 
 **Mô tả yêu cầu:**
+
 Team Leader đồng bộ Commit, Branch và Pull Request giữa GitHub và hệ thống.
 
 **Actor:** Team Leader.
@@ -163,6 +191,7 @@ Team Leader đồng bộ Commit, Branch và Pull Request giữa GitHub và hệ 
 ---
 
 ## FR-13 – Theo dõi Commit GitHub
+
 **Tên yêu cầu:** Theo dõi Commit GitHub.
 
 **Mô tả yêu cầu:**
@@ -175,9 +204,11 @@ Hệ thống hiển thị danh sách Commit theo từng Task và thống kê s�
 ---
 
 ## FR-14 – Commit mã nguồn lên GitHub
+
 **Tên yêu cầu:** Commit mã nguồn lên GitHub.
 
 **Mô tả yêu cầu:**
+
 Team Leader và Team Member thực hiện Commit mã nguồn lên GitHub. Hệ thống ghi nhận lịch sử Commit để theo dõi tiến độ.
 
 **Actor:** Team Leader, Team Member.
@@ -187,9 +218,11 @@ Team Leader và Team Member thực hiện Commit mã nguồn lên GitHub. Hệ t
 ---
 
 ## FR-15 – Theo dõi tiến độ dự án
+
 **Tên yêu cầu:** Theo dõi tiến độ dự án.
 
 **Mô tả yêu cầu:**
+
 Hệ thống hiển thị tiến độ dự án dựa trên Requirement, Task và dữ liệu đồng bộ từ Jira, GitHub.
 
 **Actor:** Admin, Lecturer, Team Leader, Team Member.
@@ -199,9 +232,11 @@ Hệ thống hiển thị tiến độ dự án dựa trên Requirement, Task v�
 ---
 
 ## FR-16 – Xem báo cáo tiến độ
+
 **Tên yêu cầu:** Xem báo cáo tiến độ.
 
 **Mô tả yêu cầu:**
+
 Hệ thống cung cấp báo cáo tổng hợp về tiến độ thực hiện dự án, tỷ lệ hoàn thành Requirement, Task và thống kê Commit.
 
 **Actor:** Admin, Lecturer, Team Leader.
@@ -211,9 +246,11 @@ Hệ thống cung cấp báo cáo tổng hợp về tiến độ thực hiện d
 ---
 
 ## FR-17 – Thống kê Commit GitHub
+
 **Tên yêu cầu:** Thống kê Commit GitHub.
 
 **Mô tả yêu cầu:**
+
 Hệ thống thống kê Commit theo thành viên, theo nhóm và theo khoảng thời gian.
 
 **Actor:** Admin, Lecturer, Team Leader, Team Member.
@@ -223,9 +260,11 @@ Hệ thống thống kê Commit theo thành viên, theo nhóm và theo khoảng 
 ---
 
 ## FR-18 – Kiểm tra trạng thái kết nối
+
 **Tên yêu cầu:** Kiểm tra trạng thái kết nối Jira và GitHub.
 
 **Mô tả yêu cầu:**
+
 Admin kiểm tra trạng thái kết nối giữa hệ thống với Jira và GitHub, đồng thời xem các thông báo lỗi nếu có.
 
 **Actor:** Admin.
@@ -235,9 +274,11 @@ Admin kiểm tra trạng thái kết nối giữa hệ thống với Jira và Gi
 ---
 
 ## FR-19 – Theo dõi lịch sử hoạt động
+
 **Tên yêu cầu:** Theo dõi lịch sử hoạt động.
 
 **Mô tả yêu cầu:**
+
 Hệ thống lưu lịch sử các thao tác của người dùng như tạo Requirement, Task, phân công, cập nhật trạng thái, đồng bộ Jira/GitHub và Commit mã nguồn.
 
 **Actor:** Admin, Team Leader.
