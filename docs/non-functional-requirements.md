@@ -19,7 +19,7 @@ Hệ thống phải đảm bảo tính bảo mật cho toàn bộ dữ liệu v�
 Các quyền phải được kiểm soát theo Actor Permission Matrix:
 - Admin có toàn quyền quản trị hệ thống.
 - Lecturer chỉ được xem thông tin của các nhóm phụ trách.
-- Team Leader được quản lý Requirement, Task và thành viên trong nhóm.
+- Team Leader được quản lý Requirement, Task và phân công Task cho các thành viên trong nhóm.
 - Team Member chỉ được thao tác trên các Task được giao.
 
 Mật khẩu không được lưu dưới dạng văn bản thuần (Plain Text).
