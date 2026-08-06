@@ -1,105 +1,130 @@
 # Data Dictionary - Thiết kế Cơ sở dữ liệu
 
-Tài liệu này mô tả chi tiết cấu trúc các bảng trong sơ đồ ERD của hệ thống Quản lý dự án & Tích hợp Jira/GitHub.
+Tài liệu này mô tả chi tiết cấu trúc dữ liệu của hệ thống, dựa trên thiết kế Entity Relationship Diagram (ERD).
 
-## 1. Bảng: `roles`
-**Mô tả:** Lưu trữ danh sách phân quyền (vai trò) trong hệ thống.
-| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default value | Description |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `id` | INT | - | PK | - | No | Yes | Tự tăng | Khóa chính của bảng |
-| `role_name` | VARCHAR | 50 | - | - | No | Yes | - | Tên vai trò (Ví dụ: Admin, Student...) |
+## 1. Bảng `roles`
+Lưu trữ thông tin các nhóm quyền trong hệ thống (VD: Sinh viên, Giảng viên).
 
-## 2. Bảng: `users`
-**Mô tả:** Lưu trữ thông tin tài khoản người dùng.
-| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default value | Description |
+| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `id` | INT | - | PK | - | No | Yes | Tự tăng | Khóa chính |
-| `role_id` | INT | - | FK | `roles(id)` | No | No | - | Khóa ngoại tham chiếu đến bảng roles |
-| `username` | VARCHAR | 50 | - | - | No | Yes | - | Tên đăng nhập duy nhất |
-| `password` | VARCHAR | 255 | - | - | No | No | - | Mật khẩu (đã mã hóa) |
+| `id` | INT | - | PK | - | No | Yes | Auto Increment | Mã định danh duy nhất của quyền |
+| `name` | VARCHAR | 50 | - | - | No | Yes | - | Tên quyền (VD: Student, Teacher) |
 
-## 3. Bảng: `student_groups`
-**Mô tả:** Lưu trữ thông tin các nhóm sinh viên.
-| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default value | Description |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `id` | INT | - | PK | - | No | Yes | Tự tăng | Khóa chính định danh nhóm |
-| `group_name` | VARCHAR | 100 | - | - | No | Yes | - | Tên nhóm |
+## 2. Bảng `users`
+Lưu trữ thông tin tài khoản người dùng đăng nhập hệ thống.
 
-## 4. Bảng: `group_members` (Bảng trung gian)
-**Mô tả:** Thể hiện quan hệ n-n giữa người dùng và nhóm.
-| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default value | Description |
+| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `group_id` | INT | - | PK, FK | `student_groups(id)`| No | No | - | Khóa ngoại tham chiếu đến nhóm |
-| `user_id` | INT | - | PK, FK | `users(id)` | No | No | - | Khóa ngoại tham chiếu đến thành viên |
+| `id` | INT | - | PK | - | No | Yes | Auto Increment | Mã định danh người dùng |
+| `role_id` | INT | - | FK | `roles(id)` | No | No | - | Phân quyền của người dùng |
+| `username` | VARCHAR | 50 | - | - | No | Yes | - | Tên đăng nhập |
+| `email` | VARCHAR | 100 | - | - | No | Yes | - | Địa chỉ email người dùng |
+| `password_hash` | VARCHAR | 255 | - | - | No | No | - | Mật khẩu đã được mã hóa (hash) |
+| `created_at` | DATETIME | - | - | - | No | No | CURRENT_TIMESTAMP | Thời gian tạo tài khoản |
 
-## 5. Bảng: `projects`
-**Mô tả:** Lưu trữ thông tin dự án của các nhóm.
-| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default value | Description |
+## 3. Bảng `student_groups`
+Lưu trữ thông tin các nhóm sinh viên làm bài tập/đồ án.
+
+| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `id` | INT | - | PK | - | No | Yes | Tự tăng | Khóa chính dự án |
+| `id` | INT | - | PK | - | No | Yes | Auto Increment | Mã định danh của nhóm |
+| `name` | VARCHAR | 100 | - | - | No | No | - | Tên nhóm |
+| `created_at` | DATETIME | - | - | - | No | No | CURRENT_TIMESTAMP | Thời gian lập nhóm |
+
+## 4. Bảng `group_members`
+Bảng trung gian thể hiện quan hệ nhiều-nhiều giữa sinh viên và nhóm.
+
+| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `group_id` | INT | - | PK, FK | `student_groups(id)`| No | No | - | Mã nhóm |
+| `user_id` | INT | - | PK, FK | `users(id)` | No | No | - | Mã người dùng (sinh viên) |
+| `joined_at` | DATETIME | - | - | - | No | No | CURRENT_TIMESTAMP | Thời gian sinh viên tham gia nhóm |
+
+## 5. Bảng `projects`
+Lưu trữ thông tin các dự án/đồ án do các nhóm thực hiện.
+
+| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `id` | INT | - | PK | - | No | Yes | Auto Increment | Mã định danh dự án |
 | `group_id` | INT | - | FK | `student_groups(id)`| No | No | - | Nhóm thực hiện dự án này |
 | `name` | VARCHAR | 255 | - | - | No | No | - | Tên dự án |
+| `description` | TEXT | - | - | - | Yes | No | NULL | Mô tả chi tiết dự án |
 
-## 6. Bảng: `requirements`
-**Mô tả:** Lưu trữ các yêu cầu chức năng của dự án.
-| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default value | Description |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `id` | INT | - | PK | - | No | Yes | Tự tăng | Khóa chính |
-| `project_id`| INT | - | FK | `projects(id)` | No | No | - | Thuộc dự án nào |
-| `content` | TEXT | - | - | - | No | No | - | Nội dung chi tiết của yêu cầu |
+## 6. Bảng `requirements`
+Lưu trữ các yêu cầu (Requirement) thuộc về một dự án.
 
-## 7. Bảng: `tasks`
-**Mô tả:** Lưu trữ danh sách các công việc trong dự án.
-| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default value | Description |
+| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `id` | INT | - | PK | - | No | Yes | Tự tăng | Khóa chính công việc |
-| `project_id`| INT | - | FK | `projects(id)` | No | No | - | Thuộc dự án nào |
-| `title` | VARCHAR | 255 | - | - | No | No | - | Tiêu đề công việc |
-| `status` | VARCHAR | 50 | - | - | Yes | No | 'To Do' | Trạng thái (To Do, In Progress, Done) |
+| `id` | INT | - | PK | - | No | Yes | Auto Increment | Mã định danh yêu cầu |
+| `project_id` | INT | - | FK | `projects(id)` | No | No | - | Dự án chứa yêu cầu này |
+| `title` | VARCHAR | 255 | - | - | No | No | - | Tiêu đề yêu cầu |
+| `description` | TEXT | - | - | - | Yes | No | NULL | Mô tả chi tiết yêu cầu |
 
-## 8. Bảng: `jira_issues`
-**Mô tả:** Lưu trữ thông tin liên kết với Jira.
-| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default value | Description |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `id` | INT | - | PK | - | No | Yes | Tự tăng | Khóa chính |
-| `task_id` | INT | - | FK | `tasks(id)` | No | No | - | Liên kết với task nội bộ hệ thống |
-| `issue_key` | VARCHAR | 50 | - | - | No | Yes | - | Mã Issue trên Jira (VD: CNPM-20) |
+## 7. Bảng `tasks`
+Lưu trữ các công việc chi tiết cần làm để đáp ứng yêu cầu.
 
-## 9. Bảng: `github_repositories`
-**Mô tả:** Lưu trữ thông tin kho lưu trữ GitHub của dự án.
-| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default value | Description |
+| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `id` | INT | - | PK | - | No | Yes | Tự tăng | Khóa chính |
-| `project_id`| INT | - | FK | `projects(id)` | No | No | - | Thuộc dự án nào |
-| `repo_url` | VARCHAR | 255 | - | - | No | No | - | Đường dẫn URL của Repository |
+| `id` | INT | - | PK | - | No | Yes | Auto Increment | Mã định danh công việc |
+| `project_id` | INT | - | FK | `projects(id)` | No | No | - | Dự án chứa công việc này |
+| `requirement_id`| INT | - | FK | `requirements(id)`| Yes| No | NULL | Yêu cầu liên kết với công việc (nếu có) |
+| `title` | VARCHAR | 255 | - | - | No | No | - | Tên công việc |
+| `status` | VARCHAR | 50 | - | - | No | No | 'TODO' | Trạng thái công việc (TODO, IN_PROGRESS, DONE) |
 
-## 10. Bảng: `github_commits`
-**Mô tả:** Lưu trữ lịch sử commit từ GitHub.
-| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default value | Description |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `commit_hash`| VARCHAR | 40 | PK | - | No | Yes | - | Mã băm duy nhất của commit |
-| `repo_id` | INT | - | FK | `github_repositories(id)`| No | No | - | Thuộc repo nào |
-| `message` | TEXT | - | - | - | No | No | - | Nội dung tin nhắn commit |
+## 8. Bảng `jira_issues`
+Lưu trữ thông tin liên kết giữa Task trong hệ thống và Issue trên Jira Cloud.
 
-## 11. Bảng: `task_commit_links` (Bảng trung gian)
-**Mô tả:** Thể hiện quan hệ giữa Task và Commit (1 task có nhiều commit, 1 commit giải quyết nhiều task).
-| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default value | Description |
+| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `task_id` | INT | - | PK, FK | `tasks(id)` | No | No | - | Khóa ngoại trỏ đến task |
-| `commit_hash`| VARCHAR | 40 | PK, FK | `github_commits(commit_hash)`| No | No | - | Khóa ngoại trỏ đến commit |
+| `id` | INT | - | PK | - | No | Yes | Auto Increment | Mã định danh bản ghi |
+| `task_id` | INT | - | FK | `tasks(id)` | No | Yes | - | Task liên kết (Quan hệ 1-1) |
+| `jira_issue_key`| VARCHAR | 50 | - | - | No | Yes | - | Mã Issue trên Jira (VD: CNPM-1) |
+| `url` | VARCHAR | 255 | - | - | Yes | No | NULL | Đường dẫn trực tiếp đến Issue trên Jira |
 
-## 12. Bảng: `sync_logs`
-**Mô tả:** Lưu lịch sử đồng bộ dữ liệu với hệ thống ngoài.
-| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default value | Description |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `id` | INT | - | PK | - | No | Yes | Tự tăng | Khóa chính |
-| `project_id`| INT | - | FK | `projects(id)` | No | No | - | Dự án được đồng bộ |
-| `status` | VARCHAR | 50 | - | - | No | No | - | Trạng thái (Thành công/Thất bại) |
+## 9. Bảng `github_repositories`
+Lưu trữ thông tin kho mã nguồn (Repository) của dự án.
 
-## 13. Bảng: `activity_logs`
-**Mô tả:** Lưu lịch sử hoạt động của người dùng trong hệ thống.
-| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default value | Description |
+| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `id` | INT | - | PK | - | No | Yes | Tự tăng | Khóa chính |
-| `user_id` | INT | - | FK | `users(id)` | No | No | - | Người dùng thực hiện hành động |
-| `action` | VARCHAR | 255 | - | - | No | No | - | Mô tả hành động (Ví dụ: Đăng nhập, Tạo task) |
+| `id` | INT | - | PK | - | No | Yes | Auto Increment | Mã định danh bản ghi |
+| `project_id` | INT | - | FK | `projects(id)` | No | No | - | Dự án sở hữu kho code này |
+| `repo_url` | VARCHAR | 255 | - | - | No | No | - | Đường dẫn đến Repository trên GitHub |
+
+## 10. Bảng `github_commits`
+Lưu trữ lịch sử đẩy code (commits) từ GitHub.
+
+| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `id` | INT | - | PK | - | No | Yes | Auto Increment | Mã định danh bản ghi |
+| `repository_id` | INT | - | FK | `github_repositories(id)`| No | No | - | Kho code chứa commit này |
+| `commit_hash` | VARCHAR | 100 | - | - | No | Yes | - | Mã hash định danh duy nhất của commit |
+| `message` | TEXT | - | - | - | Yes | No | NULL | Nội dung (message) của lần commit |
+
+## 11. Bảng `task_commit_links`
+Bảng trung gian liên kết nhiều-nhiều giữa Tasks và GitHub Commits.
+
+| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `task_id` | INT | - | PK, FK | `tasks(id)` | No | No | - | Mã công việc |
+| `commit_id` | INT | - | PK, FK | `github_commits(id)` | No | No | - | Mã commit tương ứng |
+
+## 12. Bảng `sync_logs`
+Lưu nhật ký đồng bộ dữ liệu giữa hệ thống và Jira/GitHub.
+
+| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `id` | INT | - | PK | - | No | Yes | Auto Increment | Mã định danh log |
+| `project_id` | INT | - | FK | `projects(id)` | No | No | - | Dự án được đồng bộ |
+| `sync_type` | VARCHAR | 50 | - | - | No | No | - | Loại đồng bộ (JIRA hoặc GITHUB) |
+| `status` | VARCHAR | 50 | - | - | No | No | - | Trạng thái đồng bộ (SUCCESS, FAILED) |
+| `created_at` | DATETIME | - | - | - | No | No | CURRENT_TIMESTAMP | Thời gian thực hiện đồng bộ |
+
+## 13. Bảng `activity_logs`
+Lưu nhật ký các thao tác của người dùng trên hệ thống.
+
+| Column name | Data type | Length | Key | Reference | Nullable | Unique | Default | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `id` | INT | - | PK | - | No | Yes | Auto Increment | Mã định danh log |
+| `user_id` | INT | - | FK | `users(id)` | No | No | - | Người thực hiện thao tác |
+| `action` | VARCHAR | 255 | - | - | No | No | - | Hành động đã thực hiện (VD: Tạo task mới) |
+| `created_at` | DATETIME | - | - | - | No | No | CURRENT_TIMESTAMP | Thời gian thực hiện thao tác |
