@@ -23,10 +23,7 @@ public class User {
     @Column(nullable = false, unique = true)
     private String email;
 
-    /**
-     * [AC 4] Lưu hash mật khẩu và ẩn hoàn toàn khi Serialize JSON
-     */
-    @JsonIgnore
+    @JsonIgnore // [AC 4] Bỏ qua trường này khi Serialize sang JSON
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
