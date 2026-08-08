@@ -1,19 +1,38 @@
 package vn.edu.cnpm.projectsupport.auth.dto;
 
-import lombok.*;
-
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@ToString
 public class LoginRequest {
 
     private String username;
-
-    /**
-     * [AC 4] Loại bỏ password khỏi hàm toString() để không ghi vào Log file
-     */
-    @ToString.Exclude
     private String password;
+
+    public LoginRequest() {
+    }
+
+    public LoginRequest(String username, String password) {
+        this.username = username;
+        this.password = password;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
+    @Override
+    public String toString() {
+        return "LoginRequest{" +
+                "username='" + username + '\'' +
+                '}';
+    }
 }
