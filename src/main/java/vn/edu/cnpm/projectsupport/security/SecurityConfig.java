@@ -19,10 +19,30 @@ public class SecurityConfig {
         return http
                 .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .httpBasic(Customizer.withDefaults())
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/actuator/health", "/api/v1/auth/**").permitAll()
-                        .anyRequest().authenticated())
+
+                        .requestMatchers(
+                                "/actuator/health",
+                                "/api/v1/auth/**"
+                        ).permitAll()
+
+                        .requestMatchers("/api/admin/**")
+                        .hasRole("ADMIN")
+
+                        .requestMatchers("/api/lecturer/**")
+                        .hasRole("LECTURER")
+
+                        .requestMatchers("/api/team-leader/**")
+                        .hasRole("TEAM_LEADER")
+
+                        .requestMatchers("/api/member/**")
+                        .hasRole("TEAM_MEMBER")
+
+                        .anyRequest().authenticated()
+                )
                 .build();
     }
 
