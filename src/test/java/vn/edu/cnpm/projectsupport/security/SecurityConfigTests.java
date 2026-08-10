@@ -6,38 +6,27 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration;
-import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-import vn.edu.cnpm.projectsupport.identity.repository.UserRepository;
 
 @ActiveProfiles("test")
 @AutoConfigureMockMvc
 @SpringBootTest(properties = {
+    "spring.autoconfigure.exclude=" +
+        "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration," +
+        "org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration," +
+        "org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration," +
+        "org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration",
     "app.jwt.secret=401b63e22363964121a328323a2d20741facd722d56214d1f60087413063f915",
     "app.jwt.expiration-ms=86400000"
-})
-@EnableAutoConfiguration(exclude = {
-    DataSourceAutoConfiguration.class,
-    DataSourceTransactionManagerAutoConfiguration.class,
-    HibernateJpaAutoConfiguration.class,
-    FlywayAutoConfiguration.class
 })
 class SecurityConfigTests {
 
     @Autowired
     private MockMvc mockMvc;
-
-    @MockBean
-    private UserRepository userRepository;
 
     @Test
     @DisplayName("Endpoint Actuator Health cho phép truy cập công khai")
