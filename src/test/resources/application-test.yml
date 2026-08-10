@@ -1,17 +1,19 @@
 spring:
   datasource:
     url: jdbc:h2:mem:cnpm_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
+    driver-class-name: org.h2.Driver
     username: sa
     password:
   jpa:
     hibernate:
-      ddl-auto: create-drop # Đổi từ 'none' sang 'create-drop' để Hibernate tự tạo bảng khi test
+      ddl-auto: create-drop
+    generate-ddl: true
   flyway:
     enabled: false
 
 app:
-  security:
-    integration-encryption-key: test-only-encryption-key-32-characters
-  jwt: # BỔ SUNG CẤU HÌNH JWT CHO TEST
+  jwt:
     secret: 401b63e22363964121a328323a2d20741facd722d56214d1f60087413063f915
     expiration-ms: 86400000
+  security:
+    integration-encryption-key: test-only-encryption-key-32-characters
