@@ -16,7 +16,12 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest(properties = {
     "app.jwt.secret=401b63e22363964121a328323a2d20741facd722d56214d1f60087413063f915",
     "app.jwt.expiration-ms=86400000",
-    "spring.flyway.enabled=false"
+    "spring.flyway.enabled=false",
+    "spring.jpa.hibernate.ddl-auto=create-drop",
+    "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=MySQL",
+    "spring.datasource.driver-class-name=org.h2.Driver",
+    "spring.datasource.username=sa",
+    "spring.datasource.password="
 })
 class SecurityConfigTests {
 
