@@ -2,8 +2,7 @@ package vn.edu.cnpm.projectsupport.auth;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import vn.edu.cnpm.projectsupport.auth.dto.LoginRequest;
-import vn.edu.cnpm.projectsupport.auth.dto.LoginResponse;
+
 import vn.edu.cnpm.projectsupport.common.exception.InvalidCredentialsException;
 import vn.edu.cnpm.projectsupport.identity.domain.User;
 import vn.edu.cnpm.projectsupport.identity.domain.UserStatus;
