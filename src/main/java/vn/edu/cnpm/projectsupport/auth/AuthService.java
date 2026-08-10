@@ -3,8 +3,11 @@ package vn.edu.cnpm.projectsupport.auth;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import vn.edu.cnpm.projectsupport.auth.dto.LoginRequest;
+import vn.edu.cnpm.projectsupport.auth.dto.LoginResponse;
+import vn.edu.cnpm.projectsupport.common.exception.InvalidCredentialsException;
 import vn.edu.cnpm.projectsupport.identity.domain.User;
-import vn.edu.cnpm.projectsupport.identity.repository.UserRepository; // Import đúng package UserRepository của đồng đội
+import vn.edu.cnpm.projectsupport.identity.domain.UserStatus;
+import vn.edu.cnpm.projectsupport.identity.repository.UserRepository;
 
 @Service
 public class AuthService {
@@ -17,17 +20,32 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
     }
 
-    public boolean login(LoginRequest request) {
-        // Đổi thành findByUsernameIgnoreCase để dùng hàm có sẵn trong UserRepository
-        User user = userRepository.findByUsernameIgnoreCase(request.getUsername())
-                .orElseThrow(() -> new RuntimeException("Tài khoản hoặc mật khẩu không chính xác"));
+    public LoginResponse login(LoginRequest request) {
 
-        boolean isPasswordValid = passwordEncoder.matches(request.getPassword(), user.getPasswordHash());
+        User user = userRepository
+                .findByUsernameIgnoreCase(request.getUsernameOrEmail())
+                .or(() -> userRepository
+                        .findByEmailIgnoreCase(request.getUsernameOrEmail()))
+                .orElseThrow(() ->
+                        new RuntimeException("Invalid username/email or password"));
 
-        if (!isPasswordValid) {
-            throw new RuntimeException("Tài khoản hoặc mật khẩu không chính xác");
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new InvalidCredentialsException(
+                    "Username/email hoặc password không đúng");
         }
 
-        return true;
+        if (!passwordEncoder.matches(
+                request.getPassword(),
+                user.getPasswordHash())) {
+
+            throw new InvalidCredentialsException(
+                    "Username/email hoặc password không đúng");
+        }
+
+        return new LoginResponse(
+                user.getUsername(),
+                user.getEmail(),
+                user.getFullName()
+        );
     }
 }
