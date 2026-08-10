@@ -13,7 +13,11 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @ActiveProfiles("test")
 @AutoConfigureMockMvc
-@SpringBootTest
+@SpringBootTest(properties = {
+    "app.jwt.secret=401b63e22363964121a328323a2d20741facd722d56214d1f60087413063f915",
+    "app.jwt.expiration-ms=86400000",
+    "spring.flyway.enabled=false"
+})
 class SecurityConfigTests {
 
     @Autowired
