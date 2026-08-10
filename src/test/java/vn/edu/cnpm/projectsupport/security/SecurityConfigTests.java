@@ -15,11 +15,8 @@ import org.springframework.test.web.servlet.MockMvc;
 @ActiveProfiles("test")
 @AutoConfigureMockMvc
 @SpringBootTest(properties = {
-    "spring.autoconfigure.exclude=" +
-        "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration," +
-        "org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration," +
-        "org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration," +
-        "org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration",
+    "spring.jpa.hibernate.ddl-auto=create-drop",
+    "spring.flyway.enabled=false",
     "app.jwt.secret=401b63e22363964121a328323a2d20741facd722d56214d1f60087413063f915",
     "app.jwt.expiration-ms=86400000"
 })
