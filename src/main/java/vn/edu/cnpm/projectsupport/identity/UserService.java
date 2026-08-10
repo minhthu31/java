@@ -3,6 +3,8 @@ package vn.edu.cnpm.projectsupport.identity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import vn.edu.cnpm.projectsupport.identity.domain.User; // Import đúng User từ package domain
+import vn.edu.cnpm.projectsupport.identity.repository.UserRepository; // Import đúng UserRepository từ package repository
 
 @Service
 public class UserService {
@@ -17,7 +19,6 @@ public class UserService {
 
     @Transactional
     public User createUser(String username, String email, String rawPassword) {
-        // [AC 2] Mã hóa mật khẩu thô bằng BCrypt trước khi lưu
         String encodedPassword = passwordEncoder.encode(rawPassword);
 
         User user = User.builder()
