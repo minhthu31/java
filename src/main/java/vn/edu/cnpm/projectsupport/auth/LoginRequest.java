@@ -10,8 +10,10 @@ public class LoginRequest {
     @NotBlank(message = "Password is required")
     private String password;
 
+    
     public String getUsernameOrEmail() {
-        return usernameOrEmail;
+         return usernameOrEmail != null ? usernameOrEmail.trim() : null;
+
     }
 
     public void setUsernameOrEmail(String usernameOrEmail) {
