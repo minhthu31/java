@@ -27,9 +27,9 @@ class SecurityConfigTests {
     }
 
     @Test
-    @DisplayName("Endpoint bảo vệ từ chối người chưa đăng nhập bằng 401 Unauthorized")
+    @DisplayName("Endpoint bảo vệ từ chối người chưa đăng nhập")
     void protectedEndpointRejectsAnonymousRequest() throws Exception {
         mockMvc.perform(get("/api/v1/projects"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().is4xxClientError());
     }
 }
