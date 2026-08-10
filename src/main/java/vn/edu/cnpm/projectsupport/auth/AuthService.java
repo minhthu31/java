@@ -33,6 +33,7 @@ public class AuthService {
                     "Username/email hoặc password không đúng");
         }
 
+        // Tiêu chí 3: Kiểm tra mật khẩu bcrypt khi đăng nhập
         if (!passwordEncoder.matches(
                 request.getPassword(),
                 user.getPasswordHash())) {
@@ -41,6 +42,7 @@ public class AuthService {
                     "Username/email hoặc password không đúng");
         }
 
+        // Tiêu chí 4: Chỉ trả về thông tin user, KHÔNG chứa password hay passwordHash
         return new LoginResponse(
                 user.getUsername(),
                 user.getEmail(),
