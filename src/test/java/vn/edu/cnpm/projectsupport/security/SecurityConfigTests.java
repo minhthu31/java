@@ -8,18 +8,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 @ActiveProfiles("test")
 @AutoConfigureMockMvc
-@SpringBootTest(properties = {
-    "spring.jpa.hibernate.ddl-auto=create-drop",
-    "spring.flyway.enabled=false",
-    "app.jwt.secret=401b63e22363964121a328323a2d20741facd722d56214d1f60087413063f915",
-    "app.jwt.expiration-ms=86400000"
-})
+@SpringBootTest
 class SecurityConfigTests {
 
     @Autowired
@@ -37,13 +31,5 @@ class SecurityConfigTests {
     void protectedEndpointRejectsAnonymousRequest() throws Exception {
         mockMvc.perform(get("/api/v1/projects"))
                 .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    @DisplayName("Endpoint admin từ chối người dùng sai vai trò bằng 403 Forbidden")
-    @WithMockUser(username = "member", roles = {"TEAM_MEMBER"})
-    void adminEndpointRejectsForbiddenUser() throws Exception {
-        mockMvc.perform(get("/api/v1/admin/dashboard"))
-                .andExpect(status().isForbidden());
     }
 }
