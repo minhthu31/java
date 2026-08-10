@@ -1,5 +1,6 @@
 package vn.edu.cnpm.projectsupport.auth;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -15,10 +16,6 @@ import vn.edu.cnpm.projectsupport.identity.repository.UserRepository;
 
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.when;
-
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
@@ -33,44 +30,51 @@ class AuthServiceTest {
 
     @Test
     void login_Success() {
-        LoginRequest request = new LoginRequest("testuser", "password123");
+        LoginRequest request = new LoginRequest();
+        request.setUsernameOrEmail("testuser");
+        request.setPassword("password123");
+
         User mockUser = Mockito.mock(User.class);
 
-        when(userRepository.findByUsernameIgnoreCase("testuser")).thenReturn(Optional.of(mockUser));
-        when(mockUser.getStatus()).thenReturn(UserStatus.ACTIVE);
-        when(mockUser.getPasswordHash()).thenReturn("hashedPassword");
-        when(passwordEncoder.matches("password123", "hashedPassword")).thenReturn(true);
-        when(mockUser.getUsername()).thenReturn("testuser");
-        when(mockUser.getEmail()).thenReturn("test@gmail.com");
-        when(mockUser.getFullName()).thenReturn("Test User");
+        Mockito.when(userRepository.findByUsernameIgnoreCase("testuser")).thenReturn(Optional.of(mockUser));
+        Mockito.when(mockUser.getStatus()).thenReturn(UserStatus.ACTIVE);
+        Mockito.when(mockUser.getPasswordHash()).thenReturn("hashedPassword");
+        Mockito.when(passwordEncoder.matches("password123", "hashedPassword")).thenReturn(true);
+        Mockito.when(mockUser.getUsername()).thenReturn("testuser");
+        Mockito.when(mockUser.getEmail()).thenReturn("test@gmail.com");
+        Mockito.when(mockUser.getFullName()).thenReturn("Test User");
 
         LoginResponse response = authService.login(request);
 
-        assertNotNull(response);
-        assertEquals("testuser", response.getUsername());
-        assertEquals("test@gmail.com", response.getEmail());
+        Assertions.assertNotNull(response);
+        Assertions.assertEquals("testuser", response.getUsername());
+        Assertions.assertEquals("test@gmail.com", response.getEmail());
     }
 
     @Test
     void login_WrongPassword_ThrowsException() {
-        LoginRequest request = new LoginRequest("testuser", "wrongpassword");
+        LoginRequest request = new LoginRequest();
+        request.setUsernameOrEmail("testuser");
+        request.setPassword("wrongpassword");
+
         User mockUser = Mockito.mock(User.class);
 
-        when(userRepository.findByUsernameIgnoreCase("testuser")).thenReturn(Optional.of(mockUser));
-        when(mockUser.getStatus()).thenReturn(UserStatus.ACTIVE);
-        when(mockUser.getPasswordHash()).thenReturn("hashedPassword");
-        when(passwordEncoder.matches("wrongpassword", "hashedPassword")).thenReturn(false);
+        Mockito.when(userRepository.findByUsernameIgnoreCase("testuser")).thenReturn(Optional.of(mockUser));
+        Mockito.when(mockUser.getStatus()).thenReturn(UserStatus.ACTIVE);
+        Mockito.when(mockUser.getPasswordHash()).thenReturn("hashedPassword");
+        Mockito.when(passwordEncoder.matches("wrongpassword", "hashedPassword")).thenReturn(false);
 
-        assertThrows(InvalidCredentialsException.class, () -> authService.login(request));
+        Assertions.assertThrows(InvalidCredentialsException.class, () -> authService.login(request));
     }
 
     @Test
     void login_UserNotFound_ThrowsException() {
-        LoginRequest request = new LoginRequest("unknown", "password123");
+        LoginRequest request = new LoginRequest();
+        request.setUsernameOrEmail("unknown");
 
-        when(userRepository.findByUsernameIgnoreCase("unknown")).thenReturn(Optional.empty());
-        when(userRepository.findByEmailIgnoreCase("unknown")).thenReturn(Optional.empty());
+        Mockito.when(userRepository.findByUsernameIgnoreCase("unknown")).thenReturn(Optional.empty());
+        Mockito.when(userRepository.findByEmailIgnoreCase("unknown")).thenReturn(Optional.empty());
 
-        assertThrows(RuntimeException.class, () -> authService.login(request));
+        Assertions.assertThrows(RuntimeException.class, () -> authService.login(request));
     }
 }
