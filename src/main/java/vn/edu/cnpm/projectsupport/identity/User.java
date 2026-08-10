@@ -1,4 +1,4 @@
-package vn.edu.cnpm.projectsupport.identity;
+package vn.edu.cnpm.projectsupport.identity.domain;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
