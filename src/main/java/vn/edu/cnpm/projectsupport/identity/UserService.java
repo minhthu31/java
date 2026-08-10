@@ -2,9 +2,7 @@ package vn.edu.cnpm.projectsupport.identity;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import vn.edu.cnpm.projectsupport.identity.domain.User; // Import đúng User từ package domain
-import vn.edu.cnpm.projectsupport.identity.repository.UserRepository; // Import đúng UserRepository từ package repository
+import vn.edu.cnpm.projectsupport.identity.repository.UserRepository;
 
 @Service
 public class UserService {
@@ -17,17 +15,8 @@ public class UserService {
         this.passwordEncoder = passwordEncoder;
     }
 
-    @Transactional
-    public User createUser(String username, String email, String rawPassword) {
-        String encodedPassword = passwordEncoder.encode(rawPassword);
-
-        User user = User.builder()
-                .username(username)
-                .email(email)
-                .passwordHash(encodedPassword)
-                .status("ACTIVE")
-                .build();
-
-        return userRepository.save(user);
+    // Tiêu chí 2: Hàm mã hóa password trước khi lưu vào CSDL
+    public String encodePassword(String rawPassword) {
+        return passwordEncoder.encode(rawPassword);
     }
 }
