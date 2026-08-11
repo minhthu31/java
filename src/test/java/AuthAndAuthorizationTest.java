@@ -7,6 +7,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -14,12 +15,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@ActiveProfiles("test")
 public class AuthAndAuthorizationTest {
 
     @Autowired
     private MockMvc mockMvc;
 
-    // --- PHẦN 1: TEST CASES ĐĂNG NHẬP --- //
+    // =========================================================
+    // PHẦN 1: TEST CASES ĐĂNG NHẬP
+    // =========================================================
 
     @Test
     @DisplayName("TC01: Đăng nhập thành công với thông tin hợp lệ")
@@ -32,13 +36,11 @@ public class AuthAndAuthorizationTest {
             }
             """;
 
-        mockMvc.perform(
-                post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body)
-        )
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.token").exists());
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").exists());
     }
 
     @Test
@@ -52,12 +54,10 @@ public class AuthAndAuthorizationTest {
             }
             """;
 
-        mockMvc.perform(
-                post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body)
-        )
-        .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -71,12 +71,10 @@ public class AuthAndAuthorizationTest {
             }
             """;
 
-        mockMvc.perform(
-                post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body)
-        )
-        .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -90,16 +88,14 @@ public class AuthAndAuthorizationTest {
             }
             """;
 
-        mockMvc.perform(
-                post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body)
-        )
-        .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+                .andExpect(status().isForbidden());
     }
 
     @Test
-    @DisplayName("TC05: Đăng nhập thất bại do thiếu username/email")
+    @DisplayName("TC05: Đăng nhập thất bại do thiếu username")
     void login_MissingUsername() throws Exception {
 
         String body = """
@@ -108,12 +104,10 @@ public class AuthAndAuthorizationTest {
             }
             """;
 
-        mockMvc.perform(
-                post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body)
-        )
-        .andExpect(status().isBadRequest());
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -126,46 +120,39 @@ public class AuthAndAuthorizationTest {
             }
             """;
 
-        mockMvc.perform(
-                post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body)
-        )
-        .andExpect(status().isBadRequest());
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+                .andExpect(status().isBadRequest());
     }
 
-
-    // --- PHẦN 2: TEST CASES PHÂN QUYỀN --- //
+    // =========================================================
+    // PHẦN 2: TEST CASES PHÂN QUYỀN
+    // =========================================================
 
     @Test
     @DisplayName("TC07: Chưa đăng nhập cố tình truy cập endpoint bảo vệ")
     void accessProtectedEndpoint_Unauthenticated() throws Exception {
 
-        mockMvc.perform(
-                get("/api/admin/dashboard")
-        )
-        .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/admin/dashboard"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
     @WithMockUser(username = "admin_user", roles = {"ADMIN"})
-    @DisplayName("TC08: Đúng role (ADMIN) truy cập endpoint bảo vệ thành công")
+    @DisplayName("TC08: Đúng role ADMIN truy cập endpoint bảo vệ thành công")
     void accessProtectedEndpoint_CorrectRole() throws Exception {
 
-        mockMvc.perform(
-                get("/api/admin/dashboard")
-        )
-        .andExpect(status().isOk());
+        mockMvc.perform(get("/api/admin/dashboard"))
+                .andExpect(status().isOk());
     }
 
     @Test
     @WithMockUser(username = "student_user", roles = {"STUDENT"})
-    @DisplayName("TC09: Sai role (STUDENT cố vào trang ADMIN) nhận lỗi 403 Forbidden")
+    @DisplayName("TC09: Sai role STUDENT truy cập trang ADMIN nhận lỗi 403")
     void accessProtectedEndpoint_WrongRole() throws Exception {
 
-        mockMvc.perform(
-                get("/api/admin/dashboard")
-        )
-        .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/admin/dashboard"))
+                .andExpect(status().isForbidden());
     }
 }
