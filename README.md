@@ -42,7 +42,30 @@ Yêu cầu: JDK 21+, Docker Desktop.
 4. Kiểm tra: `GET http://localhost:8080/actuator/health`.
 
 Không đưa `.env`, token Jira/GitHub, mật khẩu database hoặc key mã hóa lên Git.
+## Hướng dẫn cấu hình Database MySQL Local
 
+Để project khởi động không có lỗi database, bạn cần chuẩn bị MySQL trên máy cá nhân theo các bước sau:
+
+### 1. Tạo Database
+Mở phần mềm quản lý MySQL (như MySQL Workbench, DBeaver) hoặc truy cập vào MySQL container đang chạy, sau đó thực thi lệnh SQL sau để tạo database cho dự án:
+` ` `sql
+CREATE DATABASE `cnpm_project_support` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+` ` `
+
+### 2. Cấu hình Biến môi trường (Environment Variables)
+Để đảm bảo tiêu chí bảo mật (không commit mật khẩu database lên Git), hệ thống lấy thông tin kết nối qua biến môi trường. Bạn bắt buộc phải cấu hình biến này trên IDE trước khi chạy ứng dụng:
+
+**Trên IntelliJ IDEA:**
+1. Mở `Edit Configurations...` (Bên cạnh nút Run ở góc phải trên cùng).
+2. Tìm đến ô `Environment variables`.
+3. Nhập giá trị: `DB_USERNAME=root;DB_PASSWORD=mật_khẩu_mysql_của_bạn` (Đổi `root` và mật khẩu cho khớp với máy bạn).
+4. Nhấn **Apply** và **OK**.
+
+**Trên Eclipse/Spring Tool Suite:**
+1. Mở `Run` -> `Run Configurations...`.
+2. Chuyển sang tab `Environment`.
+3. Bấm **New** và thêm 2 biến `DB_USERNAME` và `DB_PASSWORD` cùng giá trị tương ứng.
+4. Bấm **Apply**.
 ## Kiểm thử
 
 ```bash
