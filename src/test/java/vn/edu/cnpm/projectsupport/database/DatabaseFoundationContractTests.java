@@ -17,7 +17,7 @@ class DatabaseFoundationContractTests {
 
     private static final String TEST_PASSWORD = "password";
     private static final String TEST_PASSWORD_HASH =
-            "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
+            "$2a$10$X5SEXqMNs8g55FRoNmLyAuT8ad6CumKvabP.fW5ieA655hYCLNgq2";
 
     @Test
     void seedContainsExactlyTheFourSupportedRoles() throws IOException {
