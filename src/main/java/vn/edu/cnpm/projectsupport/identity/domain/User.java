@@ -37,6 +37,24 @@ public class User extends BaseEntity {
     protected User() {
     }
 
+    public User(Role role, String username, String email, String passwordHash, String fullName) {
+        this.role = role;
+        this.username = username;
+        this.email = email;
+        this.passwordHash = passwordHash;
+        this.fullName = fullName;
+        this.status = UserStatus.ACTIVE;
+    }
+
+    public User(Role role, String username, String email, String passwordHash, String fullName, UserStatus status) {
+        this.role = role;
+        this.username = username;
+        this.email = email;
+        this.passwordHash = passwordHash;
+        this.fullName = fullName;
+        this.status = status;
+    }
+
     public Role getRole() {
         return role;
     }
