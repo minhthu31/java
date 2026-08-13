@@ -3,6 +3,7 @@ package vn.edu.cnpm.projectsupport.identity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import vn.edu.cnpm.projectsupport.identity.domain.Role;
 import vn.edu.cnpm.projectsupport.identity.domain.User;
 import vn.edu.cnpm.projectsupport.identity.repository.UserRepository;
@@ -25,14 +26,10 @@ public class UserService {
     @Transactional
     public User registerUser(Role role, String username, String email, String rawPassword, String fullName) {
         String passwordHash = encodePassword(rawPassword);
-
-        User user = new User();
-        user.setRole(role);
-        user.setUsername(username);
-        user.setEmail(email);
-        user.setPasswordHash(passwordHash);
-        user.setFullName(fullName);
-
+        
+        // Khởi tạo User bằng public constructor 5 tham số có sẵn từ main
+        User user = new User(role, username, email, passwordHash, fullName);
+        
         return userRepository.save(user);
     }
 }
