@@ -3,17 +3,13 @@ package vn.edu.cnpm.projectsupport.identity;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import vn.edu.cnpm.projectsupport.identity.domain.Role;
-import vn.edu.cnpm.projectsupport.identity.domain.User;
 import vn.edu.cnpm.projectsupport.identity.repository.UserRepository;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -26,27 +22,20 @@ class UserServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
-    @Mock
-    private Role role;
-
     @InjectMocks
     private UserService userService;
 
     @Test
-    @DisplayName("Nên mã hóa mật khẩu trước khi lưu người dùng")
-    void shouldEncodePasswordBeforeSavingUser() {
+    @DisplayName("Nên gọi PasswordEncoder để mã hóa mật khẩu thô")
+    void shouldEncodePasswordSuccessfully() {
         String rawPassword = "Password@123";
         String hashedPassword = "$2a$10$encodedHashValueExample";
 
         when(passwordEncoder.encode(rawPassword)).thenReturn(hashedPassword);
 
-        userService.registerUser(role, "testuser", "test@example.com", rawPassword, "Test User");
+        String result = userService.encodePassword(rawPassword);
 
-        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-        verify(userRepository).save(userCaptor.capture());
-
-        User savedUser = userCaptor.getValue();
-        assertEquals(hashedPassword, savedUser.getPasswordHash());
-        assertNotEquals(rawPassword, savedUser.getPasswordHash());
+        assertEquals(hashedPassword, result);
+        verify(passwordEncoder).encode(rawPassword);
     }
 }

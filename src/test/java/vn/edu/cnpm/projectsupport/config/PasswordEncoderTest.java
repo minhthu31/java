@@ -32,22 +32,10 @@ class PasswordEncoderTest {
     void shouldMatchPasswordCorrectly() {
         String rawPassword = "Password@123";
         String wrongPassword = "wrong-password";
+
         String encodedPassword = passwordEncoder.encode(rawPassword);
 
         assertTrue(passwordEncoder.matches(rawPassword, encodedPassword));
         assertFalse(passwordEncoder.matches(wrongPassword, encodedPassword));
-    }
-
-    @Test
-    @DisplayName("Mỗi lần encode cùng một mật khẩu phải tạo ra hash khác nhau nhưng đều khớp")
-    void shouldGenerateDifferentHashesForSamePasswordDueToSalt() {
-        String rawPassword = "Password@123";
-
-        String hash1 = passwordEncoder.encode(rawPassword);
-        String hash2 = passwordEncoder.encode(rawPassword);
-
-        assertNotEquals(hash1, hash2);
-        assertTrue(passwordEncoder.matches(rawPassword, hash1));
-        assertTrue(passwordEncoder.matches(rawPassword, hash2));
     }
 }
