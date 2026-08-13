@@ -5,6 +5,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers;
 import org.springframework.test.context.ActiveProfiles;
@@ -12,7 +13,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -41,6 +44,20 @@ class SecurityConfigTests {
     }
 
     @Test
+    @DisplayName("Endpoint POST /api/v1/auth/login cho phép truy cập công khai khi chưa đăng nhập")
+    void loginEndpointIsPublic() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"usernameOrEmail\":\"test\",\"password\":\"test\"}"))
+                .andExpect(result -> {
+                    int statusCode = result.getResponse().getStatus();
+                    // Đảm bảo Security không chặn request này (không trả về 401 hoặc 403)
+                    assertNotEquals(401, statusCode);
+                    assertNotEquals(403, statusCode);
+                });
+    }
+
+    @Test
     @DisplayName("Endpoint bảo vệ từ chối người chưa đăng nhập với mã lỗi 401 UNAUTHORIZED")
     void protectedEndpointRejectsAnonymousRequest() throws Exception {
         mockMvc.perform(get("/api/v1/projects"))
@@ -50,7 +67,7 @@ class SecurityConfigTests {
 
     @Test
     @DisplayName("Endpoint yêu cầu quyền ADMIN từ chối User không đủ quyền với mã lỗi 403 ACCESS_DENIED")
-    @WithMockUser(username = "student_user", roles = {"STUDENT"})
+    @WithMockUser(username = "team_member_user", roles = {"TEAM_MEMBER"})
     void adminEndpointRejectsInsufficientRoleUser() throws Exception {
         mockMvc.perform(get("/api/v1/admin/users"))
                 .andExpect(status().isForbidden())
