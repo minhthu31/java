@@ -3,20 +3,22 @@ package vn.edu.cnpm.projectsupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-public class AuthAndAuthorizationTest {
+class AuthAndAuthorizationTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -30,17 +32,21 @@ public class AuthAndAuthorizationTest {
     void login_Success() throws Exception {
 
         String body = """
-            {
-                "username": "testuser",
-                "password": "CorrectPassword123!"
-            }
-            """;
+                {
+                    "usernameOrEmail": "testuser",
+                    "password": "CorrectPassword123!"
+                }
+                """;
 
-        mockMvc.perform(post("/api/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body))
+        mockMvc.perform(
+                        post("/api/v1/auth/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body)
+                )
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.token").exists());
+                .andExpect(jsonPath("$.accessToken").exists())
+                .andExpect(jsonPath("$.username").exists())
+                .andExpect(jsonPath("$.role").exists());
     }
 
     @Test
@@ -48,15 +54,17 @@ public class AuthAndAuthorizationTest {
     void login_WrongPassword() throws Exception {
 
         String body = """
-            {
-                "username": "testuser",
-                "password": "WrongPassword"
-            }
-            """;
+                {
+                    "usernameOrEmail": "testuser",
+                    "password": "WrongPassword"
+                }
+                """;
 
-        mockMvc.perform(post("/api/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body))
+        mockMvc.perform(
+                        post("/api/v1/auth/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body)
+                )
                 .andExpect(status().isUnauthorized());
     }
 
@@ -65,15 +73,17 @@ public class AuthAndAuthorizationTest {
     void login_UserNotFound() throws Exception {
 
         String body = """
-            {
-                "username": "nonexistent_user",
-                "password": "SomePassword123"
-            }
-            """;
+                {
+                    "usernameOrEmail": "nonexistent_user",
+                    "password": "SomePassword123"
+                }
+                """;
 
-        mockMvc.perform(post("/api/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body))
+        mockMvc.perform(
+                        post("/api/v1/auth/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body)
+                )
                 .andExpect(status().isUnauthorized());
     }
 
@@ -82,31 +92,35 @@ public class AuthAndAuthorizationTest {
     void login_InactiveAccount() throws Exception {
 
         String body = """
-            {
-                "username": "inactive_user",
-                "password": "CorrectPassword123!"
-            }
-            """;
+                {
+                    "usernameOrEmail": "inactive_user",
+                    "password": "CorrectPassword123!"
+                }
+                """;
 
-        mockMvc.perform(post("/api/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body))
+        mockMvc.perform(
+                        post("/api/v1/auth/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body)
+                )
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    @DisplayName("TC05: Đăng nhập thất bại do thiếu username")
-    void login_MissingUsername() throws Exception {
+    @DisplayName("TC05: Đăng nhập thất bại do thiếu username/email")
+    void login_MissingUsernameOrEmail() throws Exception {
 
         String body = """
-            {
-                "password": "CorrectPassword123!"
-            }
-            """;
+                {
+                    "password": "CorrectPassword123!"
+                }
+                """;
 
-        mockMvc.perform(post("/api/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body))
+        mockMvc.perform(
+                        post("/api/v1/auth/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body)
+                )
                 .andExpect(status().isBadRequest());
     }
 
@@ -115,14 +129,16 @@ public class AuthAndAuthorizationTest {
     void login_MissingPassword() throws Exception {
 
         String body = """
-            {
-                "username": "testuser"
-            }
-            """;
+                {
+                    "usernameOrEmail": "testuser"
+                }
+                """;
 
-        mockMvc.perform(post("/api/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body))
+        mockMvc.perform(
+                        post("/api/v1/auth/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body)
+                )
                 .andExpect(status().isBadRequest());
     }
 
@@ -131,28 +147,42 @@ public class AuthAndAuthorizationTest {
     // =========================================================
 
     @Test
-    @DisplayName("TC07: Chưa đăng nhập cố tình truy cập endpoint bảo vệ")
+    @DisplayName("TC07: Chưa đăng nhập truy cập endpoint bảo vệ bị từ chối")
     void accessProtectedEndpoint_Unauthenticated() throws Exception {
 
-        mockMvc.perform(get("/api/admin/dashboard"))
-                .andExpect(status().isUnauthorized());
+        mockMvc.perform(
+                        get("/api/v1/projects")
+                )
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
     }
 
     @Test
-    @WithMockUser(username = "admin_user", roles = {"ADMIN"})
-    @DisplayName("TC08: Đúng role ADMIN truy cập endpoint bảo vệ thành công")
-    void accessProtectedEndpoint_CorrectRole() throws Exception {
+    @WithMockUser(
+            username = "admin_user",
+            roles = {"ADMIN"}
+    )
+    @DisplayName("TC08: ADMIN truy cập endpoint quản trị thành công")
+    void accessAdminEndpoint_CorrectRole() throws Exception {
 
-        mockMvc.perform(get("/api/admin/dashboard"))
+        mockMvc.perform(
+                        get("/api/v1/admin/users")
+                )
                 .andExpect(status().isOk());
     }
 
     @Test
-    @WithMockUser(username = "student_user", roles = {"STUDENT"})
-    @DisplayName("TC09: Sai role STUDENT truy cập trang ADMIN nhận lỗi 403")
-    void accessProtectedEndpoint_WrongRole() throws Exception {
+    @WithMockUser(
+            username = "team_member_user",
+            roles = {"TEAM_MEMBER"}
+    )
+    @DisplayName("TC09: TEAM_MEMBER truy cập endpoint ADMIN bị từ chối")
+    void accessAdminEndpoint_WrongRole() throws Exception {
 
-        mockMvc.perform(get("/api/admin/dashboard"))
-                .andExpect(status().isForbidden());
+        mockMvc.perform(
+                        get("/api/v1/admin/users")
+                )
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
     }
 }
