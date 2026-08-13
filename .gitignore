@@ -11,5 +11,8 @@ application-local.yaml
 application-local.properties
 *.log
 logs/
+frontend/node_modules/
+frontend/build/
+frontend/.env
 !.env.example
 !.mvn/wrapper/maven-wrapper.jar
