@@ -50,13 +50,10 @@ public class SecurityConfig {
                         .accessDeniedHandler(customAccessDeniedHandler)
                 )
                 .authorizeHttpRequests(authorize -> authorize
-                        
                         .requestMatchers("/actuator/health").permitAll()
-                                       
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
-                
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
-                        
+                        .anyRequest().authenticated() // Đã bổ sung
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
