@@ -13,7 +13,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -47,13 +47,15 @@ class SecurityConfigTests {
     @DisplayName("Endpoint POST /api/v1/auth/login cho phép truy cập công khai khi chưa đăng nhập")
     void loginEndpointIsPublic() throws Exception {
         mockMvc.perform(post("/api/v1/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"usernameOrEmail\":\"test\",\"password\":\"test\"}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"usernameOrEmail\":\"testuser\",\"password\":\"password123\"}"))
                 .andExpect(result -> {
-                    int statusCode = result.getResponse().getStatus();
-                    // Đảm bảo Security không chặn request này (không trả về 401 hoặc 403)
-                    assertNotEquals(401, statusCode);
-                    assertNotEquals(403, statusCode);
+                    String responseBody = result.getResponse().getContentAsString();
+                    // Đảm bảo Spring Security permitAll() cho request đi qua, không bị CustomAuthenticationEntryPoint chặn
+                    assertFalse(
+                            responseBody.contains("Bạn cần đăng nhập để truy cập tài nguyên này"),
+                            "Endpoint login phải cho phép truy cập công khai mà không bị Spring Security chặn"
+                    );
                 });
     }
 

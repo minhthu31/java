@@ -40,7 +40,8 @@ class JwtTokenProviderTest {
     @DisplayName("Từ chối token đã hết hạn")
     void validateToken_ExpiredToken_ReturnsFalse() {
         ReflectionTestUtils.setField(jwtTokenProvider, "jwtExpirationMs", -1000L);
-        String expiredToken = jwtTokenProvider.generateToken("testuser", "STUDENT");
+        // Sử dụng role TEAM_MEMBER hợp lệ thay cho STUDENT
+        String expiredToken = jwtTokenProvider.generateToken("testuser", "TEAM_MEMBER");
 
         assertFalse(jwtTokenProvider.validateToken(expiredToken));
     }
