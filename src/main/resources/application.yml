@@ -38,5 +38,8 @@ logging:
     level: "%5p [correlationId:%X{correlationId:-}]"
 
 app:
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration-ms: ${JWT_EXPIRATION_MS:3600000}
   security:
     integration-encryption-key: ${INTEGRATION_ENCRYPTION_KEY}

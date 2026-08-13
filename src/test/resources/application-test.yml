@@ -10,5 +10,8 @@ spring:
     enabled: false
 
 app:
+  jwt:
+    secret: test-only-jwt-secret-key-with-at-least-32-bytes
+    expiration-ms: 3600000
   security:
     integration-encryption-key: test-only-encryption-key-32-characters
