@@ -1,18 +1,29 @@
 package vn.edu.cnpm.projectsupport.auth;
 
 public class LoginResponse {
-
+    private String token;
     private String username;
     private String email;
     private String fullName;
+    private String role;
 
     public LoginResponse() {
     }
 
-    public LoginResponse(String username, String email, String fullName) {
+    public LoginResponse(String token, String username, String email, String fullName, String role) {
+        this.token = token;
         this.username = username;
         this.email = email;
         this.fullName = fullName;
+        this.role = role;
+    }
+
+    public String getToken() {
+        return token;
+    }
+
+    public void setToken(String token) {
+        this.token = token;
     }
 
     public String getUsername() {
@@ -37,5 +48,13 @@ public class LoginResponse {
 
     public void setFullName(String fullName) {
         this.fullName = fullName;
+    }
+
+    public String getRole() {
+        return role;
+    }
+
+    public void setRole(String role) {
+        this.role = role;
     }
 }
