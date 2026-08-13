@@ -26,7 +26,6 @@ public class UserService {
     public User registerUser(Role role, String username, String email, String rawPassword, String fullName) {
         String passwordHash = encodePassword(rawPassword);
 
-        
         User user = new User();
         user.setRole(role);
         user.setUsername(username);
