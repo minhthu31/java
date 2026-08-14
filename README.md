@@ -96,6 +96,11 @@ Flyway là nguồn chuẩn của schema. Không dùng `spring.jpa.hibernate.ddl-
 - Liên kết thủ công phải ghi actor, thời gian và lý do.
 - Không dùng riêng số commit để kết luận mức đóng góp hoặc điểm số.
 
+## Sprint 2
+
+- [CNPM-52 - API Contract](docs/sprint-2-api-contract.md)
+- [Sprint 2 Kickoff](docs/sprint-2-kickoff.md)
+
 ## Quy trình Git
 
 - Branch: `<type>/<JIRA-KEY>-<short-description>`
