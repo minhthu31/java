@@ -75,6 +75,17 @@ vn.edu.cnpm.projectsupport
 
 Mỗi module nên tổ chức tiếp thành `controller`, `service`, `domain`, `repository`, `dto` và `mapper` khi bắt đầu phát triển. Không tạo một thư mục controller/service khổng lồ dùng chung cho mọi nghiệp vụ.
 
+## Tài liệu thiết kế
+
+Bộ tài liệu thiết kế đã đối chiếu với source code và Flyway migration hiện tại:
+
+- [Điểm bắt đầu review CNPM-18, CNPM-19 và CNPM-20](docs/system-design/README.md)
+- [Kiến trúc hệ thống](docs/system-design/architecture.md)
+- [ERD](docs/system-design/erd.md)
+- [Data Dictionary](docs/system-design/database-design.md)
+
+Các sơ đồ nguồn Draw.io nằm cùng thư mục để nhóm có thể tiếp tục chỉnh sửa và xuất PNG/PDF khi nộp bài.
+
 ## Database
 
 Flyway là nguồn chuẩn của schema. Không dùng `spring.jpa.hibernate.ddl-auto=update`.
