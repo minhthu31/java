@@ -79,7 +79,7 @@ Mỗi module nên tổ chức tiếp thành `controller`, `service`, `domain`, `
 
 Bộ tài liệu thiết kế đã đối chiếu với source code và Flyway migration hiện tại:
 
-- [Điểm bắt đầu review CNPM-18, CNPM-19 và CNPM-20](docs/system-design/README.md)
+- [CNPM-18, CNPM-19 và CNPM-20](docs/system-design/README.md)
 - [Kiến trúc hệ thống](docs/system-design/architecture.md)
 - [ERD](docs/system-design/erd.md)
 - [Data Dictionary](docs/system-design/database-design.md)
