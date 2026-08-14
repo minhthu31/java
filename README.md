@@ -96,6 +96,11 @@ Flyway là nguồn chuẩn của schema. Không dùng `spring.jpa.hibernate.ddl-
 - Liên kết thủ công phải ghi actor, thời gian và lý do.
 - Không dùng riêng số commit để kết luận mức đóng góp hoặc điểm số.
 
+## Báo cáo Sprint
+
+- [CNPM-50 - Tích hợp và kiểm tra kết quả Sprint 1](docs/sprint-reports/CNPM-50-sprint-1-integration-test-report.md)
+- [CNPM-51 - Tổng kết Sprint 1 và tạo Sprint 2 Backlog](docs/sprint-reports/CNPM-51-sprint-1-review-and-sprint-2-backlog.md)
+
 ## Quy trình Git
 
 - Branch: `<type>/<JIRA-KEY>-<short-description>`
