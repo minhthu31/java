@@ -75,6 +75,17 @@ vn.edu.cnpm.projectsupport
 
 Mỗi module nên tổ chức tiếp thành `controller`, `service`, `domain`, `repository`, `dto` và `mapper` khi bắt đầu phát triển. Không tạo một thư mục controller/service khổng lồ dùng chung cho mọi nghiệp vụ.
 
+## Tài liệu thiết kế
+
+Bộ tài liệu thiết kế đã đối chiếu với source code và Flyway migration hiện tại:
+
+- [CNPM-18, CNPM-19 và CNPM-20](docs/system-design/README.md)
+- [Kiến trúc hệ thống](docs/system-design/architecture.md)
+- [ERD](docs/system-design/erd.md)
+- [Data Dictionary](docs/system-design/database-design.md)
+
+Các sơ đồ nguồn Draw.io nằm cùng thư mục để nhóm có thể tiếp tục chỉnh sửa và xuất PNG/PDF khi nộp bài.
+
 ## Database
 
 Flyway là nguồn chuẩn của schema. Không dùng `spring.jpa.hibernate.ddl-auto=update`.
@@ -95,6 +106,11 @@ Flyway là nguồn chuẩn của schema. Không dùng `spring.jpa.hibernate.ddl-
 - Liên kết tự động chỉ tạo sau khi Issue Key được xác minh trong Jira project của nhóm.
 - Liên kết thủ công phải ghi actor, thời gian và lý do.
 - Không dùng riêng số commit để kết luận mức đóng góp hoặc điểm số.
+
+## Báo cáo Sprint
+
+- [CNPM-50 - Tích hợp và kiểm tra kết quả Sprint 1](docs/sprint-reports/CNPM-50-sprint-1-integration-test-report.md)
+- [CNPM-51 - Tổng kết Sprint 1 và tạo Sprint 2 Backlog](docs/sprint-reports/CNPM-51-sprint-1-review-and-sprint-2-backlog.md)
 
 ## Sprint 2
 
