@@ -2,6 +2,7 @@ package vn.edu.cnpm.projectsupport.auth;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import vn.edu.cnpm.projectsupport.common.exception.InvalidCredentialsException;
 import vn.edu.cnpm.projectsupport.identity.domain.User;
 import vn.edu.cnpm.projectsupport.identity.domain.UserStatus;
@@ -21,6 +22,7 @@ public class AuthService {
         this.jwtTokenProvider = jwtTokenProvider;
     }
 
+    @Transactional(readOnly = true)
     public LoginResponse login(LoginRequest request) {
         User user = userRepository.findByUsernameIgnoreCase(request.getUsernameOrEmail())
                 .or(() -> userRepository.findByEmailIgnoreCase(request.getUsernameOrEmail()))
