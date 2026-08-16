@@ -1,5 +1,6 @@
 package vn.edu.cnpm.projectsupport.requirement;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -23,6 +24,7 @@ public class RequirementCreateRequest {
     private Priority priority;
     private RequirementStatus status;
 
+    @JsonIgnore
     @AssertTrue(message = "Creation status must be null or DRAFT")
     public boolean isValidCreationStatus() {
         return status == null || status == RequirementStatus.DRAFT;
