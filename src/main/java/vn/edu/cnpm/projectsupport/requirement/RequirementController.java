@@ -1,14 +1,15 @@
 package vn.edu.cnpm.projectsupport.requirement;
 
-import vn.edu.cnpm.projectsupport.security.CurrentUser;
 import vn.edu.cnpm.projectsupport.security.UserPrincipal;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/v1/requirements")
@@ -20,7 +21,7 @@ public class RequirementController {
     @PostMapping
     public ResponseEntity<RequirementResponse> create(
             @Valid @RequestBody RequirementCreateRequest request,
-            @CurrentUser UserPrincipal currentUser) {
+            @AuthenticationPrincipal UserPrincipal currentUser) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(requirementService.create(request, currentUser.getId()));
     }
@@ -29,7 +30,7 @@ public class RequirementController {
     public ResponseEntity<RequirementResponse> update(
             @PathVariable String id,
             @Valid @RequestBody RequirementUpdateRequest request,
-            @CurrentUser UserPrincipal currentUser) {
+            @AuthenticationPrincipal UserPrincipal currentUser) {
         return ResponseEntity.ok(requirementService.update(id, request, currentUser.getId()));
     }
 
@@ -37,7 +38,7 @@ public class RequirementController {
     public ResponseEntity<RequirementResponse> updateStatus(
             @PathVariable String id,
             @Valid @RequestBody RequirementStatusUpdateRequest request,
-            @CurrentUser UserPrincipal currentUser) {
+            @AuthenticationPrincipal UserPrincipal currentUser) {
         return ResponseEntity.ok(requirementService.updateStatus(id, request, currentUser.getId()));
     }
 
@@ -45,7 +46,7 @@ public class RequirementController {
     public ResponseEntity<Void> delete(
             @PathVariable String id,
             @RequestParam(defaultValue = "false") boolean hardDelete,
-            @CurrentUser UserPrincipal currentUser) {
+            @AuthenticationPrincipal UserPrincipal currentUser) {
         requirementService.delete(id, hardDelete, currentUser.getId());
         return ResponseEntity.noContent().build();
     }
@@ -53,7 +54,7 @@ public class RequirementController {
     @GetMapping("/{id}")
     public ResponseEntity<RequirementResponse> getDetail(
             @PathVariable String id,
-            @CurrentUser UserPrincipal currentUser) {
+            @AuthenticationPrincipal UserPrincipal currentUser) {
         return ResponseEntity.ok(requirementService.getDetail(id, currentUser.getId()));
     }
 
@@ -61,7 +62,7 @@ public class RequirementController {
     public ResponseEntity<Page<RequirementResponse>> getList(
             RequirementFilterRequest filter,
             Pageable pageable,
-            @CurrentUser UserPrincipal currentUser) {
+            @AuthenticationPrincipal UserPrincipal currentUser) {
         return ResponseEntity.ok(requirementService.getList(filter, pageable, currentUser.getId()));
     }
 }

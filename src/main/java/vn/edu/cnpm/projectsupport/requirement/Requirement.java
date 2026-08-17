@@ -1,4 +1,4 @@
-package com.example.requirement;
+package vn.edu.cnpm.projectsupport.requirement;
 
 import jakarta.persistence.*;
 import lombok.*;

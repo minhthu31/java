@@ -4,5 +4,9 @@ public enum RequirementStatus {
     DRAFT,
     APPROVED,
     SYNCED,
-    ARCHIVED
+    ARCHIVED,
+    OPEN,
+    IN_PROGRESS,
+    DONE,
+    CLOSED
 }

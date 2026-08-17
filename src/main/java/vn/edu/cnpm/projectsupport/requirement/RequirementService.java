@@ -1,9 +1,9 @@
-package com.example.requirement;
+package vn.edu.cnpm.projectsupport.requirement;
 
-import com.example.common.exception.AccessDeniedException;
-import com.example.common.exception.ResourceNotFoundException;
-import com.example.group.GroupService;
-import com.example.project.ProjectService;
+import vn.edu.cnpm.projectsupport.common.exception.AccessDeniedException;
+import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
+import vn.edu.cnpm.projectsupport.group.GroupService;
+import vn.edu.cnpm.projectsupport.project.ProjectService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -20,16 +20,16 @@ public class RequirementService {
 
     @Transactional
     public RequirementResponse create(RequirementCreateRequest request, String currentUserId) {
-        projectService.validateProjectExists(request.getProjectId());
-        String groupId = projectService.getGroupIdByProjectId(request.getProjectId());
+        String projectIdStr = String.valueOf(request.getProjectId());
+        projectService.validateProjectExists(projectIdStr);
+        String groupId = projectService.getGroupIdByProjectId(projectIdStr);
 
-        // Acceptance Criteria: Leader được tạo Requirement trong nhóm
         if (!groupService.isLeader(groupId, currentUserId)) {
             throw new AccessDeniedException("Chỉ Leader mới có quyền tạo Requirement.");
         }
 
         Requirement entity = Requirement.builder()
-                .projectId(request.getProjectId())
+                .projectId(projectIdStr)
                 .title(request.getTitle())
                 .description(request.getDescription())
                 .priority(request.getPriority())
@@ -45,7 +45,6 @@ public class RequirementService {
         Requirement entity = getEntity(id);
         String groupId = projectService.getGroupIdByProjectId(entity.getProjectId());
 
-        // Acceptance Criteria: Leader được cập nhật thông tin
         if (!groupService.isLeader(groupId, currentUserId)) {
             throw new AccessDeniedException("Chỉ Leader mới có quyền sửa Requirement.");
         }
@@ -62,7 +61,6 @@ public class RequirementService {
         Requirement entity = getEntity(id);
         String groupId = projectService.getGroupIdByProjectId(entity.getProjectId());
 
-        // Acceptance Criteria: Member/Leader/Lecturer trong nhóm được cập nhật status
         if (!groupService.hasAccess(groupId, currentUserId)) {
             throw new AccessDeniedException("Người ngoài nhóm không có quyền cập nhật trạng thái.");
         }
@@ -76,12 +74,10 @@ public class RequirementService {
         Requirement entity = getEntity(id);
         String groupId = projectService.getGroupIdByProjectId(entity.getProjectId());
 
-        // Acceptance Criteria: Leader được xóa
         if (!groupService.isLeader(groupId, currentUserId)) {
             throw new AccessDeniedException("Chỉ Leader mới có quyền xóa Requirement.");
         }
 
-        // Acceptance Criteria: Xóa mềm / Xóa cứng theo contract
         if (hardDelete) {
             requirementRepository.delete(entity);
         } else {
@@ -95,7 +91,6 @@ public class RequirementService {
         Requirement entity = getEntity(id);
         String groupId = projectService.getGroupIdByProjectId(entity.getProjectId());
 
-        // Acceptance Criteria: Chặn người ngoài nhóm
         if (!groupService.hasAccess(groupId, currentUserId)) {
             throw new AccessDeniedException("Bạn không có quyền xem thông tin Requirement này.");
         }
@@ -106,10 +101,10 @@ public class RequirementService {
     @Transactional(readOnly = true)
     public Page<RequirementResponse> getList(RequirementFilterRequest filter, Pageable pageable, String currentUserId) {
         if (filter.getProjectId() != null) {
-            projectService.validateProjectExists(filter.getProjectId());
-            String groupId = projectService.getGroupIdByProjectId(filter.getProjectId());
+            String projectIdStr = String.valueOf(filter.getProjectId());
+            projectService.validateProjectExists(projectIdStr);
+            String groupId = projectService.getGroupIdByProjectId(projectIdStr);
 
-            // Acceptance Criteria: Lecturer xem nhóm phụ trách, Member xem phạm vi cho phép
             if (!groupService.hasAccess(groupId, currentUserId)) {
                 throw new AccessDeniedException("Bạn không có quyền xem danh sách Requirement của nhóm này.");
             }

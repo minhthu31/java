@@ -1,4 +1,4 @@
-package com.example.requirement;
+package vn.edu.cnpm.projectsupport.requirement;
 
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
@@ -6,6 +6,7 @@ import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 public class RequirementSpecification {
 
@@ -13,11 +14,12 @@ public class RequirementSpecification {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            // Lọc dữ liệu chưa bị xóa mềm
+            
             predicates.add(cb.equal(root.get("isDeleted"), false));
 
-            if (StringUtils.hasText(filter.getProjectId())) {
-                predicates.add(cb.equal(root.get("projectId"), filter.getProjectId()));
+            
+            if (Objects.nonNull(filter.getProjectId()) && StringUtils.hasText(String.valueOf(filter.getProjectId()))) {
+                predicates.add(cb.equal(root.get("projectId"), String.valueOf(filter.getProjectId())));
             }
 
             if (StringUtils.hasText(filter.getKeyword())) {

@@ -1,4 +1,4 @@
-package com.example.requirement;
+package vn.edu.cnpm.projectsupport.requirement;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
