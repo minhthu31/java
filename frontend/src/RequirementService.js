@@ -1,108 +1,116 @@
-import { currentUser } from "./authService";
+const API_BASE_URL =
+    process.env.REACT_APP_API_BASE_URL || "http://localhost:8080/api/v1";
 
-const API_BASE_URL = "http://localhost:8080/api/v1/requirements";
+const getAuthHeaders = () => {
+    const token =
+        localStorage.getItem("token") ||
+        localStorage.getItem("accessToken") ||
+        localStorage.getItem("jwtToken") ||
+        localStorage.getItem("jwt");
 
-const MOCK_REQUIREMENTS = [
-    {
-        id: 1,
-        title: "Đăng nhập hệ thống qua JWT",
-        actor: "User",
-        priority: "HIGH",
-        status: "APPROVED",
-    },
-    {
-        id: 2,
-        title: "Quản lý danh sách thành viên nhóm",
-        actor: "Leader",
-        priority: "MEDIUM",
-        status: "APPROVED",
-    },
-    {
-        id: 3,
-        title: "Tạo và cập nhật Requirement Description",
-        actor: "Leader",
-        priority: "CRITICAL",
-        status: "IN_REVIEW",
-    },
-    {
-        id: 4,
-        title: "Phê duyệt yêu cầu đồ án môn học",
-        actor: "Lecturer",
-        priority: "HIGH",
-        status: "IN_REVIEW",
-    },
-    {
-        id: 5,
-        title: "Theo dõi tiến độ qua GitHub API",
-        actor: "Lecturer",
-        priority: "HIGH",
-        status: "DRAFT",
-    },
-];
+    const headers = {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+    };
 
-export const requirementService = {
-    async getRequirements(params = {}) {
-        const user = currentUser();
-        const token =
-            user?.token ||
-            user?.accessToken ||
-            localStorage.getItem("token") ||
-            localStorage.getItem("access_token");
+    if (token) {
+        headers.Authorization = token.startsWith("Bearer ")
+            ? token
+            : `Bearer ${token}`;
+    }
+
+    return headers;
+};
+
+const createHttpError = (status, message) => {
+    const error = new Error(message);
+    error.status = status;
+    return error;
+};
+
+const getErrorMessage = async (response) => {
+    try {
+        const body = await response.json();
+
+        return (
+            body?.message ||
+            body?.error ||
+            body?.data?.message ||
+            `Lỗi máy chủ (${response.status})`
+        );
+    } catch {
+        return `Lỗi máy chủ (${response.status})`;
+    }
+};
+
+export const RequirementService = {
+    getRequirements: async (projectId, params = {}) => {
+        if (projectId === undefined || projectId === null || projectId === "") {
+            throw createHttpError(400, "projectId is required");
+        }
+
+        const {
+            keyword = "",
+            status = "",
+            priority = "",
+            jiraIssueKey = "",
+            page = 0,
+            size = 20,
+            sort = "updatedAt,desc",
+        } = params;
 
         const query = new URLSearchParams();
-        if (params.search) query.append("search", params.search);
-        if (params.actor && params.actor !== "ALL")
-            query.append("actor", params.actor);
-        if (params.priority && params.priority !== "ALL")
-            query.append("priority", params.priority);
-        if (params.status && params.status !== "ALL")
-            query.append("status", params.status);
 
-        try {
-            const response = await fetch(
-                `${API_BASE_URL}?${query.toString()}`,
-                {
-                    method: "GET",
-                    headers: {
-                        "Content-Type": "application/json",
-                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                    },
-                },
-            );
-
-            if (response.ok) {
-                const result = await response.json();
-                return result.data || result;
-            }
-
-            throw new Error(`BACKEND_ERROR_${response.status}`);
-        } catch (err) {
-            console.warn(
-                "Backend chưa sẵn sàng API Requirement (Lỗi 500/404), hiển thị dữ liệu fallback để kiểm thử UI.",
-            );
-
-            const keyword = (params.search || "").trim().toLowerCase();
-            return MOCK_REQUIREMENTS.filter((item) => {
-                const matchSearch =
-                    !keyword ||
-                    item.title.toLowerCase().includes(keyword) ||
-                    item.actor.toLowerCase().includes(keyword);
-                const matchActor =
-                    !params.actor ||
-                    params.actor === "ALL" ||
-                    item.actor === params.actor;
-                const matchPriority =
-                    !params.priority ||
-                    params.priority === "ALL" ||
-                    item.priority === params.priority;
-                const matchStatus =
-                    !params.status ||
-                    params.status === "ALL" ||
-                    item.status === params.status;
-                return (
-                    matchSearch && matchActor && matchPriority && matchStatus
-                );
-            });
+        if (keyword.trim()) {
+            query.append("keyword", keyword.trim());
         }
+
+        if (status.trim()) {
+            query.append("status", status.trim());
+        }
+
+        if (priority.trim()) {
+            query.append("priority", priority.trim());
+        }
+
+        if (jiraIssueKey.trim()) {
+            query.append("jiraIssueKey", jiraIssueKey.trim());
+        }
+
+        query.append("page", String(page));
+        query.append("size", String(size));
+
+        if (sort) {
+            query.append("sort", sort);
+        }
+
+        const endpoint =
+            `${API_BASE_URL}/projects/${projectId}/requirements` +
+            `?${query.toString()}`;
+
+        const response = await fetch(endpoint, {
+            method: "GET",
+            headers: getAuthHeaders(),
+        });
+
+        if (!response.ok) {
+            const message = await getErrorMessage(response);
+
+            throw createHttpError(response.status, message);
+        }
+
+        const json = await response.json();
+
+
+        if (!json || !json.data || !Array.isArray(json.data.content)) {
+            throw createHttpError(
+                500,
+                "Response API không đúng cấu trúc data.content.",
+            );
+        }
+
+        return json.data;
     },
 };
+
+export default RequirementService;
