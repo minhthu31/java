@@ -1,78 +1,151 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { requirementService } from "./RequirementService";
-export const RequirementList = ({
-    currentUserRole = "TEAM_MEMBER",
-    onCreateRequirement,
-    onEditRequirement,
-}) => {
+import React, { useCallback, useEffect, useState } from "react";
+import { RequirementService } from "./RequirementService";
+
+const PAGE_SIZE = 20;
+
+const STATUS_OPTIONS = ["", "DRAFT", "APPROVED", "SYNCED", "ARCHIVED"];
+
+const PRIORITY_OPTIONS = ["", "HIGHEST", "HIGH", "MEDIUM", "LOW", "LOWEST"];
+
+const RequirementList = ({ projectId, currentUserRole }) => {
     const [requirements, setRequirements] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
+
+    const [loading, setLoading] = useState(false);
+
     const [error, setError] = useState(null);
 
-    const [searchTerm, setSearchTerm] = useState("");
-    const [selectedActor, setSelectedActor] = useState("ALL");
-    const [selectedPriority, setSelectedPriority] = useState("ALL");
-    const [selectedStatus, setSelectedStatus] = useState("ALL");
+    const [page, setPage] = useState(0);
 
-    const role = (currentUserRole || "").toUpperCase();
-    const canManage =
-        role === "TEAM_LEADER" || role === "LEADER" || role === "ADMIN";
+    const [totalPages, setTotalPages] = useState(1);
 
-    const loadData = useCallback(async () => {
-        setIsLoading(true);
-        setError(null);
-        try {
-            const data = await requirementService.getRequirements({
-                search: searchTerm,
-                actor: selectedActor,
-                priority: selectedPriority,
-                status: selectedStatus,
-            });
-            setRequirements(Array.isArray(data) ? data : []);
-        } catch (err) {
-            setError(err.message || "Không thể tải dữ liệu từ máy chủ.");
-        } finally {
-            setIsLoading(false);
+    const [totalElements, setTotalElements] = useState(0);
+
+    const [keywordInput, setKeywordInput] = useState("");
+
+    const [jiraIssueKeyInput, setJiraIssueKeyInput] = useState("");
+
+    const [keyword, setKeyword] = useState("");
+
+    const [status, setStatus] = useState("");
+
+    const [priority, setPriority] = useState("");
+
+    const [jiraIssueKey, setJiraIssueKey] = useState("");
+
+    const canManage = currentUserRole === "TEAM_LEADER";
+
+    const fetchRequirements = useCallback(async () => {
+        if (projectId === undefined || projectId === null || projectId === "") {
+            setRequirements([]);
+            setTotalPages(1);
+            setTotalElements(0);
+            setError("Không xác định được project hiện tại.");
+            setLoading(false);
+            return;
         }
-    }, [searchTerm, selectedActor, selectedPriority, selectedStatus]);
+
+        setLoading(true);
+        setError(null);
+
+        try {
+            const data = await RequirementService.getRequirements(projectId, {
+                keyword,
+                status,
+                priority,
+                jiraIssueKey,
+                page,
+                size: PAGE_SIZE,
+                sort: "updatedAt,desc",
+            });
+
+            if (!data || !Array.isArray(data.content)) {
+                throw new Error(
+                    "Response API không đúng cấu trúc data.content.",
+                );
+            }
+
+            setRequirements(data.content);
+
+            setTotalPages(
+                Number.isInteger(data.totalPages)
+                    ? Math.max(data.totalPages, 1)
+                    : 1,
+            );
+
+            setTotalElements(
+                Number.isInteger(data.totalElements)
+                    ? data.totalElements
+                    : data.content.length,
+            );
+        } catch (err) {
+            setRequirements([]);
+            setTotalPages(1);
+            setTotalElements(0);
+
+            if (err.status === 401) {
+                setError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+            } else if (err.status === 403) {
+                setError("Bạn không có quyền xem danh sách Requirement.");
+            } else if (err.status === 404) {
+                setError("Không tìm thấy project hoặc Requirement.");
+            } else {
+                setError(err.message || "Không thể tải danh sách Requirement.");
+            }
+        } finally {
+            setLoading(false);
+        }
+    }, [projectId, keyword, status, priority, jiraIssueKey, page]);
 
     useEffect(() => {
-        const timer = setTimeout(() => loadData(), 200);
-        return () => clearTimeout(timer);
-    }, [loadData]);
+        fetchRequirements();
+    }, [fetchRequirements]);
 
-   
-    const actorOptions = useMemo(() => {
-        const actors = requirements.map((r) => r.actor).filter(Boolean);
-        return Array.from(new Set(actors));
-    }, [requirements]);
+    const handleSearchSubmit = (event) => {
+        event.preventDefault();
 
-    const handleResetFilter = () => {
-        setSearchTerm("");
-        setSelectedActor("ALL");
-        setSelectedPriority("ALL");
-        setSelectedStatus("ALL");
+        setPage(0);
+
+        setKeyword(keywordInput.trim());
+
+        setJiraIssueKey(jiraIssueKeyInput.trim());
     };
 
-    const badgeStyle = {
-        LOW: { bg: "#f1f5f9", text: "#475569", label: "Low" },
-        MEDIUM: { bg: "#eff6ff", text: "#1d4ed8", label: "Medium" },
-        HIGH: { bg: "#fef3c7", text: "#b45309", label: "High" },
-        CRITICAL: { bg: "#ffe4e6", text: "#e11d48", label: "Critical" },
-        DRAFT: { bg: "#f3f4f6", text: "#374151", label: "Bản nháp" },
-        IN_REVIEW: { bg: "#fef9c3", text: "#854d0e", label: "Đang xem xét" },
-        APPROVED: { bg: "#dcfce7", text: "#15803d", label: "Đã duyệt" },
-        REJECTED: { bg: "#fee2e2", text: "#b91c1c", label: "Từ chối" },
+    const handleClearFilters = () => {
+        setKeywordInput("");
+        setJiraIssueKeyInput("");
+
+        setKeyword("");
+        setJiraIssueKey("");
+        setStatus("");
+        setPriority("");
+
+        setPage(0);
+    };
+
+    const handleStatusChange = (event) => {
+        setStatus(event.target.value);
+        setPage(0);
+    };
+
+    const handlePriorityChange = (event) => {
+        setPriority(event.target.value);
+        setPage(0);
+    };
+
+    const handlePreviousPage = () => {
+        setPage((currentPage) => Math.max(currentPage - 1, 0));
+    };
+
+    const handleNextPage = () => {
+        setPage((currentPage) => Math.min(currentPage + 1, totalPages - 1));
     };
 
     return (
         <div
             style={{
-                backgroundColor: "#ffffff",
-                borderRadius: "12px",
-                padding: "24px",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-                border: "1px solid #e2e8f0",
+                padding: "32px",
+                maxWidth: "1400px",
+                margin: "0 auto",
             }}
         >
             <div
@@ -80,45 +153,45 @@ export const RequirementList = ({
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    borderBottom: "1px solid #e2e8f0",
-                    paddingBottom: "16px",
-                    marginBottom: "20px",
+                    marginBottom: "24px",
                 }}
             >
                 <div>
-                    <h3
+                    <h1
                         style={{
                             margin: 0,
-                            fontSize: "18px",
-                            color: "#0f172a",
-                            fontWeight: "700",
+                            fontSize: "28px",
                         }}
                     >
-                        Danh sách Requirement Description
-                    </h3>
-                    <span style={{ fontSize: "13px", color: "#64748b" }}>
-                        Quyền hiện tại:{" "}
-                        <strong style={{ color: "#2563eb" }}>
-                            {currentUserRole}
-                        </strong>
-                    </span>
+                        Requirements
+                    </h1>
+
+                    <p
+                        style={{
+                            margin: "6px 0 0",
+                            color: "#6b778c",
+                        }}
+                    >
+                        Danh sách yêu cầu của project
+                    </p>
                 </div>
 
                 {canManage && (
                     <button
-                        onClick={
-                            onCreateRequirement ||
-                            (() => alert("Mở form tạo Requirement mới"))
+                        type="button"
+                        onClick={() =>
+                            alert(
+                                "Chức năng tạo Requirement sẽ được tích hợp ở CNPM-64.",
+                            )
                         }
                         style={{
-                            backgroundColor: "#2563eb",
+                            padding: "10px 16px",
+                            backgroundColor: "#0052cc",
                             color: "#fff",
                             border: "none",
-                            padding: "8px 16px",
-                            borderRadius: "8px",
+                            borderRadius: "5px",
                             cursor: "pointer",
-                            fontWeight: "600",
-                            fontSize: "13px",
+                            fontWeight: 600,
                         }}
                     >
                         + Tạo Requirement
@@ -126,354 +199,488 @@ export const RequirementList = ({
                 )}
             </div>
 
-            <div
+            <form
+                onSubmit={handleSearchSubmit}
                 style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-                    gap: "12px",
-                    marginBottom: "16px",
+                    backgroundColor: "#fff",
+                    padding: "20px",
+                    borderRadius: "8px",
+                    marginBottom: "20px",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
                 }}
             >
-                <div>
-                    <label
-                        style={{
-                            display: "block",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                            color: "#475569",
-                            marginBottom: "4px",
-                        }}
-                    >
-                        Tìm kiếm Title / Actor
-                    </label>
-                    <input
-                        type="text"
-                        placeholder="Nhập từ khóa..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        style={{
-                            width: "100%",
-                            padding: "8px 12px",
-                            borderRadius: "6px",
-                            border: "1px solid #cbd5e1",
-                            fontSize: "14px",
-                            boxSizing: "border-box",
-                        }}
-                    />
-                </div>
-
-                <div>
-                    <label
-                        style={{
-                            display: "block",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                            color: "#475569",
-                            marginBottom: "4px",
-                        }}
-                    >
-                        Lọc theo Actor
-                    </label>
-                    <select
-                        value={selectedActor}
-                        onChange={(e) => setSelectedActor(e.target.value)}
-                        style={{
-                            width: "100%",
-                            padding: "8px 12px",
-                            borderRadius: "6px",
-                            border: "1px solid #cbd5e1",
-                            fontSize: "14px",
-                        }}
-                    >
-                        <option value="ALL">Tất cả Actor</option>
-                        {actorOptions.map((actor) => (
-                            <option key={actor} value={actor}>
-                                {actor}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-
-                <div>
-                    <label
-                        style={{
-                            display: "block",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                            color: "#475569",
-                            marginBottom: "4px",
-                        }}
-                    >
-                        Độ ưu tiên (Priority)
-                    </label>
-                    <select
-                        value={selectedPriority}
-                        onChange={(e) => setSelectedPriority(e.target.value)}
-                        style={{
-                            width: "100%",
-                            padding: "8px 12px",
-                            borderRadius: "6px",
-                            border: "1px solid #cbd5e1",
-                            fontSize: "14px",
-                        }}
-                    >
-                        <option value="ALL">Tất cả Priority</option>
-                        <option value="LOW">Low</option>
-                        <option value="MEDIUM">Medium</option>
-                        <option value="HIGH">High</option>
-                        <option value="CRITICAL">Critical</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label
-                        style={{
-                            display: "block",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                            color: "#475569",
-                            marginBottom: "4px",
-                        }}
-                    >
-                        Trạng thái (Status)
-                    </label>
-                    <select
-                        value={selectedStatus}
-                        onChange={(e) => setSelectedStatus(e.target.value)}
-                        style={{
-                            width: "100%",
-                            padding: "8px 12px",
-                            borderRadius: "6px",
-                            border: "1px solid #cbd5e1",
-                            fontSize: "14px",
-                        }}
-                    >
-                        <option value="ALL">Tất cả Trạng thái</option>
-                        <option value="DRAFT">Bản nháp</option>
-                        <option value="IN_REVIEW">Đang xem xét</option>
-                        <option value="APPROVED">Đã duyệt</option>
-                        <option value="REJECTED">Từ chối</option>
-                    </select>
-                </div>
-            </div>
-
-            {(searchTerm ||
-                selectedActor !== "ALL" ||
-                selectedPriority !== "ALL" ||
-                selectedStatus !== "ALL") && (
-                <div style={{ marginBottom: "16px", textAlign: "right" }}>
-                    <button
-                        onClick={handleResetFilter}
-                        style={{
-                            background: "none",
-                            border: "none",
-                            color: "#2563eb",
-                            fontSize: "13px",
-                            fontWeight: "600",
-                            cursor: "pointer",
-                            textDecoration: "underline",
-                        }}
-                    >
-                        Xóa tất cả bộ lọc
-                    </button>
-                </div>
-            )}
-
-            {/* Hiển thị Trạng thái */}
-            {isLoading ? (
                 <div
                     style={{
-                        textAlign: "center",
-                        padding: "40px 0",
-                        color: "#64748b",
+                        display: "grid",
+                        gridTemplateColumns: "2fr 1fr 1fr 1.5fr auto auto",
+                        gap: "12px",
+                        alignItems: "end",
                     }}
                 >
-                    Đang tải danh sách Requirement...
-                </div>
-            ) : error ? (
-                <div
-                    style={{
-                        textAlign: "center",
-                        padding: "24px",
-                        color: "#b91c1c",
-                        backgroundColor: "#fee2e2",
-                        borderRadius: "8px",
-                    }}
-                >
-                    <p style={{ margin: "0 0 8px 0" }}>{error}</p>
+                    <div>
+                        <label
+                            style={{
+                                display: "block",
+                                marginBottom: "6px",
+                                fontSize: "13px",
+                                fontWeight: 600,
+                            }}
+                        >
+                            Từ khóa
+                        </label>
+
+                        <input
+                            type="text"
+                            placeholder="Tìm từ khóa"
+                            value={keywordInput}
+                            onChange={(event) =>
+                                setKeywordInput(event.target.value)
+                            }
+                            style={{
+                                width: "100%",
+                                boxSizing: "border-box",
+                                padding: "9px 10px",
+                                border: "1px solid #dfe1e6",
+                                borderRadius: "4px",
+                            }}
+                        />
+                    </div>
+
+                    <div>
+                        <label
+                            style={{
+                                display: "block",
+                                marginBottom: "6px",
+                                fontSize: "13px",
+                                fontWeight: 600,
+                            }}
+                        >
+                            Status
+                        </label>
+
+                        <select
+                            aria-label="Status filter"
+                            value={status}
+                            onChange={handleStatusChange}
+                            style={{
+                                width: "100%",
+                                padding: "9px 10px",
+                                border: "1px solid #dfe1e6",
+                                borderRadius: "4px",
+                            }}
+                        >
+                            {STATUS_OPTIONS.map((option) => (
+                                <option
+                                    key={option || "ALL_STATUS"}
+                                    value={option}
+                                >
+                                    {option || "Tất cả"}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label
+                            style={{
+                                display: "block",
+                                marginBottom: "6px",
+                                fontSize: "13px",
+                                fontWeight: 600,
+                            }}
+                        >
+                            Priority
+                        </label>
+
+                        <select
+                            aria-label="Priority filter"
+                            value={priority}
+                            onChange={handlePriorityChange}
+                            style={{
+                                width: "100%",
+                                padding: "9px 10px",
+                                border: "1px solid #dfe1e6",
+                                borderRadius: "4px",
+                            }}
+                        >
+                            {PRIORITY_OPTIONS.map((option) => (
+                                <option
+                                    key={option || "ALL_PRIORITY"}
+                                    value={option}
+                                >
+                                    {option || "Tất cả"}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label
+                            style={{
+                                display: "block",
+                                marginBottom: "6px",
+                                fontSize: "13px",
+                                fontWeight: 600,
+                            }}
+                        >
+                            Jira Issue Key
+                        </label>
+
+                        <input
+                            type="text"
+                            placeholder="Ví dụ: CNPM-63"
+                            value={jiraIssueKeyInput}
+                            onChange={(event) =>
+                                setJiraIssueKeyInput(event.target.value)
+                            }
+                            style={{
+                                width: "100%",
+                                boxSizing: "border-box",
+                                padding: "9px 10px",
+                                border: "1px solid #dfe1e6",
+                                borderRadius: "4px",
+                            }}
+                        />
+                    </div>
+
                     <button
-                        onClick={loadData}
+                        type="submit"
                         style={{
-                            backgroundColor: "#dc2626",
+                            padding: "9px 16px",
+                            backgroundColor: "#0052cc",
                             color: "#fff",
                             border: "none",
-                            padding: "6px 12px",
-                            borderRadius: "6px",
+                            borderRadius: "4px",
                             cursor: "pointer",
-                            fontSize: "12px",
-                            fontWeight: "600",
+                            fontWeight: 600,
+                        }}
+                    >
+                        Tìm kiếm
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={handleClearFilters}
+                        style={{
+                            padding: "9px 16px",
+                            backgroundColor: "#fff",
+                            color: "#172b4d",
+                            border: "1px solid #dfe1e6",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                        }}
+                    >
+                        Xóa lọc
+                    </button>
+                </div>
+            </form>
+
+            {error && (
+                <div
+                    role="alert"
+                    style={{
+                        padding: "16px",
+                        backgroundColor: "#ffebe6",
+                        border: "1px solid #ffbdad",
+                        borderRadius: "6px",
+                        marginBottom: "20px",
+                        color: "#bf2600",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                    }}
+                >
+                    <span>{error}</span>
+
+                    <button
+                        type="button"
+                        onClick={fetchRequirements}
+                        style={{
+                            padding: "7px 14px",
+                            backgroundColor: "#de350b",
+                            color: "#fff",
+                            border: "none",
+                            borderRadius: "4px",
+                            cursor: "pointer",
                         }}
                     >
                         Thử lại
                     </button>
                 </div>
-            ) : requirements.length === 0 ? (
+            )}
+
+            {/* LOADING */}
+            {loading && (
                 <div
                     style={{
+                        backgroundColor: "#fff",
+                        padding: "40px",
                         textAlign: "center",
-                        padding: "40px 0",
-                        color: "#64748b",
-                        border: "1px dashed #cbd5e1",
                         borderRadius: "8px",
                     }}
                 >
-                    <p style={{ margin: "0 0 8px 0", fontSize: "14px" }}>
-                        Không tìm thấy Requirement phù hợp.
-                    </p>
-                    <button
-                        onClick={handleResetFilter}
-                        style={{
-                            backgroundColor: "#f1f5f9",
-                            color: "#334155",
-                            border: "1px solid #cbd5e1",
-                            padding: "6px 12px",
-                            borderRadius: "6px",
-                            cursor: "pointer",
-                            fontSize: "13px",
-                            fontWeight: "600",
-                        }}
-                    >
-                        Đặt lại bộ lọc
-                    </button>
+                    Đang tải danh sách Requirement...
                 </div>
-            ) : (
-                <div style={{ overflowX: "auto" }}>
-                    <table
+            )}
+
+            {!loading && !error && requirements.length === 0 && (
+                <div
+                    style={{
+                        backgroundColor: "#fff",
+                        padding: "50px",
+                        textAlign: "center",
+                        borderRadius: "8px",
+                        color: "#6b778c",
+                    }}
+                >
+                    Không có Requirement nào.
+                </div>
+            )}
+
+            {!loading && !error && requirements.length > 0 && (
+                <>
+                    <div
                         style={{
-                            width: "100%",
-                            borderCollapse: "collapse",
-                            textAlign: "left",
-                            fontSize: "14px",
+                            backgroundColor: "#fff",
+                            borderRadius: "8px",
+                            overflow: "auto",
+                            boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
                         }}
                     >
-                        <thead>
-                            <tr
-                                style={{
-                                    backgroundColor: "#f8fafc",
-                                    borderBottom: "2px solid #e2e8f0",
-                                    color: "#475569",
-                                }}
-                            >
-                                <th style={{ padding: "12px 16px" }}>Title</th>
-                                <th style={{ padding: "12px 16px" }}>Actor</th>
-                                <th style={{ padding: "12px 16px" }}>
-                                    Priority
-                                </th>
-                                <th style={{ padding: "12px 16px" }}>Status</th>
-                                {canManage && (
-                                    <th
-                                        style={{
-                                            padding: "12px 16px",
-                                            textAlign: "right",
-                                        }}
-                                    >
-                                        Thao tác
-                                    </th>
-                                )}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {requirements.map((item) => (
+                        <table
+                            style={{
+                                width: "100%",
+                                borderCollapse: "collapse",
+                            }}
+                        >
+                            <thead>
                                 <tr
-                                    key={item.id}
                                     style={{
-                                        borderBottom: "1px solid #f1f5f9",
+                                        backgroundColor: "#f4f5f7",
                                     }}
                                 >
-                                    <td
+                                    <th
                                         style={{
-                                            padding: "14px 16px",
-                                            fontWeight: "600",
-                                            color: "#0f172a",
+                                            padding: "14px",
+                                            textAlign: "left",
                                         }}
                                     >
-                                        {item.title}
-                                    </td>
-                                    <td
+                                        Jira Issue Key
+                                    </th>
+
+                                    <th
                                         style={{
-                                            padding: "14px 16px",
-                                            color: "#475569",
+                                            padding: "14px",
+                                            textAlign: "left",
                                         }}
                                     >
-                                        {item.actor}
-                                    </td>
-                                    <td style={{ padding: "14px 16px" }}>
-                                        <span
-                                            style={{
-                                                padding: "4px 10px",
-                                                borderRadius: "20px",
-                                                fontSize: "12px",
-                                                fontWeight: "600",
-                                                backgroundColor:
-                                                    badgeStyle[item.priority]
-                                                        ?.bg,
-                                                color: badgeStyle[item.priority]
-                                                    ?.text,
-                                            }}
-                                        >
-                                            {badgeStyle[item.priority]?.label ||
-                                                item.priority}
-                                        </span>
-                                    </td>
-                                    <td style={{ padding: "14px 16px" }}>
-                                        <span
-                                            style={{
-                                                padding: "4px 10px",
-                                                borderRadius: "6px",
-                                                fontSize: "12px",
-                                                fontWeight: "500",
-                                                backgroundColor:
-                                                    badgeStyle[item.status]?.bg,
-                                                color: badgeStyle[item.status]
-                                                    ?.text,
-                                            }}
-                                        >
-                                            {badgeStyle[item.status]?.label ||
-                                                item.status}
-                                        </span>
-                                    </td>
+                                        Title
+                                    </th>
+
+                                    <th
+                                        style={{
+                                            padding: "14px",
+                                            textAlign: "left",
+                                        }}
+                                    >
+                                        Description
+                                    </th>
+
+                                    <th
+                                        style={{
+                                            padding: "14px",
+                                            textAlign: "left",
+                                        }}
+                                    >
+                                        Priority
+                                    </th>
+
+                                    <th
+                                        style={{
+                                            padding: "14px",
+                                            textAlign: "left",
+                                        }}
+                                    >
+                                        Status
+                                    </th>
+
+                                    <th
+                                        style={{
+                                            padding: "14px",
+                                            textAlign: "left",
+                                        }}
+                                    >
+                                        Updated
+                                    </th>
+
                                     {canManage && (
-                                        <td
+                                        <th
                                             style={{
-                                                padding: "14px 16px",
-                                                textAlign: "right",
+                                                padding: "14px",
+                                                textAlign: "left",
                                             }}
                                         >
-                                            <button
-                                                onClick={() =>
-                                                    onEditRequirement?.(item) ||
-                                                    alert(
-                                                        `Chỉnh sửa: ${item.title}`,
-                                                    )
-                                                }
-                                                style={{
-                                                    background: "none",
-                                                    border: "none",
-                                                    color: "#2563eb",
-                                                    fontWeight: "600",
-                                                    cursor: "pointer",
-                                                }}
-                                            >
-                                                Chỉnh sửa
-                                            </button>
-                                        </td>
+                                            Thao tác
+                                        </th>
                                     )}
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+
+                            <tbody>
+                                {requirements.map((requirement) => (
+                                    <tr
+                                        key={requirement.id}
+                                        style={{
+                                            borderTop: "1px solid #ebecf0",
+                                        }}
+                                    >
+                                        <td
+                                            style={{
+                                                padding: "14px",
+                                                fontWeight: 600,
+                                            }}
+                                        >
+                                            {requirement.jiraIssueKey || "-"}
+                                        </td>
+
+                                        <td
+                                            style={{
+                                                padding: "14px",
+                                            }}
+                                        >
+                                            {requirement.title}
+                                        </td>
+
+                                        <td
+                                            style={{
+                                                padding: "14px",
+                                                maxWidth: "300px",
+                                            }}
+                                        >
+                                            {requirement.description || "-"}
+                                        </td>
+
+                                        <td
+                                            style={{
+                                                padding: "14px",
+                                            }}
+                                        >
+                                            {requirement.priority || "-"}
+                                        </td>
+
+                                        <td
+                                            style={{
+                                                padding: "14px",
+                                            }}
+                                        >
+                                            {requirement.status || "-"}
+                                        </td>
+
+                                        <td
+                                            style={{
+                                                padding: "14px",
+                                            }}
+                                        >
+                                            {requirement.updatedAt
+                                                ? new Date(
+                                                      requirement.updatedAt,
+                                                  ).toLocaleString("vi-VN")
+                                                : "-"}
+                                        </td>
+
+                                        {canManage && (
+                                            <td
+                                                style={{
+                                                    padding: "14px",
+                                                }}
+                                            >
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        alert(
+                                                            "Chức năng sửa Requirement sẽ được tích hợp ở CNPM-64.",
+                                                        )
+                                                    }
+                                                    style={{
+                                                        padding: "6px 12px",
+                                                        backgroundColor: "#fff",
+                                                        border: "1px solid #0052cc",
+                                                        color: "#0052cc",
+                                                        borderRadius: "4px",
+                                                        cursor: "pointer",
+                                                    }}
+                                                >
+                                                    Sửa
+                                                </button>
+                                            </td>
+                                        )}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div
+                        style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            marginTop: "16px",
+                        }}
+                    >
+                        <span
+                            style={{
+                                color: "#6b778c",
+                                fontSize: "14px",
+                            }}
+                        >
+                            Tổng số: {totalElements} Requirement
+                        </span>
+
+                        <div
+                            style={{
+                                display: "flex",
+                                gap: "8px",
+                                alignItems: "center",
+                            }}
+                        >
+                            <button
+                                type="button"
+                                disabled={page === 0}
+                                onClick={handlePreviousPage}
+                                style={{
+                                    padding: "7px 12px",
+                                    cursor:
+                                        page === 0 ? "not-allowed" : "pointer",
+                                }}
+                            >
+                                Trước
+                            </button>
+
+                            <span>
+                                Trang {page + 1} / {totalPages}
+                            </span>
+
+                            <button
+                                type="button"
+                                disabled={page >= totalPages - 1}
+                                onClick={handleNextPage}
+                                style={{
+                                    padding: "7px 12px",
+                                    cursor:
+                                        page >= totalPages - 1
+                                            ? "not-allowed"
+                                            : "pointer",
+                                }}
+                            >
+                                Sau
+                            </button>
+                        </div>
+                    </div>
+                </>
             )}
         </div>
     );
 };
+
+export default RequirementList;
