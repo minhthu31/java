@@ -33,4 +33,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     ResponseEntity<ApiError> handleUnexpected(Exception exception,HttpServletRequest request){request.getServletContext().log("Unhandled request error",exception);return error(HttpStatus.INTERNAL_SERVER_ERROR,"INTERNAL_ERROR","Hệ thống gặp lỗi ngoài dự kiến",Map.of());}
     private ResponseEntity<ApiError> error(HttpStatus status,String code,String message,Map<String,String> fields){return ResponseEntity.status(status).body(new ApiError(code,message,MDC.get("correlationId"),fields,Instant.now()));}
+    @ExceptionHandler(ForbiddenGroupScopeException.class)
+    ResponseEntity<ApiError> handleForbiddenGroupScope(ForbiddenGroupScopeException exception) {
+        return error(HttpStatus.FORBIDDEN, "ACCESS_DENIED", exception.getMessage(), Map.of());
 }
