@@ -3,7 +3,6 @@
 
 -- =====================================================================
 -- 0.1 TẠO 1 NHÓM SINH VIÊN MẪU (Bắt buộc vì Project yêu cầu group_id)
--- Đã bổ sung cột 'code' (NOT NULL UNIQUE) và gán 'leader_user_id'
 -- =====================================================================
 INSERT INTO student_groups (code, name, leader_user_id) 
 VALUES (
