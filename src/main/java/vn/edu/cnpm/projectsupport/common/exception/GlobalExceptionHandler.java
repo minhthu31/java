@@ -16,24 +16,50 @@ import vn.edu.cnpm.projectsupport.common.api.ApiError;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
     @ExceptionHandler(ResourceNotFoundException.class)
     ResponseEntity<ApiError> handleNotFound(ResourceNotFoundException exception) {
         return error(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", exception.getMessage(), Map.of());
     }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException exception) {
-        Map<String,String> fields=new LinkedHashMap<>();
-        for(FieldError fieldError:exception.getBindingResult().getFieldErrors()) fields.putIfAbsent(fieldError.getField(),fieldError.getDefaultMessage());
-        return error(HttpStatus.BAD_REQUEST,"VALIDATION_ERROR","Dữ liệu đầu vào không hợp lệ",fields);
+        Map<String, String> fields = new LinkedHashMap<>();
+        for (FieldError fieldError : exception.getBindingResult().getFieldErrors()) {
+            fields.putIfAbsent(fieldError.getField(), fieldError.getDefaultMessage());
+        }
+        return error(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "Dữ liệu đầu vào không hợp lệ", fields);
     }
-    @ExceptionHandler(AccessDeniedException.class)
-    ResponseEntity<ApiError> handleAccessDenied(){return error(HttpStatus.FORBIDDEN,"ACCESS_DENIED","Bạn không có quyền thực hiện thao tác này",Map.of());}
-    @ExceptionHandler(InvalidCredentialsException.class)
-    ResponseEntity<ApiError> handleInvalidCredentials(InvalidCredentialsException exception){return error(HttpStatus.UNAUTHORIZED,"INVALID_CREDENTIALS",exception.getMessage(),Map.of());}
-    @ExceptionHandler(Exception.class)
-    ResponseEntity<ApiError> handleUnexpected(Exception exception,HttpServletRequest request){request.getServletContext().log("Unhandled request error",exception);return error(HttpStatus.INTERNAL_SERVER_ERROR,"INTERNAL_ERROR","Hệ thống gặp lỗi ngoài dự kiến",Map.of());}
-    private ResponseEntity<ApiError> error(HttpStatus status,String code,String message,Map<String,String> fields){return ResponseEntity.status(status).body(new ApiError(code,message,MDC.get("correlationId"),fields,Instant.now()));}
+
     @ExceptionHandler(ForbiddenGroupScopeException.class)
     ResponseEntity<ApiError> handleForbiddenGroupScope(ForbiddenGroupScopeException exception) {
         return error(HttpStatus.FORBIDDEN, "ACCESS_DENIED", exception.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException exception) {
+        return error(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Bạn không có quyền thực hiện thao tác này", Map.of());
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    ResponseEntity<ApiError> handleInvalidCredentials(InvalidCredentialsException exception) {
+        return error(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", exception.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(Exception.class)
+    ResponseEntity<ApiError> handleUnexpected(Exception exception, HttpServletRequest request) {
+        return error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", "Đã có lỗi xảy ra trong hệ thống", Map.of());
+    }
+
+    private ResponseEntity<ApiError> error(HttpStatus status, String code, String message, Map<String, String> fields) {
+        String correlationId = MDC.get("correlationId");
+        ApiError apiError = ApiError.builder()
+                .code(code)
+                .message(message)
+                .correlationId(correlationId)
+                .fieldErrors(fields)
+                .timestamp(Instant.now())
+                .build();
+        return ResponseEntity.status(status).body(apiError);
+    }
 }
