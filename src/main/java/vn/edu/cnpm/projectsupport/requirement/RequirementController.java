@@ -1,10 +1,11 @@
 package vn.edu.cnpm.projectsupport.requirement;
 
-import jakarta.validation.Valid;
-import java.util.Collections;
 import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
@@ -14,79 +15,85 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+
+import jakarta.validation.Valid;
 import vn.edu.cnpm.projectsupport.common.api.ApiResponse;
 
 @RestController
 @RequestMapping("/api/v1/projects/{projectId}/requirements")
+@Validated
 public class RequirementController {
 
-    //Lấy danh sách requirement theo bộ lọc
-    @GetMapping
-    public ResponseEntity<ApiResponse<List<RequirementResponse>>> getRequirements(
-            @PathVariable Long projectId,
-            @ModelAttribute RequirementFilterRequest filter) {
-        // Controller chỉ trả cấu trúc envelope, không chứa logic nghiệp vụ
-        List<RequirementResponse> responses = Collections.emptyList();
-        return ResponseEntity.ok(ApiResponse.success(responses));
+    private final RequirementService requirementService;
+
+    // Constructor Injection
+    public RequirementController(RequirementService requirementService) {
+        this.requirementService = requirementService;
     }
 
-    // Tạo mới requirement
+    // 1. Tạo Requirement (201 Created) - Chỉ Leader
     @PostMapping
-    public ResponseEntity<ApiResponse<RequirementResponse>> createRequirement(
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAnyRole('LEADER', 'TEAM_LEADER')")
+    public ApiResponse<RequirementResponse> createRequirement(
             @PathVariable Long projectId,
             @Valid @RequestBody RequirementCreateRequest request) {
-        RequirementResponse response = new RequirementResponse();
-        response.setProjectId(projectId);
-        response.setTitle(request.getTitle());
-        response.setActor(request.getActor());
-        response.setPriority(request.getPriority());
-        response.setStatus(RequirementStatus.DRAFT);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
+        RequirementResponse response = requirementService.createRequirement(projectId, request);
+        return ApiResponse.success(response);
     }
 
-    // Lấy chi tiết requirement theo ID
+    // 2. Lấy danh sách Requirement có lọc (200 OK)
+    @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'LECTURER', 'LEADER', 'TEAM_LEADER', 'MEMBER', 'TEAM_MEMBER')")
+    public ApiResponse<List<RequirementResponse>> getRequirements(
+            @PathVariable Long projectId,
+            @ModelAttribute RequirementFilterRequest filterRequest) {
+        List<RequirementResponse> responses = requirementService.getRequirements(projectId, filterRequest);
+        return ApiResponse.success(responses);
+    }
+
+    // 3. Lấy chi tiết Requirement theo ID (200 OK)
     @GetMapping("/{requirementId}")
-    public ResponseEntity<ApiResponse<RequirementResponse>> getRequirementById(
+    @PreAuthorize("hasAnyRole('ADMIN', 'LECTURER', 'LEADER', 'TEAM_LEADER', 'MEMBER', 'TEAM_MEMBER')")
+    public ApiResponse<RequirementResponse> getRequirementById(
             @PathVariable Long projectId,
             @PathVariable Long requirementId) {
-        RequirementResponse response = new RequirementResponse();
-        response.setId(requirementId);
-        response.setProjectId(projectId);
-        return ResponseEntity.ok(ApiResponse.success(response));
+        RequirementResponse response = requirementService.getRequirementById(projectId, requirementId);
+        return ApiResponse.success(response);
     }
 
-    //  Cập nhật nội dung requirement
+    // 4. Cập nhật Requirement (200 OK) - Chỉ Leader
     @PutMapping("/{requirementId}")
-    public ResponseEntity<ApiResponse<RequirementResponse>> updateRequirement(
+    @PreAuthorize("hasAnyRole('LEADER', 'TEAM_LEADER')")
+    public ApiResponse<RequirementResponse> updateRequirement(
             @PathVariable Long projectId,
             @PathVariable Long requirementId,
             @Valid @RequestBody RequirementUpdateRequest request) {
-        RequirementResponse response = new RequirementResponse();
-        response.setId(requirementId);
-        response.setProjectId(projectId);
-        response.setTitle(request.getTitle());
-        return ResponseEntity.ok(ApiResponse.success(response));
+        RequirementResponse response = requirementService.updateRequirement(projectId, requirementId, request);
+        return ApiResponse.success(response);
     }
 
-    // Cập nhật trạng thái requirement
+    // 5. Cập nhật trạng thái Requirement (200 OK) - Chỉ Leader
     @PatchMapping("/{requirementId}/status")
-    public ResponseEntity<ApiResponse<RequirementResponse>> updateRequirementStatus(
+    @PreAuthorize("hasAnyRole('LEADER', 'TEAM_LEADER')")
+    public ApiResponse<RequirementResponse> updateRequirementStatus(
             @PathVariable Long projectId,
             @PathVariable Long requirementId,
             @Valid @RequestBody RequirementStatusUpdateRequest request) {
-        RequirementResponse response = new RequirementResponse();
-        response.setId(requirementId);
-        response.setProjectId(projectId);
-        response.setStatus(request.getStatus());
-        return ResponseEntity.ok(ApiResponse.success(response));
+        RequirementResponse response = requirementService.updateStatus(projectId, requirementId, request);
+        return ApiResponse.success(response);
     }
 
-    //  Xóa requirement
+    // 6. Xóa Requirement (204 No Content) - Chỉ Leader
     @DeleteMapping("/{requirementId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('LEADER', 'TEAM_LEADER')")
     public ResponseEntity<Void> deleteRequirement(
             @PathVariable Long projectId,
             @PathVariable Long requirementId) {
+        requirementService.deleteRequirement(projectId, requirementId);
         return ResponseEntity.noContent().build();
     }
 }
