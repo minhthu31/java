@@ -48,18 +48,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     ResponseEntity<ApiError> handleUnexpected(Exception exception, HttpServletRequest request) {
-        return error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", "Đã có lỗi xảy ra trong hệ thống", Map.of());
+        return error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Hệ thống gặp lỗi ngoài dự kiến", Map.of());
     }
 
     private ResponseEntity<ApiError> error(HttpStatus status, String code, String message, Map<String, String> fields) {
-        String correlationId = MDC.get("correlationId");
-        ApiError apiError = ApiError.builder()
-                .code(code)
-                .message(message)
-                .correlationId(correlationId)
-                .fieldErrors(fields)
-                .timestamp(Instant.now())
-                .build();
-        return ResponseEntity.status(status).body(apiError);
+        return ResponseEntity.status(status).body(new ApiError(code, message, MDC.get("correlationId"), fields, Instant.now()));
     }
 }
