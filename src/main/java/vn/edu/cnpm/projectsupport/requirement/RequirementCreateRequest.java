@@ -3,6 +3,7 @@ package vn.edu.cnpm.projectsupport.requirement;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public class RequirementCreateRequest {
@@ -21,8 +22,13 @@ public class RequirementCreateRequest {
     private String exceptionFlow;
     private String postcondition;
 
+    @NotNull(message = "Priority is required")
     private Priority priority;
+
     private RequirementStatus status;
+
+    @NotNull(message = "ProjectId is required")
+    private Long projectId;
 
     @JsonIgnore
     @AssertTrue(message = "Creation status must be null or DRAFT")
@@ -33,16 +39,17 @@ public class RequirementCreateRequest {
     public RequirementCreateRequest() {
     }
 
-    public RequirementCreateRequest(String title, String actor, Priority priority, RequirementStatus status) {
+    public RequirementCreateRequest(String title, String actor, Priority priority, RequirementStatus status, Long projectId) {
         this.title = title;
         this.actor = actor;
         this.priority = priority;
         this.status = status;
+        this.projectId = projectId;
     }
 
     public RequirementCreateRequest(String title, String actor, String description, String precondition,
                                   String mainFlow, String alternativeFlow, String exceptionFlow,
-                                  String postcondition, Priority priority, RequirementStatus status) {
+                                  String postcondition, Priority priority, RequirementStatus status, Long projectId) {
         this.title = title;
         this.actor = actor;
         this.description = description;
@@ -53,6 +60,7 @@ public class RequirementCreateRequest {
         this.postcondition = postcondition;
         this.priority = priority;
         this.status = status;
+        this.projectId = projectId;
     }
 
     public String getTitle() {
@@ -133,5 +141,13 @@ public class RequirementCreateRequest {
 
     public void setStatus(RequirementStatus status) {
         this.status = status;
+    }
+
+    public Long getProjectId() {
+        return projectId;
+    }
+
+    public void setProjectId(Long projectId) {
+        this.projectId = projectId;
     }
 }
