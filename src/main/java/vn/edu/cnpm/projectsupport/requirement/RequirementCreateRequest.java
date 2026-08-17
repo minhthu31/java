@@ -39,6 +39,16 @@ public class RequirementCreateRequest {
     public RequirementCreateRequest() {
     }
 
+    // Constructor 4 tham số để tương thích các test case cũ
+    public RequirementCreateRequest(String title, String actor, Priority priority, RequirementStatus status) {
+        this.title = title;
+        this.actor = actor;
+        this.priority = priority;
+        this.status = status;
+        this.projectId = 1L;
+    }
+
+    // Constructor 5 tham số đầy đủ
     public RequirementCreateRequest(String title, String actor, Priority priority, RequirementStatus status, Long projectId) {
         this.title = title;
         this.actor = actor;
@@ -47,9 +57,27 @@ public class RequirementCreateRequest {
         this.projectId = projectId;
     }
 
+    // Constructor full field cũ (không có projectId)
     public RequirementCreateRequest(String title, String actor, String description, String precondition,
-                                  String mainFlow, String alternativeFlow, String exceptionFlow,
-                                  String postcondition, Priority priority, RequirementStatus status, Long projectId) {
+                                    String mainFlow, String alternativeFlow, String exceptionFlow,
+                                    String postcondition, Priority priority, RequirementStatus status) {
+        this.title = title;
+        this.actor = actor;
+        this.description = description;
+        this.precondition = precondition;
+        this.mainFlow = mainFlow;
+        this.alternativeFlow = alternativeFlow;
+        this.exceptionFlow = exceptionFlow;
+        this.postcondition = postcondition;
+        this.priority = priority;
+        this.status = status;
+        this.projectId = 1L;
+    }
+
+    // Constructor full field có projectId
+    public RequirementCreateRequest(String title, String actor, String description, String precondition,
+                                    String mainFlow, String alternativeFlow, String exceptionFlow,
+                                    String postcondition, Priority priority, RequirementStatus status, Long projectId) {
         this.title = title;
         this.actor = actor;
         this.description = description;
