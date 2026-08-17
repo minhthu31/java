@@ -1,4 +1,4 @@
-package vn.edu.cnpm.projectsupport.exception;
+package vn.edu.cnpm.projectsupport.common.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.MDC;
@@ -9,6 +9,9 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import vn.edu.cnpm.projectsupport.exception.ErrorResponse;
+import vn.edu.cnpm.projectsupport.exception.ForbiddenGroupScopeException;
+import vn.edu.cnpm.projectsupport.exception.ResourceNotFoundException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -19,9 +22,10 @@ public class GlobalExceptionHandler {
 
     private String getCorrelationId() {
         String correlationId = MDC.get("correlationId");
-        return (correlationId != null) ? correlationId : UUID.randomUUID().toString();
+        return (correlationId != null && !correlationId.isBlank()) ? correlationId : UUID.randomUUID().toString();
     }
 
+    // 1. Chặn Title rỗng và các vi phạm Validation (@Valid / @NotBlank / @NotNull)
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationExceptions(
             MethodArgumentNotValidException ex, HttpServletRequest request) {
@@ -41,6 +45,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
+    // 2. Chặn Priority / Status không hợp lệ hoặc sai format enum
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleInvalidJson(
             HttpMessageNotReadableException ex, HttpServletRequest request) {
@@ -54,6 +59,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
+    // 3. Chặn Project hoặc Resource không tồn tại (404)
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(
             ResourceNotFoundException ex, HttpServletRequest request) {
@@ -67,6 +73,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
     }
 
+    // 4. Chặn sửa/tạo Requirement ngoài phạm vi nhóm (403)
     @ExceptionHandler(ForbiddenGroupScopeException.class)
     public ResponseEntity<ErrorResponse> handleForbiddenScope(
             ForbiddenGroupScopeException ex, HttpServletRequest request) {
@@ -80,6 +87,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
     }
 
+    // 5. Bắt các lỗi chung của hệ thống (500, không trả stack trace)
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGlobalException(
             Exception ex, HttpServletRequest request) {
