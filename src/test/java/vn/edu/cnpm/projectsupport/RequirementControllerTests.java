@@ -28,6 +28,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import vn.edu.cnpm.projectsupport.common.exception.GlobalExceptionHandler;
 import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
 import vn.edu.cnpm.projectsupport.requirement.Priority;
 import vn.edu.cnpm.projectsupport.requirement.RequirementController;
@@ -56,7 +57,11 @@ class RequirementControllerTests {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(requirementController).build();
+        // Gắn GlobalExceptionHandler để bắt ResourceNotFoundException trả về mã 404 Not Found
+        mockMvc = MockMvcBuilders
+                .standaloneSetup(requirementController)
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
 
         projectId = 1L;
         requirementId = 100L;
