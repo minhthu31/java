@@ -25,6 +25,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -57,7 +58,6 @@ class RequirementControllerTests {
 
     @BeforeEach
     void setUp() {
-        // Gắn GlobalExceptionHandler để bắt ResourceNotFoundException trả về mã 404 Not Found
         mockMvc = MockMvcBuilders
                 .standaloneSetup(requirementController)
                 .setControllerAdvice(new GlobalExceptionHandler())
@@ -238,5 +238,30 @@ class RequirementControllerTests {
                 .andExpect(status().isNotFound());
 
         verify(requirementService).getRequirementById(projectId, 999L);
+    }
+
+    // ==========================================
+    // 6. TEST 403 FORBIDDEN (ACCESS DENIED)
+    // ==========================================
+    @Test
+    @DisplayName("POST /api/v1/projects/{projectId}/requirements (Access Denied) -> 403 Forbidden")
+    void createRequirement_AccessDenied_Returns403() throws Exception {
+        String requestJson = """
+                {
+                    "title": "Quản lý yêu cầu SRS",
+                    "description": "Mô tả yêu cầu hệ thống",
+                    "priority": "HIGH"
+                }
+                """;
+
+        when(requirementService.createRequirement(eq(projectId), any(RequirementCreateRequest.class)))
+                .thenThrow(new AccessDeniedException("Access is denied"));
+
+        mockMvc.perform(post("/api/v1/projects/{projectId}/requirements", projectId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isForbidden());
+
+        verify(requirementService).createRequirement(eq(projectId), any(RequirementCreateRequest.class));
     }
 }
