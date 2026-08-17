@@ -18,12 +18,12 @@ import vn.edu.cnpm.projectsupport.common.api.ApiError;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
-    ResponseEntity<ApiError> handleNotFound(ResourceNotFoundException exception) {
+    public ResponseEntity<ApiError> handleNotFound(ResourceNotFoundException exception) {
         return error(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", exception.getMessage(), Map.of());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException exception) {
+    public ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException exception) {
         Map<String, String> fields = new LinkedHashMap<>();
         for (FieldError fieldError : exception.getBindingResult().getFieldErrors()) {
             fields.putIfAbsent(fieldError.getField(), fieldError.getDefaultMessage());
@@ -32,22 +32,22 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(ForbiddenGroupScopeException.class)
-    ResponseEntity<ApiError> handleForbiddenGroupScope(ForbiddenGroupScopeException exception) {
+    public ResponseEntity<ApiError> handleForbiddenGroupScope(ForbiddenGroupScopeException exception) {
         return error(HttpStatus.FORBIDDEN, "ACCESS_DENIED", exception.getMessage(), Map.of());
     }
 
     @ExceptionHandler(AccessDeniedException.class)
-    ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException exception) {
+    public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException exception) {
         return error(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Bạn không có quyền thực hiện thao tác này", Map.of());
     }
 
     @ExceptionHandler(InvalidCredentialsException.class)
-    ResponseEntity<ApiError> handleInvalidCredentials(InvalidCredentialsException exception) {
+    public ResponseEntity<ApiError> handleInvalidCredentials(InvalidCredentialsException exception) {
         return error(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", exception.getMessage(), Map.of());
     }
 
     @ExceptionHandler(Exception.class)
-    ResponseEntity<ApiError> handleUnexpected(Exception exception, HttpServletRequest request) {
+    public ResponseEntity<ApiError> handleUnexpected(Exception exception, HttpServletRequest request) {
         return error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Hệ thống gặp lỗi ngoài dự kiến", Map.of());
     }
 
