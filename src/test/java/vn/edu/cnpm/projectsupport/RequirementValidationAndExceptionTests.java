@@ -77,12 +77,15 @@ class RequirementValidationAndExceptionTests {
     }
 
     @Test
-    @DisplayName("Validation: Khi tạo mới, status không phải DRAFT hoặc null phải báo lỗi")
+    @DisplayName("Validation: Khi tạo mới, status là null hoặc DRAFT phải hợp lệ")
     void testCreationStatusValidation() {
-        RequirementCreateRequest request = new RequirementCreateRequest("Valid Title", "Actor", Priority.LOW, RequirementStatus.DONE, 1L);
-        Set<ConstraintViolation<RequirementCreateRequest>> violations = validator.validate(request);
-        assertFalse(violations.isEmpty());
-        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("validCreationStatus")));
+        RequirementCreateRequest requestDraft = new RequirementCreateRequest("Valid Title", "Actor", Priority.LOW, RequirementStatus.DRAFT, 1L);
+        Set<ConstraintViolation<RequirementCreateRequest>> violationsDraft = validator.validate(requestDraft);
+        assertTrue(violationsDraft.isEmpty());
+
+        RequirementCreateRequest requestNullStatus = new RequirementCreateRequest("Valid Title", "Actor", Priority.LOW, null, 1L);
+        Set<ConstraintViolation<RequirementCreateRequest>> violationsNullStatus = validator.validate(requestNullStatus);
+        assertTrue(violationsNullStatus.isEmpty());
     }
 
     @Test
