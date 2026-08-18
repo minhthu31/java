@@ -1,10 +1,10 @@
 package vn.edu.cnpm.projectsupport.requirement;
 
-import java.util.List;
+import vn.edu.cnpm.projectsupport.common.api.PageResponse;
 
 public interface RequirementService {
 
-    List<RequirementResponse> getRequirements(Long projectId, RequirementFilterRequest filter);
+    PageResponse<RequirementResponse> getRequirements(Long projectId, RequirementFilterRequest filter);
 
     RequirementResponse createRequirement(Long projectId, RequirementCreateRequest request);
 

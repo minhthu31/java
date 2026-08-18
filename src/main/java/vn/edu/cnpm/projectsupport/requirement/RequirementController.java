@@ -1,8 +1,5 @@
 package vn.edu.cnpm.projectsupport.requirement;
 
-import java.util.List;
-
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -21,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
 import vn.edu.cnpm.projectsupport.common.api.ApiResponse;
+import vn.edu.cnpm.projectsupport.common.api.PageResponse;
 
 @RestController
 @RequestMapping("/api/v1/projects/{projectId}/requirements")
@@ -29,14 +27,14 @@ public class RequirementController {
 
     private final RequirementService requirementService;
 
-    public RequirementController(@Autowired(required = false) RequirementService requirementService) {
+    public RequirementController(RequirementService requirementService) {
         this.requirementService = requirementService;
     }
 
-    // 1. Tạo Requirement - Chỉ LEADER
+    // 1. Tạo Requirement - Chỉ TEAM_LEADER
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('LEADER')")
+    @PreAuthorize("hasRole('TEAM_LEADER')")
     public ApiResponse<RequirementResponse> createRequirement(
             @PathVariable Long projectId,
             @Valid @RequestBody RequirementCreateRequest request) {
@@ -44,19 +42,19 @@ public class RequirementController {
         return ApiResponse.success(response);
     }
 
-    // 2. Lấy danh sách Requirement có lọc - Tất cả các role
+    // 2. Lấy danh sách Requirement có phân trang/lọc - Chỉ LECTURER và TEAM_LEADER
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'LECTURER', 'LEADER', 'MEMBER')")
-    public ApiResponse<List<RequirementResponse>> getRequirements(
+    @PreAuthorize("hasAnyRole('LECTURER', 'TEAM_LEADER')")
+    public ApiResponse<PageResponse<RequirementResponse>> getRequirements(
             @PathVariable Long projectId,
             @ModelAttribute RequirementFilterRequest filterRequest) {
-        List<RequirementResponse> responses = requirementService.getRequirements(projectId, filterRequest);
+        PageResponse<RequirementResponse> responses = requirementService.getRequirements(projectId, filterRequest);
         return ApiResponse.success(responses);
     }
 
-    // 3. Lấy chi tiết Requirement theo ID - Tất cả các role
+    // 3. Lấy chi tiết Requirement - Chỉ LECTURER và TEAM_LEADER
     @GetMapping("/{requirementId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'LECTURER', 'LEADER', 'MEMBER')")
+    @PreAuthorize("hasAnyRole('LECTURER', 'TEAM_LEADER')")
     public ApiResponse<RequirementResponse> getRequirementById(
             @PathVariable Long projectId,
             @PathVariable Long requirementId) {
@@ -64,9 +62,9 @@ public class RequirementController {
         return ApiResponse.success(response);
     }
 
-    // 4. Cập nhật thông tin Requirement - Chỉ LEADER
+    // 4. Cập nhật thông tin Requirement - Chỉ TEAM_LEADER
     @PutMapping("/{requirementId}")
-    @PreAuthorize("hasRole('LEADER')")
+    @PreAuthorize("hasRole('TEAM_LEADER')")
     public ApiResponse<RequirementResponse> updateRequirement(
             @PathVariable Long projectId,
             @PathVariable Long requirementId,
@@ -75,9 +73,9 @@ public class RequirementController {
         return ApiResponse.success(response);
     }
 
-    // 5. Cập nhật trạng thái Requirement - Chỉ LEADER
+    // 5. Cập nhật trạng thái Requirement - Chỉ TEAM_LEADER
     @PatchMapping("/{requirementId}/status")
-    @PreAuthorize("hasRole('LEADER')")
+    @PreAuthorize("hasRole('TEAM_LEADER')")
     public ApiResponse<RequirementResponse> updateRequirementStatus(
             @PathVariable Long projectId,
             @PathVariable Long requirementId,
@@ -86,10 +84,10 @@ public class RequirementController {
         return ApiResponse.success(response);
     }
 
-    // 6. Xóa Requirement - Chỉ LEADER
+    // 6. Xóa Requirement - Chỉ TEAM_LEADER
     @DeleteMapping("/{requirementId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasRole('LEADER')")
+    @PreAuthorize("hasRole('TEAM_LEADER')")
     public ResponseEntity<Void> deleteRequirement(
             @PathVariable Long projectId,
             @PathVariable Long requirementId) {
