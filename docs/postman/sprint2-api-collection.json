@@ -1,0 +1,122 @@
+{
+	"info": {
+		"_postman_id": "cnpm-sprint2-collection",
+		"name": "CNPM Sprint 2 API Tests",
+		"description": "Collection kiểm thử Sprint 2: Requirement CRUD, Task CRUD và kiểm tra mã lỗi 401, 403, 400",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Requirement CRUD",
+			"item": [
+				{
+					"name": "Create Requirement",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
+						"method": "POST",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/requirements", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "requirements" ] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Đăng nhập hệ thống\",\n  \"actor\": \"Sinh viên\",\n  \"description\": \"Chức năng đăng nhập tài khoản\",\n  \"priority\": \"HIGH\",\n  \"status\": \"DRAFT\"\n}"
+						}
+					}
+				},
+				{
+					"name": "Get Requirements",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
+						"method": "GET",
+						"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/requirements", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "requirements" ] }
+					}
+				}
+			]
+		},
+		{
+			"name": "2. Task CRUD",
+			"item": [
+				{
+					"name": "Create Task",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
+						"method": "POST",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/tasks", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "tasks" ] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Thiết kế giao diện bộ lọc\",\n  \"acceptanceCriteria\": \"Lọc được theo type, status, assignee và priority\",\n  \"issueType\": \"TASK\",\n  \"priority\": \"HIGH\"\n}"
+						}
+					}
+				},
+				{
+					"name": "Get Tasks",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
+						"method": "GET",
+						"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/tasks", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "tasks" ] }
+					}
+				},
+				{
+					"name": "Update Task Status",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
+						"method": "PATCH",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/tasks/1/status", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "tasks", "1", "status" ] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"IN_PROGRESS\"\n}"
+						}
+					}
+				},
+				{
+					"name": "Delete Task",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
+						"method": "DELETE",
+						"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/tasks/1", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "tasks", "1" ] }
+					}
+				}
+			]
+		},
+		{
+			"name": "3. Security & Validation Tests",
+			"item": [
+				{
+					"name": "Test 401 Unauthorized (Missing Token)",
+					"request": {
+						"method": "GET",
+						"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/tasks", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "tasks" ] }
+					}
+				},
+				{
+					"name": "Test 403 Forbidden (Member Deleting Task)",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_member}}", "type": "string" } ] },
+						"method": "DELETE",
+						"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/tasks/1", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "tasks", "1" ] }
+					}
+				},
+				{
+					"name": "Test 400 Bad Request (Task Empty Title)",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
+						"method": "POST",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/tasks", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "tasks" ] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"\",\n  \"acceptanceCriteria\": \"Kiểm tra lỗi Validation 400\",\n  \"issueType\": \"TASK\",\n  \"priority\": \"HIGH\"\n}"
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{ "key": "baseUrl", "value": "http://localhost:8080" },
+		{ "key": "projectId", "value": "1" },
+		{ "key": "token_leader", "value": "" },
+		{ "key": "token_member", "value": "" }
+	]
+}
