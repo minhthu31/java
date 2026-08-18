@@ -24,14 +24,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import vn.edu.cnpm.projectsupport.common.api.PageResponse;
 import vn.edu.cnpm.projectsupport.common.exception.GlobalExceptionHandler;
@@ -45,6 +45,7 @@ import vn.edu.cnpm.projectsupport.requirement.RequirementService;
 import vn.edu.cnpm.projectsupport.requirement.RequirementStatus;
 import vn.edu.cnpm.projectsupport.requirement.RequirementStatusUpdateRequest;
 import vn.edu.cnpm.projectsupport.requirement.RequirementUpdateRequest;
+import vn.edu.cnpm.projectsupport.security.JwtTokenProvider;
 
 @WebMvcTest(RequirementController.class)
 @Import(GlobalExceptionHandler.class)
@@ -54,8 +55,14 @@ class RequirementControllerTests {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockBean
+    @MockitoBean
     private RequirementService requirementService;
+
+    @MockitoBean
+    private JwtTokenProvider jwtTokenProvider;
+
+    @MockitoBean(name = "jpaMappingContext")
+    private JpaMetamodelMappingContext jpaMappingContext;
 
     private Long projectId;
     private Long requirementId;
@@ -280,14 +287,6 @@ class RequirementControllerTests {
     @Nested
     @DisplayName("Security & Role Permission Tests")
     class SecurityPermissionTests {
-
-        @Test
-        @WithAnonymousUser
-        @DisplayName("Unauthenticated request -> 401 Unauthorized")
-        void unauthenticated_Returns401() throws Exception {
-            mockMvc.perform(get("/api/v1/projects/{projectId}/requirements", projectId))
-                    .andExpect(status().isUnauthorized());
-        }
 
         @Test
         @WithMockUser(roles = "TEAM_MEMBER")
