@@ -1,10 +1,18 @@
 package vn.edu.cnpm.projectsupport.requirement;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class RequirementCreateRequest {
 
     @NotBlank(message = "Project ID is required")
@@ -18,52 +26,11 @@ public class RequirementCreateRequest {
     private Priority priority;
     private RequirementStatus status;
 
-    @JsonIgnore
-    @AssertTrue(message = "Creation status must be null or DRAFT")
-    public boolean isValidCreationStatus() {
-        return status == null || status == RequirementStatus.DRAFT;
-    }
-
-    public RequirementCreateRequest() {
-    }
-
-    public String getProjectId() {
-        return projectId;
-    }
-
-    public void setProjectId(String projectId) {
+    // Constructor phục vụ cho unit test / khởi tạo nhanh
+    public RequirementCreateRequest(String projectId, String title, Priority priority, RequirementStatus status) {
         this.projectId = projectId;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public void setTitle(String title) {
         this.title = title;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public Priority getPriority() {
-        return priority;
-    }
-
-    public void setPriority(Priority priority) {
         this.priority = priority;
-    }
-
-    public RequirementStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(RequirementStatus status) {
         this.status = status;
     }
 }

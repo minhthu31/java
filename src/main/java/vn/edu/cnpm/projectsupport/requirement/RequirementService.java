@@ -9,6 +9,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 @Service
 @RequiredArgsConstructor
@@ -100,14 +101,16 @@ public class RequirementService {
 
     @Transactional(readOnly = true)
     public Page<RequirementResponse> getList(RequirementFilterRequest filter, Pageable pageable, String currentUserId) {
-        if (filter.getProjectId() != null) {
-            String projectIdStr = String.valueOf(filter.getProjectId());
-            projectService.validateProjectExists(projectIdStr);
-            String groupId = projectService.getGroupIdByProjectId(projectIdStr);
+        if (filter == null || !StringUtils.hasText(filter.getProjectId())) {
+            throw new AccessDeniedException("Yêu cầu cung cấp projectId để xác thực quyền truy cập.");
+        }
 
-            if (!groupService.hasAccess(groupId, currentUserId)) {
-                throw new AccessDeniedException("Bạn không có quyền xem danh sách Requirement của nhóm này.");
-            }
+        String projectIdStr = filter.getProjectId();
+        projectService.validateProjectExists(projectIdStr);
+        String groupId = projectService.getGroupIdByProjectId(projectIdStr);
+
+        if (!groupService.hasAccess(groupId, currentUserId)) {
+            throw new AccessDeniedException("Bạn không có quyền xem danh sách Requirement của nhóm này.");
         }
 
         return requirementRepository.findAll(RequirementSpecification.filterRequirements(filter), pageable)

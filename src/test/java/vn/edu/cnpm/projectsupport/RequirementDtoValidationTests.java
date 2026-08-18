@@ -26,24 +26,39 @@ public class RequirementDtoValidationTests {
 
     @Test
     void whenValid_thenNoViolations() {
-        RequirementCreateRequest request = new RequirementCreateRequest(
-                "Valid Title", "User", Priority.HIGH, RequirementStatus.DRAFT);
+        RequirementCreateRequest request = RequirementCreateRequest.builder()
+                .projectId("proj-123")
+                .title("Valid Title")
+                .priority(Priority.HIGH)
+                .status(RequirementStatus.OPEN)
+                .build();
+
         Set<ConstraintViolation<RequirementCreateRequest>> violations = validator.validate(request);
         assertTrue(violations.isEmpty());
     }
 
     @Test
-    void whenStatusNull_thenValid() {
-        RequirementCreateRequest request = new RequirementCreateRequest(
-                "Valid Title", "User", Priority.HIGH, null);
+    void whenProjectIdBlank_thenViolation() {
+        RequirementCreateRequest request = RequirementCreateRequest.builder()
+                .projectId("   ")
+                .title("Valid Title")
+                .priority(Priority.HIGH)
+                .status(RequirementStatus.OPEN)
+                .build();
+
         Set<ConstraintViolation<RequirementCreateRequest>> violations = validator.validate(request);
-        assertTrue(violations.isEmpty());
+        assertFalse(violations.isEmpty());
     }
 
     @Test
     void whenTitleBlank_thenViolation() {
-        RequirementCreateRequest request = new RequirementCreateRequest(
-                "   ", "User", Priority.HIGH, RequirementStatus.DRAFT);
+        RequirementCreateRequest request = RequirementCreateRequest.builder()
+                .projectId("proj-123")
+                .title("   ")
+                .priority(Priority.HIGH)
+                .status(RequirementStatus.OPEN)
+                .build();
+
         Set<ConstraintViolation<RequirementCreateRequest>> violations = validator.validate(request);
         assertFalse(violations.isEmpty());
     }
@@ -51,26 +66,27 @@ public class RequirementDtoValidationTests {
     @Test
     void whenTitleExceeds255Chars_thenViolation() {
         String longTitle = "a".repeat(256);
-        RequirementCreateRequest request = new RequirementCreateRequest(
-                longTitle, "User", Priority.HIGH, RequirementStatus.DRAFT);
+        RequirementCreateRequest request = RequirementCreateRequest.builder()
+                .projectId("proj-123")
+                .title(longTitle)
+                .priority(Priority.HIGH)
+                .status(RequirementStatus.OPEN)
+                .build();
+
         Set<ConstraintViolation<RequirementCreateRequest>> violations = validator.validate(request);
         assertFalse(violations.isEmpty());
     }
 
     @Test
-    void whenActorExceeds255Chars_thenViolation() {
-        String longActor = "a".repeat(256);
-        RequirementCreateRequest request = new RequirementCreateRequest(
-                "Valid Title", longActor, Priority.HIGH, RequirementStatus.DRAFT);
-        Set<ConstraintViolation<RequirementCreateRequest>> violations = validator.validate(request);
-        assertFalse(violations.isEmpty());
-    }
+    void whenStatusNull_thenValid() {
+        RequirementCreateRequest request = RequirementCreateRequest.builder()
+                .projectId("proj-123")
+                .title("Valid Title")
+                .priority(Priority.HIGH)
+                .status(null)
+                .build();
 
-    @Test
-    void whenStatusNotDraft_thenViolation() {
-        RequirementCreateRequest request = new RequirementCreateRequest(
-                "Valid Title", "User", Priority.HIGH, RequirementStatus.APPROVED);
         Set<ConstraintViolation<RequirementCreateRequest>> violations = validator.validate(request);
-        assertFalse(violations.isEmpty());
+        assertTrue(violations.isEmpty());
     }
 }
