@@ -16,16 +16,18 @@ const ISSUE_TYPES = [
 const PRIORITIES = ["HIGHEST", "HIGH", "MEDIUM", "LOW", "LOWEST"];
 const TASK_STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "BLOCKED", "DONE"];
 
-export default function TaskComponent({ projectId = 1 }) {
+export default function TaskComponent({ projectId }) {
     const user = currentUser() || {};
-    const isLeader =
-        user.role === "TEAM_LEADER" ||
-        user.role_id === 3 ||
-        user.role === "ADMIN";
+    const userRole = user.role
+        ? String(user.role).replace("ROLE_", "").toUpperCase()
+        : null;
+
+    // Phân quyền chuẩn: Chỉ Trưởng nhóm (Leader) được tạo Task
+    const isLeader = userRole === "TEAM_LEADER";
 
     const [currentView, setCurrentView] = useState("list");
     const [tasks, setTasks] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
     const [metadata, setMetadata] = useState({
@@ -50,6 +52,14 @@ export default function TaskComponent({ projectId = 1 }) {
     const [formError, setFormError] = useState(null);
 
     const fetchTasks = useCallback(async () => {
+        if (!projectId) {
+            setTasks([]);
+            setMetadata({ assignees: [], sprints: [], features: [] });
+            setLoading(false);
+            setError(null);
+            return;
+        }
+
         setLoading(true);
         setError(null);
         try {
@@ -64,19 +74,38 @@ export default function TaskComponent({ projectId = 1 }) {
                 setMetadata({ assignees: [], sprints: [], features: [] });
             }
         } catch (err) {
-            setError(
-                err.response?.data?.message ||
-                    err.message ||
-                    "Hệ thống gặp lỗi ngoài dự kiến",
-            );
+            const status = err.response?.status;
+            if (status === 401) {
+                setError("Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.");
+            } else if (status === 403) {
+                setError(
+                    "Bạn không có quyền truy cập danh sách Task của dự án này.",
+                );
+            } else if (status === 404) {
+                setError("Không tìm thấy dữ liệu dự án hoặc danh sách Task.");
+            } else {
+                setError(
+                    err.response?.data?.message ||
+                        err.message ||
+                        "Hệ thống gặp lỗi ngoài dự kiến",
+                );
+            }
         } finally {
             setLoading(false);
         }
     }, [projectId]);
 
     useEffect(() => {
+        if (!projectId) {
+            setTasks([]);
+            setMetadata({ assignees: [], sprints: [], features: [] });
+            setLoading(false);
+            setError(null);
+            return;
+        }
+
         fetchTasks();
-    }, [fetchTasks]);
+    }, [projectId, fetchTasks]);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -85,6 +114,16 @@ export default function TaskComponent({ projectId = 1 }) {
 
     const handleCreateSubmit = async (e) => {
         e.preventDefault();
+
+        if (formSubmitting) {
+            return;
+        }
+
+        if (!projectId) {
+            setFormError("Chưa chọn dự án. Không thể tạo Task.");
+            return;
+        }
+
         if (
             !formData.title.trim() ||
             !formData.acceptance_criteria.trim() ||
@@ -127,9 +166,20 @@ export default function TaskComponent({ projectId = 1 }) {
                 feature_id: "",
             });
         } catch (err) {
-            setFormError(
-                err.response?.data?.message || "Có lỗi xảy ra khi tạo Task.",
-            );
+            const status = err.response?.status;
+            if (status === 401) {
+                setFormError("Phiên làm việc hết hạn khi tạo Task.");
+            } else if (status === 403) {
+                setFormError("Chỉ Trưởng nhóm (Leader) mới có quyền tạo Task.");
+            } else if (status === 404) {
+                setFormError("Không tìm thấy dự án tương ứng.");
+            } else {
+                setFormError(
+                    err.response?.data?.message ||
+                        err.message ||
+                        "Có lỗi xảy ra khi tạo Task.",
+                );
+            }
         } finally {
             setFormSubmitting(false);
         }
@@ -158,6 +208,7 @@ export default function TaskComponent({ projectId = 1 }) {
         if (syncStatus === "SYNCED") {
             return (
                 <span
+                    data-testid="sync-badge"
                     style={{
                         padding: "3px 8px",
                         fontSize: "11px",
@@ -175,6 +226,7 @@ export default function TaskComponent({ projectId = 1 }) {
         if (syncStatus === "SYNCING") {
             return (
                 <span
+                    data-testid="sync-badge"
                     style={{
                         padding: "3px 8px",
                         fontSize: "11px",
@@ -192,6 +244,7 @@ export default function TaskComponent({ projectId = 1 }) {
         if (syncStatus === "SYNC_FAILED") {
             return (
                 <span
+                    data-testid="sync-badge"
                     style={{
                         padding: "3px 8px",
                         fontSize: "11px",
@@ -208,6 +261,7 @@ export default function TaskComponent({ projectId = 1 }) {
         }
         return (
             <span
+                data-testid="sync-badge"
                 style={{
                     padding: "3px 8px",
                     fontSize: "11px",
@@ -234,7 +288,6 @@ export default function TaskComponent({ projectId = 1 }) {
         >
             {currentView === "create" ? (
                 <div>
-                    {/* NÚT QUAY LẠI DANH SÁCH - ĐÃ SỬA RÕ RÀNG */}
                     <div
                         style={{
                             display: "flex",
@@ -275,6 +328,7 @@ export default function TaskComponent({ projectId = 1 }) {
 
                     {formError && (
                         <div
+                            data-testid="form-error"
                             style={{
                                 padding: "12px",
                                 background: "#fee2e2",
@@ -298,6 +352,7 @@ export default function TaskComponent({ projectId = 1 }) {
                     >
                         <div>
                             <label
+                                htmlFor="task-title"
                                 style={{
                                     display: "block",
                                     fontWeight: 600,
@@ -309,11 +364,11 @@ export default function TaskComponent({ projectId = 1 }) {
                                 Tiêu đề (Title) *
                             </label>
                             <input
+                                id="task-title"
                                 type="text"
                                 name="title"
                                 value={formData.title}
                                 onChange={handleInputChange}
-                                required
                                 placeholder="Nhập tiêu đề task..."
                                 style={{
                                     width: "100%",
@@ -334,6 +389,7 @@ export default function TaskComponent({ projectId = 1 }) {
                         >
                             <div>
                                 <label
+                                    htmlFor="task-issue-type"
                                     style={{
                                         display: "block",
                                         fontWeight: 600,
@@ -345,6 +401,7 @@ export default function TaskComponent({ projectId = 1 }) {
                                     Loại công việc (Issue Type) *
                                 </label>
                                 <select
+                                    id="task-issue-type"
                                     name="issue_type"
                                     value={formData.issue_type}
                                     onChange={handleInputChange}
@@ -366,6 +423,7 @@ export default function TaskComponent({ projectId = 1 }) {
                             </div>
                             <div>
                                 <label
+                                    htmlFor="task-priority"
                                     style={{
                                         display: "block",
                                         fontWeight: 600,
@@ -377,6 +435,7 @@ export default function TaskComponent({ projectId = 1 }) {
                                     Độ ưu tiên (Priority) *
                                 </label>
                                 <select
+                                    id="task-priority"
                                     name="priority"
                                     value={formData.priority}
                                     onChange={handleInputChange}
@@ -407,6 +466,7 @@ export default function TaskComponent({ projectId = 1 }) {
                         >
                             <div>
                                 <label
+                                    htmlFor="task-assignee"
                                     style={{
                                         display: "block",
                                         fontWeight: 600,
@@ -418,6 +478,7 @@ export default function TaskComponent({ projectId = 1 }) {
                                     Người thực hiện (Assignee)
                                 </label>
                                 <select
+                                    id="task-assignee"
                                     name="assignee_user_id"
                                     value={formData.assignee_user_id}
                                     onChange={handleInputChange}
@@ -442,6 +503,7 @@ export default function TaskComponent({ projectId = 1 }) {
                             </div>
                             <div>
                                 <label
+                                    htmlFor="task-deadline"
                                     style={{
                                         display: "block",
                                         fontWeight: 600,
@@ -453,11 +515,11 @@ export default function TaskComponent({ projectId = 1 }) {
                                     Hạn chót (Deadline) *
                                 </label>
                                 <input
+                                    id="task-deadline"
                                     type="date"
                                     name="deadline"
                                     value={formData.deadline}
                                     onChange={handleInputChange}
-                                    required
                                     style={{
                                         width: "100%",
                                         padding: "8px 12px",
@@ -478,6 +540,7 @@ export default function TaskComponent({ projectId = 1 }) {
                         >
                             <div>
                                 <label
+                                    htmlFor="task-sprint"
                                     style={{
                                         display: "block",
                                         fontWeight: 600,
@@ -489,6 +552,7 @@ export default function TaskComponent({ projectId = 1 }) {
                                     Sprint
                                 </label>
                                 <select
+                                    id="task-sprint"
                                     name="sprint_id"
                                     value={formData.sprint_id}
                                     onChange={handleInputChange}
@@ -511,6 +575,7 @@ export default function TaskComponent({ projectId = 1 }) {
                             </div>
                             <div>
                                 <label
+                                    htmlFor="task-feature"
                                     style={{
                                         display: "block",
                                         fontWeight: 600,
@@ -522,6 +587,7 @@ export default function TaskComponent({ projectId = 1 }) {
                                     Feature
                                 </label>
                                 <select
+                                    id="task-feature"
                                     name="feature_id"
                                     value={formData.feature_id}
                                     onChange={handleInputChange}
@@ -546,6 +612,7 @@ export default function TaskComponent({ projectId = 1 }) {
 
                         <div>
                             <label
+                                htmlFor="task-acceptance"
                                 style={{
                                     display: "block",
                                     fontWeight: 600,
@@ -557,10 +624,10 @@ export default function TaskComponent({ projectId = 1 }) {
                                 Tiêu chí nghiệm thu (Acceptance Criteria) *
                             </label>
                             <textarea
+                                id="task-acceptance"
                                 name="acceptance_criteria"
                                 value={formData.acceptance_criteria}
                                 onChange={handleInputChange}
-                                required
                                 rows="3"
                                 placeholder="Nhập tiêu chí nghiệm thu..."
                                 style={{
@@ -575,6 +642,7 @@ export default function TaskComponent({ projectId = 1 }) {
 
                         <div>
                             <label
+                                htmlFor="task-description"
                                 style={{
                                     display: "block",
                                     fontWeight: 600,
@@ -586,6 +654,7 @@ export default function TaskComponent({ projectId = 1 }) {
                                 Mô tả (Description)
                             </label>
                             <textarea
+                                id="task-description"
                                 name="description"
                                 value={formData.description}
                                 onChange={handleInputChange}
@@ -601,7 +670,6 @@ export default function TaskComponent({ projectId = 1 }) {
                             />
                         </div>
 
-                        {/* CỤM NÚT HỦY VÀ LƯU TASK - ĐÃ SỬA RÕ RÀNG */}
                         <div
                             style={{
                                 display: "flex",
@@ -637,7 +705,10 @@ export default function TaskComponent({ projectId = 1 }) {
                                     borderRadius: "6px",
                                     fontWeight: 600,
                                     fontSize: "13px",
-                                    cursor: "pointer",
+                                    cursor: formSubmitting
+                                        ? "not-allowed"
+                                        : "pointer",
+                                    opacity: formSubmitting ? 0.7 : 1,
                                 }}
                             >
                                 {formSubmitting ? "Đang lưu..." : "Lưu Task"}
@@ -647,7 +718,6 @@ export default function TaskComponent({ projectId = 1 }) {
                 </div>
             ) : (
                 <div>
-                    {/* HEADER LIST */}
                     <div
                         style={{
                             display: "flex",
@@ -682,6 +752,7 @@ export default function TaskComponent({ projectId = 1 }) {
                             <button
                                 type="button"
                                 onClick={() => setCurrentView("create")}
+                                data-testid="create-task-btn"
                                 style={{
                                     padding: "10px 20px",
                                     background: "#1d4ed8",
@@ -698,9 +769,9 @@ export default function TaskComponent({ projectId = 1 }) {
                         )}
                     </div>
 
-                    {/* ERROR STATE */}
                     {error && !loading && (
                         <div
+                            data-testid="error-message"
                             style={{
                                 padding: "14px 18px",
                                 background: "#fee2e2",
@@ -717,6 +788,7 @@ export default function TaskComponent({ projectId = 1 }) {
                             <button
                                 type="button"
                                 onClick={fetchTasks}
+                                data-testid="retry-btn"
                                 style={{
                                     padding: "6px 14px",
                                     background: "#dc2626",
@@ -733,9 +805,9 @@ export default function TaskComponent({ projectId = 1 }) {
                         </div>
                     )}
 
-                    {/* LOADING STATE */}
                     {loading && (
                         <div
+                            data-testid="loading-state"
                             style={{
                                 padding: "40px",
                                 textAlign: "center",
@@ -747,9 +819,9 @@ export default function TaskComponent({ projectId = 1 }) {
                         </div>
                     )}
 
-                    {/* EMPTY STATE */}
                     {!loading && !error && tasks.length === 0 && (
                         <div
+                            data-testid="empty-state"
                             style={{
                                 padding: "40px",
                                 textAlign: "center",
@@ -770,7 +842,6 @@ export default function TaskComponent({ projectId = 1 }) {
                         </div>
                     )}
 
-                    {/* TABLE LIST */}
                     {!loading && !error && tasks.length > 0 && (
                         <div
                             style={{
@@ -832,6 +903,7 @@ export default function TaskComponent({ projectId = 1 }) {
                                     {tasks.map((task) => (
                                         <tr
                                             key={task.id}
+                                            data-testid={`task-row-${task.id}`}
                                             style={{
                                                 borderBottom:
                                                     "1px solid #f1f5f9",
@@ -903,6 +975,7 @@ export default function TaskComponent({ projectId = 1 }) {
                                             </td>
                                             <td style={{ padding: "12px" }}>
                                                 <select
+                                                    aria-label={`Trạng thái task ${task.id}`}
                                                     value={
                                                         task.status || "TODO"
                                                     }
@@ -967,6 +1040,7 @@ export default function TaskComponent({ projectId = 1 }) {
             {/* DETAIL MODAL */}
             {selectedTask && (
                 <div
+                    data-testid="detail-modal"
                     style={{
                         position: "fixed",
                         inset: 0,
@@ -992,6 +1066,7 @@ export default function TaskComponent({ projectId = 1 }) {
                     >
                         <button
                             type="button"
+                            data-testid="close-modal-btn"
                             onClick={() => setSelectedTask(null)}
                             style={{
                                 position: "absolute",

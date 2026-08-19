@@ -23,7 +23,7 @@ const getRoleTitle = (role) => {
 export default function Dashboard({ title }) {
     const navigate = useNavigate();
     const user = currentUser();
-    const [activeTab, setActiveTab] = useState("requirements"); // "requirements" | "tasks" | "progress" | "github"
+    const [activeTab, setActiveTab] = useState("requirements");
 
     useEffect(() => {
         if (!user) {
@@ -57,7 +57,7 @@ export default function Dashboard({ title }) {
             return Number(fromStorage);
         }
 
-        return 1; // Mặc định project 1 nếu chưa chọn
+        return null;
     };
 
     const selectedProjectId = getProjectId();
@@ -161,7 +161,6 @@ export default function Dashboard({ title }) {
                 </p>
             </section>
 
-            {/* TAB NAVIGATION */}
             <section
                 className="grid"
                 style={{
@@ -264,7 +263,6 @@ export default function Dashboard({ title }) {
                 </button>
             </section>
 
-            {/* TAB CONTENT */}
             <section
                 style={{
                     backgroundColor: "#fff",
@@ -292,12 +290,7 @@ export default function Dashboard({ title }) {
                                 >
                                     Không có quyền truy cập
                                 </h3>
-                                <p
-                                    style={{
-                                        margin: 0,
-                                        fontSize: "14px",
-                                    }}
-                                >
+                                <p style={{ margin: 0, fontSize: "14px" }}>
                                     Theo quy định phân quyền (CNPM-52), vai trò{" "}
                                     <strong>
                                         {userRole || "Chưa phân quyền"}
@@ -323,12 +316,7 @@ export default function Dashboard({ title }) {
                                 >
                                     Chưa chọn dự án
                                 </h3>
-                                <p
-                                    style={{
-                                        margin: 0,
-                                        fontSize: "14px",
-                                    }}
-                                >
+                                <p style={{ margin: 0, fontSize: "14px" }}>
                                     Vui lòng chọn một project trước khi xem danh
                                     sách Requirement.
                                 </p>
@@ -344,7 +332,31 @@ export default function Dashboard({ title }) {
 
                 {activeTab === "tasks" && (
                     <div style={{ padding: "20px" }}>
-                        <TaskComponent projectId={selectedProjectId || 1} />
+                        {!selectedProjectId ? (
+                            <div
+                                data-testid="no-project-message"
+                                style={{
+                                    padding: "40px 24px",
+                                    textAlign: "center",
+                                    color: "#6b778c",
+                                }}
+                            >
+                                <h3
+                                    style={{
+                                        color: "#172b4d",
+                                        marginBottom: "8px",
+                                    }}
+                                >
+                                    Chưa chọn dự án
+                                </h3>
+                                <p style={{ margin: 0, fontSize: "14px" }}>
+                                    Vui lòng chọn một project trước khi xem danh
+                                    sách Task.
+                                </p>
+                            </div>
+                        ) : (
+                            <TaskComponent projectId={selectedProjectId} />
+                        )}
                     </div>
                 )}
 
