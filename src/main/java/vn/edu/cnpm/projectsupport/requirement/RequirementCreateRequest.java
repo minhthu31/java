@@ -32,13 +32,22 @@ public class RequirementCreateRequest {
         this.priority = priority;
     }
 
-    // Constructor 5 tham số (Fix lỗi dòng 139)
+    // Constructor 5 tham số nhận Enum
     public RequirementCreateRequest(String title, String description, String actor, Priority priority, RequirementStatus status) {
         this.title = title;
         this.description = description;
         this.actor = actor;
         this.priority = priority;
         this.status = status;
+    }
+
+    // Constructor 5 tham số nhận String
+    public RequirementCreateRequest(String title, String description, String actor, String priority, String status) {
+        this.title = title;
+        this.description = description;
+        this.actor = actor;
+        setPriority(priority);
+        setStatus(status);
     }
 
     // Constructor 6 tham số
