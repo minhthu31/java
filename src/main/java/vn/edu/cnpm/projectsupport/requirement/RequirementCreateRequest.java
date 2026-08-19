@@ -24,6 +24,63 @@ public class RequirementCreateRequest {
 
     public RequirementCreateRequest() {}
 
+    // Constructor phục vụ cho RequirementDtoValidationTests
+    public RequirementCreateRequest(String title, String description, String actor, Priority priority, RequirementStatus status) {
+        this.title = title;
+        this.description = description;
+        this.actor = actor;
+        this.priority = priority;
+        this.status = status;
+    }
+
+    // Constructor đầy đủ
+    public RequirementCreateRequest(String title, String description, String actor, Priority priority,
+                                    String precondition, String mainFlow, String alternativeFlow,
+                                    String exceptionFlow, String postcondition, RequirementStatus status) {
+        this.title = title;
+        this.description = description;
+        this.actor = actor;
+        this.priority = priority;
+        this.precondition = precondition;
+        this.mainFlow = mainFlow;
+        this.alternativeFlow = alternativeFlow;
+        this.exceptionFlow = exceptionFlow;
+        this.postcondition = postcondition;
+        this.status = status;
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static class Builder {
+        private String title;
+        private String description;
+        private String actor;
+        private Priority priority;
+        private String precondition;
+        private String mainFlow;
+        private String alternativeFlow;
+        private String exceptionFlow;
+        private String postcondition;
+        private RequirementStatus status;
+
+        public Builder title(String title) { this.title = title; return this; }
+        public Builder description(String description) { this.description = description; return this; }
+        public Builder actor(String actor) { this.actor = actor; return this; }
+        public Builder priority(Priority priority) { this.priority = priority; return this; }
+        public Builder precondition(String precondition) { this.precondition = precondition; return this; }
+        public Builder mainFlow(String mainFlow) { this.mainFlow = mainFlow; return this; }
+        public Builder alternativeFlow(String alternativeFlow) { this.alternativeFlow = alternativeFlow; return this; }
+        public Builder exceptionFlow(String exceptionFlow) { this.exceptionFlow = exceptionFlow; return this; }
+        public Builder postcondition(String postcondition) { this.postcondition = postcondition; return this; }
+        public Builder status(RequirementStatus status) { this.status = status; return this; }
+
+        public RequirementCreateRequest build() {
+            return new RequirementCreateRequest(title, description, actor, priority, precondition, mainFlow, alternativeFlow, exceptionFlow, postcondition, status);
+        }
+    }
+
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
 
