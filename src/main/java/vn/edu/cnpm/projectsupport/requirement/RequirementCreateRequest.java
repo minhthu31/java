@@ -24,7 +24,7 @@ public class RequirementCreateRequest {
 
     public RequirementCreateRequest() {}
 
-    // Constructor 5 tham số dùng cho RequirementDtoValidationTests
+    // Constructor 5 tham số khớp đúng với dòng 71 của RequirementDtoValidationTests
     public RequirementCreateRequest(String title, String description, String actor, Priority priority, RequirementStatus status) {
         this.title = title;
         this.description = description;
@@ -33,7 +33,7 @@ public class RequirementCreateRequest {
         this.status = status;
     }
 
-    // Constructor đầy đủ
+    // Constructor đầy đủ 10 tham số
     public RequirementCreateRequest(String title, String description, String actor, Priority priority,
                                     String precondition, String mainFlow, String alternativeFlow,
                                     String exceptionFlow, String postcondition, RequirementStatus status) {
