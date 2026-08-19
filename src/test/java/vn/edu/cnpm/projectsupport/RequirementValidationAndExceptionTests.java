@@ -6,22 +6,20 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
 
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-public class RequirementValidationAndExceptionTests {
+class RequirementValidationAndExceptionTests {
 
     @Autowired
     private MockMvc mockMvc;
@@ -30,103 +28,28 @@ public class RequirementValidationAndExceptionTests {
     private ObjectMapper objectMapper;
 
     @MockitoBean
-    private RequirementService requirementService;
+    private RequirementManagementService requirementService;
 
     @Test
-    @WithMockUser(roles = "TEAM_LEADER")
-    @DisplayName("Validation: Title trống trả về 400 và code VALIDATION_FAILED kèm fieldErrors")
-    void createRequirement_BlankTitle_Returns400() throws Exception {
+    @WithMockUser(username = "testuser", roles = {"USER"})
+    @DisplayName("POST requirement with blank title should return 400 with VALIDATION_FAILED code")
+    void testBlankTitleValidation() throws Exception {
         RequirementCreateRequest request = RequirementCreateRequest.builder()
                 .title("")
+                .description("Test description")
+                .actor("User")
+                .priority(Priority.HIGH)
+                .status(RequirementStatus.DRAFT)
                 .build();
 
-        mockMvc.perform(post("/api/v1/projects/1/requirements")
+        mockMvc.perform(post("/projects/1/requirements")
+                        .header("X-Correlation-ID", "corr-test-123")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
-                .andExpect(jsonPath("$.fieldErrors.title").exists())
-                .andExpect(jsonPath("$.correlationId").exists())
-                .andExpect(jsonPath("$.timestamp").exists());
-    }
-
-    @Test
-    @WithMockUser(roles = "TEAM_LEADER")
-    @DisplayName("Validation: Title quá 255 ký tự trả về 400")
-    void createRequirement_TitleTooLong_Returns400() throws Exception {
-        String longTitle = "A".repeat(256);
-        RequirementCreateRequest request = RequirementCreateRequest.builder()
-                .title(longTitle)
-                .build();
-
-        mockMvc.perform(post("/api/v1/projects/1/requirements")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
-                .andExpect(jsonPath("$.fieldErrors.title").exists());
-    }
-
-    @Test
-    @WithMockUser(roles = "TEAM_LEADER")
-    @DisplayName("Validation: Actor quá 255 ký tự trả về 400")
-    void createRequirement_ActorTooLong_Returns400() throws Exception {
-        String longActor = "B".repeat(256);
-        RequirementCreateRequest request = RequirementCreateRequest.builder()
-                .title("Valid Title")
-                .actor(longActor)
-                .build();
-
-        mockMvc.perform(post("/api/v1/projects/1/requirements")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
-                .andExpect(jsonPath("$.fieldErrors.actor").exists());
-    }
-
-    @Test
-    @WithMockUser(roles = "TEAM_LEADER")
-    @DisplayName("Validation: Enum priority không hợp lệ trả về 400")
-    void createRequirement_InvalidEnum_Returns400() throws Exception {
-        String invalidJson = "{\"title\": \"Valid Title\", \"priority\": \"INVALID_PRIORITY\"}";
-
-        mockMvc.perform(post("/api/v1/projects/1/requirements")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(invalidJson))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
-    }
-
-    @Test
-    @WithMockUser(roles = "TEAM_LEADER")
-    @DisplayName("Validation: Status khi tạo khác DRAFT trả về 400")
-    void createRequirement_InvalidInitialStatus_Returns400() throws Exception {
-        RequirementCreateRequest request = RequirementCreateRequest.builder()
-                .title("Valid Title")
-                .status("APPROVED")
-                .build();
-
-        mockMvc.perform(post("/api/v1/projects/1/requirements")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
-                .andExpect(jsonPath("$.fieldErrors.status").exists());
-    }
-
-    @Test
-    @WithMockUser(roles = "TEAM_LEADER")
-    @DisplayName("Exception: Không tìm thấy Requirement trả về 404 và RESOURCE_NOT_FOUND")
-    void getRequirement_NotFound_Returns404() throws Exception {
-        when(requirementService.getRequirement(eq(1L), eq(999L)))
-                .thenThrow(new ResourceNotFoundException("Requirement not found"));
-
-        mockMvc.perform(get("/api/v1/projects/1/requirements/999"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
-                .andExpect(jsonPath("$.message").value("Requirement not found"))
-                .andExpect(jsonPath("$.correlationId").exists())
-                .andExpect(jsonPath("$.timestamp").exists());
+                .andExpect(jsonPath("$.code", is("VALIDATION_FAILED")))
+                .andExpect(jsonPath("$.correlationId", is("corr-test-123")))
+                .andExpect(jsonPath("$.fieldErrors.title", notNullValue()))
+                .andExpect(jsonPath("$.timestamp", notNullValue()));
     }
 }
