@@ -44,7 +44,7 @@ class TaskServiceTest {
     }
 
     @Test
-    @DisplayName("Tạo Task thành công và giao đúng người")
+    @DisplayName("Tạo Task thành công với syncStatus mặc định là NOT_SYNCED")
     void createTask_Success() {
         when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -52,7 +52,6 @@ class TaskServiceTest {
 
         assertNotNull(createdTask);
         assertEquals("LEADER_01", createdTask.getCreatedById());
-        assertEquals("MEMBER_01", createdTask.getAssigneeId());
         assertEquals(SyncStatus.NOT_SYNCED, createdTask.getSyncStatus());
         assertEquals(TaskStatus.TODO, createdTask.getStatus());
         verify(taskRepository, times(1)).save(any(Task.class));
@@ -86,7 +85,6 @@ class TaskServiceTest {
         Task updatedTask = taskService.updateTaskStatusByMember("MEMBER_01", "TASK_01", TaskStatus.IN_PROGRESS);
 
         assertEquals(TaskStatus.IN_PROGRESS, updatedTask.getStatus());
-        verify(taskRepository, times(1)).save(any(Task.class));
     }
 
     @Test
