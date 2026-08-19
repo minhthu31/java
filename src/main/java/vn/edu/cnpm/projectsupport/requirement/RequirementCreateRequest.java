@@ -24,7 +24,7 @@ public class RequirementCreateRequest {
 
     public RequirementCreateRequest() {}
 
-    // Constructor phục vụ cho RequirementDtoValidationTests
+    // Constructor 5 tham số dùng cho RequirementDtoValidationTests
     public RequirementCreateRequest(String title, String description, String actor, Priority priority, RequirementStatus status) {
         this.title = title;
         this.description = description;
@@ -69,12 +69,24 @@ public class RequirementCreateRequest {
         public Builder description(String description) { this.description = description; return this; }
         public Builder actor(String actor) { this.actor = actor; return this; }
         public Builder priority(Priority priority) { this.priority = priority; return this; }
+        public Builder priority(String priority) {
+            if (priority != null) {
+                try { this.priority = Priority.valueOf(priority); } catch (Exception ignored) {}
+            }
+            return this;
+        }
         public Builder precondition(String precondition) { this.precondition = precondition; return this; }
         public Builder mainFlow(String mainFlow) { this.mainFlow = mainFlow; return this; }
         public Builder alternativeFlow(String alternativeFlow) { this.alternativeFlow = alternativeFlow; return this; }
         public Builder exceptionFlow(String exceptionFlow) { this.exceptionFlow = exceptionFlow; return this; }
         public Builder postcondition(String postcondition) { this.postcondition = postcondition; return this; }
         public Builder status(RequirementStatus status) { this.status = status; return this; }
+        public Builder status(String status) {
+            if (status != null) {
+                try { this.status = RequirementStatus.valueOf(status); } catch (Exception ignored) {}
+            }
+            return this;
+        }
 
         public RequirementCreateRequest build() {
             return new RequirementCreateRequest(title, description, actor, priority, precondition, mainFlow, alternativeFlow, exceptionFlow, postcondition, status);
@@ -92,6 +104,11 @@ public class RequirementCreateRequest {
 
     public Priority getPriority() { return priority; }
     public void setPriority(Priority priority) { this.priority = priority; }
+    public void setPriority(String priority) {
+        if (priority != null) {
+            try { this.priority = Priority.valueOf(priority); } catch (Exception ignored) {}
+        }
+    }
 
     public String getPrecondition() { return precondition; }
     public void setPrecondition(String precondition) { this.precondition = precondition; }
@@ -110,4 +127,9 @@ public class RequirementCreateRequest {
 
     public RequirementStatus getStatus() { return status; }
     public void setStatus(RequirementStatus status) { this.status = status; }
+    public void setStatus(String status) {
+        if (status != null) {
+            try { this.status = RequirementStatus.valueOf(status); } catch (Exception ignored) {}
+        }
+    }
 }
