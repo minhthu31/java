@@ -1,181 +1,36 @@
 package vn.edu.cnpm.projectsupport.requirement;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class RequirementCreateRequest {
 
-    @NotBlank(message = "Title is required")
-    @Size(max = 255, message = "Title must not exceed 255 characters")
+    @NotBlank(message = "Title must not be blank")
+    @Size(min = 1, max = 255, message = "Title must be between 1 and 255 characters")
     private String title;
+
+    private String description;
 
     @Size(max = 255, message = "Actor must not exceed 255 characters")
     private String actor;
 
-    private String description;
+    private Priority priority; // Cho phép null khi tạo bản nháp (draft)
+
     private String precondition;
     private String mainFlow;
     private String alternativeFlow;
     private String exceptionFlow;
     private String postcondition;
 
-    @NotNull(message = "Priority is required")
-    private Priority priority;
-
-    private RequirementStatus status;
-
-    @NotNull(message = "ProjectId is required")
-    private Long projectId;
-
-    @JsonIgnore
-    @AssertTrue(message = "Creation status must be null or DRAFT")
-    public boolean isValidCreationStatus() {
-        return status == null || status == RequirementStatus.DRAFT;
-    }
-
-    public RequirementCreateRequest() {
-    }
-
-    // Constructor 4 tham số để tương thích các test case cũ
-    public RequirementCreateRequest(String title, String actor, Priority priority, RequirementStatus status) {
-        this.title = title;
-        this.actor = actor;
-        this.priority = priority;
-        this.status = status;
-        this.projectId = 1L;
-    }
-
-    // Constructor 5 tham số đầy đủ
-    public RequirementCreateRequest(String title, String actor, Priority priority, RequirementStatus status, Long projectId) {
-        this.title = title;
-        this.actor = actor;
-        this.priority = priority;
-        this.status = status;
-        this.projectId = projectId;
-    }
-
-    // Constructor full field cũ (không có projectId)
-    public RequirementCreateRequest(String title, String actor, String description, String precondition,
-                                    String mainFlow, String alternativeFlow, String exceptionFlow,
-                                    String postcondition, Priority priority, RequirementStatus status) {
-        this.title = title;
-        this.actor = actor;
-        this.description = description;
-        this.precondition = precondition;
-        this.mainFlow = mainFlow;
-        this.alternativeFlow = alternativeFlow;
-        this.exceptionFlow = exceptionFlow;
-        this.postcondition = postcondition;
-        this.priority = priority;
-        this.status = status;
-        this.projectId = 1L;
-    }
-
-    // Constructor full field có projectId
-    public RequirementCreateRequest(String title, String actor, String description, String precondition,
-                                    String mainFlow, String alternativeFlow, String exceptionFlow,
-                                    String postcondition, Priority priority, RequirementStatus status, Long projectId) {
-        this.title = title;
-        this.actor = actor;
-        this.description = description;
-        this.precondition = precondition;
-        this.mainFlow = mainFlow;
-        this.alternativeFlow = alternativeFlow;
-        this.exceptionFlow = exceptionFlow;
-        this.postcondition = postcondition;
-        this.priority = priority;
-        this.status = status;
-        this.projectId = projectId;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public void setTitle(String title) {
-        this.title = title;
-    }
-
-    public String getActor() {
-        return actor;
-    }
-
-    public void setActor(String actor) {
-        this.actor = actor;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public String getPrecondition() {
-        return precondition;
-    }
-
-    public void setPrecondition(String precondition) {
-        this.precondition = precondition;
-    }
-
-    public String getMainFlow() {
-        return mainFlow;
-    }
-
-    public void setMainFlow(String mainFlow) {
-        this.mainFlow = mainFlow;
-    }
-
-    public String getAlternativeFlow() {
-        return alternativeFlow;
-    }
-
-    public void setAlternativeFlow(String alternativeFlow) {
-        this.alternativeFlow = alternativeFlow;
-    }
-
-    public String getExceptionFlow() {
-        return exceptionFlow;
-    }
-
-    public void setExceptionFlow(String exceptionFlow) {
-        this.exceptionFlow = exceptionFlow;
-    }
-
-    public String getPostcondition() {
-        return postcondition;
-    }
-
-    public void setPostcondition(String postcondition) {
-        this.postcondition = postcondition;
-    }
-
-    public Priority getPriority() {
-        return priority;
-    }
-
-    public void setPriority(Priority priority) {
-        this.priority = priority;
-    }
-
-    public RequirementStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(RequirementStatus status) {
-        this.status = status;
-    }
-
-    public Long getProjectId() {
-        return projectId;
-    }
-
-    public void setProjectId(Long projectId) {
-        this.projectId = projectId;
-    }
+    @Pattern(regexp = "^(DRAFT)?$", message = "Status on creation must be DRAFT or empty")
+    private String status;
 }
