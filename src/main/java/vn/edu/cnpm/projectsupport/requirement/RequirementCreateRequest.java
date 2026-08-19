@@ -14,13 +14,13 @@ public class RequirementCreateRequest {
     @Size(max = 255, message = "actor must not exceed 255 characters")
     private String actor;
 
-    private String priority;
+    private Priority priority;
     private String precondition;
     private String mainFlow;
     private String alternativeFlow;
     private String exceptionFlow;
     private String postcondition;
-    private String status;
+    private RequirementStatus status;
 
     public RequirementCreateRequest() {}
 
@@ -28,18 +28,10 @@ public class RequirementCreateRequest {
         this.title = title;
         this.description = description;
         this.actor = actor;
-        this.priority = priority != null ? priority.name() : null;
+        this.priority = priority;
     }
 
     public RequirementCreateRequest(String title, String description, String actor, Priority priority, RequirementStatus status) {
-        this.title = title;
-        this.description = description;
-        this.actor = actor;
-        this.priority = priority != null ? priority.name() : null;
-        this.status = status != null ? status.name() : null;
-    }
-
-    public RequirementCreateRequest(String title, String description, String actor, String priority, String status) {
         this.title = title;
         this.description = description;
         this.actor = actor;
@@ -47,13 +39,36 @@ public class RequirementCreateRequest {
         this.status = status;
     }
 
+    public RequirementCreateRequest(String title, String description, String actor, String priority, String status) {
+        this.title = title;
+        this.description = description;
+        this.actor = actor;
+        setPriority(priority);
+        setStatus(status);
+    }
+
     public RequirementCreateRequest(String title, String description, String actor, Priority priority, String precondition, RequirementStatus status) {
         this.title = title;
         this.description = description;
         this.actor = actor;
-        this.priority = priority != null ? priority.name() : null;
+        this.priority = priority;
         this.precondition = precondition;
-        this.status = status != null ? status.name() : null;
+        this.status = status;
+    }
+
+    public RequirementCreateRequest(String title, String description, String actor, Priority priority,
+                                    String precondition, String mainFlow, String alternativeFlow,
+                                    String exceptionFlow, String postcondition, RequirementStatus status) {
+        this.title = title;
+        this.description = description;
+        this.actor = actor;
+        this.priority = priority;
+        this.precondition = precondition;
+        this.mainFlow = mainFlow;
+        this.alternativeFlow = alternativeFlow;
+        this.exceptionFlow = exceptionFlow;
+        this.postcondition = postcondition;
+        this.status = status;
     }
 
     public static Builder builder() {
@@ -64,40 +79,39 @@ public class RequirementCreateRequest {
         private String title;
         private String description;
         private String actor;
-        private String priority;
+        private Priority priority;
         private String precondition;
         private String mainFlow;
         private String alternativeFlow;
         private String exceptionFlow;
         private String postcondition;
-        private String status;
+        private RequirementStatus status;
 
         public Builder title(String title) { this.title = title; return this; }
         public Builder description(String description) { this.description = description; return this; }
         public Builder actor(String actor) { this.actor = actor; return this; }
-        public Builder priority(Priority priority) { this.priority = priority != null ? priority.name() : null; return this; }
-        public Builder priority(String priority) { this.priority = priority; return this; }
+        public Builder priority(Priority priority) { this.priority = priority; return this; }
+        public Builder priority(String priority) {
+            if (priority != null) {
+                try { this.priority = Priority.valueOf(priority); } catch (Exception ignored) {}
+            }
+            return this;
+        }
         public Builder precondition(String precondition) { this.precondition = precondition; return this; }
         public Builder mainFlow(String mainFlow) { this.mainFlow = mainFlow; return this; }
         public Builder alternativeFlow(String alternativeFlow) { this.alternativeFlow = alternativeFlow; return this; }
         public Builder exceptionFlow(String exceptionFlow) { this.exceptionFlow = exceptionFlow; return this; }
         public Builder postcondition(String postcondition) { this.postcondition = postcondition; return this; }
-        public Builder status(RequirementStatus status) { this.status = status != null ? status.name() : null; return this; }
-        public Builder status(String status) { this.status = status; return this; }
+        public Builder status(RequirementStatus status) { this.status = status; return this; }
+        public Builder status(String status) {
+            if (status != null) {
+                try { this.status = RequirementStatus.valueOf(status); } catch (Exception ignored) {}
+            }
+            return this;
+        }
 
         public RequirementCreateRequest build() {
-            RequirementCreateRequest req = new RequirementCreateRequest();
-            req.setTitle(this.title);
-            req.setDescription(this.description);
-            req.setActor(this.actor);
-            req.setPriority(this.priority);
-            req.setPrecondition(this.precondition);
-            req.setMainFlow(this.mainFlow);
-            req.setAlternativeFlow(this.alternativeFlow);
-            req.setExceptionFlow(this.exceptionFlow);
-            req.setPostcondition(this.postcondition);
-            req.setStatus(this.status);
-            return req;
+            return new RequirementCreateRequest(title, description, actor, priority, precondition, mainFlow, alternativeFlow, exceptionFlow, postcondition, status);
         }
     }
 
@@ -110,9 +124,13 @@ public class RequirementCreateRequest {
     public String getActor() { return actor; }
     public void setActor(String actor) { this.actor = actor; }
 
-    public String getPriority() { return priority; }
-    public void setPriority(String priority) { this.priority = priority; }
-    public void setPriority(Priority priority) { this.priority = priority != null ? priority.name() : null; }
+    public Priority getPriority() { return priority; }
+    public void setPriority(Priority priority) { this.priority = priority; }
+    public void setPriority(String priority) {
+        if (priority != null) {
+            try { this.priority = Priority.valueOf(priority); } catch (Exception ignored) {}
+        }
+    }
 
     public String getPrecondition() { return precondition; }
     public void setPrecondition(String precondition) { this.precondition = precondition; }
@@ -129,7 +147,11 @@ public class RequirementCreateRequest {
     public String getPostcondition() { return postcondition; }
     public void setPostcondition(String postcondition) { this.postcondition = postcondition; }
 
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
-    public void setStatus(RequirementStatus status) { this.status = status != null ? status.name() : null; }
+    public RequirementStatus getStatus() { return status; }
+    public void setStatus(RequirementStatus status) { this.status = status; }
+    public void setStatus(String status) {
+        if (status != null) {
+            try { this.status = RequirementStatus.valueOf(status); } catch (Exception ignored) {}
+        }
+    }
 }
