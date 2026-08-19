@@ -1,5 +1,10 @@
 package vn.edu.cnpm.projectsupport.common.exception;
 
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.UUID;
+import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -10,81 +15,86 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import vn.edu.cnpm.projectsupport.common.api.ApiError;
 
-import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
-
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    private String resolveCorrelationId(WebRequest request) {
-        String correlationId = request.getHeader("X-Correlation-ID");
-        return (correlationId != null && !correlationId.isBlank()) ? correlationId : UUID.randomUUID().toString();
-    }
-
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiError> handleValidationExceptions(
-            MethodArgumentNotValidException ex, WebRequest request) {
-
-        Map<String, String> fieldErrors = new HashMap<>();
-        for (FieldError error : ex.getBindingResult().getFieldErrors()) {
-            fieldErrors.put(error.getField(), error.getDefaultMessage());
+    public ResponseEntity<ApiError> handleValidation(
+            MethodArgumentNotValidException exception, WebRequest request) {
+        Map<String, String> fields = new LinkedHashMap<>();
+        for (FieldError fieldError : exception.getBindingResult().getFieldErrors()) {
+            fields.putIfAbsent(fieldError.getField(), fieldError.getDefaultMessage());
         }
-
-        ApiError error = new ApiError(
-                "VALIDATION_FAILED",
-                "Request validation failed",
-                resolveCorrelationId(request),
-                fieldErrors,
-                Instant.now()
-        );
-
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+        return error(
+                HttpStatus.BAD_REQUEST,
+                "VALIDATION_ERROR",
+                "Dữ liệu đầu vào không hợp lệ",
+                fields,
+                request);
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ApiError> handleResourceNotFound(
-            ResourceNotFoundException ex, WebRequest request) {
-
-        ApiError error = new ApiError(
+    public ResponseEntity<ApiError> handleNotFound(
+            ResourceNotFoundException exception, WebRequest request) {
+        return error(
+                HttpStatus.NOT_FOUND,
                 "RESOURCE_NOT_FOUND",
-                ex.getMessage(),
-                resolveCorrelationId(request),
-                null,
-                Instant.now()
-        );
-
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+                exception.getMessage(),
+                Map.of(),
+                request);
     }
 
-    @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ApiError> handleAccessDenied(
-            AccessDeniedException ex, WebRequest request) {
-
-        ApiError error = new ApiError(
+    @ExceptionHandler({AccessDeniedException.class, ForbiddenGroupScopeException.class})
+    public ResponseEntity<ApiError> handleAccessDenied(Exception exception, WebRequest request) {
+        return error(
+                HttpStatus.FORBIDDEN,
                 "ACCESS_DENIED",
-                "Access denied: You do not have permission for this resource",
-                resolveCorrelationId(request),
-                null,
-                Instant.now()
-        );
+                "Bạn không có quyền thực hiện thao tác này",
+                Map.of(),
+                request);
+    }
 
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ApiError> handleInvalidCredentials(
+            InvalidCredentialsException exception, WebRequest request) {
+        return error(
+                HttpStatus.UNAUTHORIZED,
+                "INVALID_CREDENTIALS",
+                exception.getMessage(),
+                Map.of(),
+                request);
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiError> handleGeneralException(
-            Exception ex, WebRequest request) {
+    public ResponseEntity<ApiError> handleUnexpected(Exception exception, WebRequest request) {
+        return error(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "INTERNAL_ERROR",
+                "Hệ thống gặp lỗi ngoài dự kiến",
+                Map.of(),
+                request);
+    }
 
-        ApiError error = new ApiError(
-                "INTERNAL_SERVER_ERROR",
-                "An unexpected error occurred",
-                resolveCorrelationId(request),
-                null,
-                Instant.now()
-        );
+    private ResponseEntity<ApiError> error(
+            HttpStatus status,
+            String code,
+            String message,
+            Map<String, String> fields,
+            WebRequest request) {
+        return ResponseEntity.status(status).body(new ApiError(
+                code,
+                message,
+                correlationId(request),
+                fields,
+                Instant.now()));
+    }
 
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+    private String correlationId(WebRequest request) {
+        String header = request.getHeader("X-Correlation-ID");
+        if (header != null && !header.isBlank()) {
+            return header;
+        }
+        String current = MDC.get("correlationId");
+        return current == null || current.isBlank() ? UUID.randomUUID().toString() : current;
     }
 }
