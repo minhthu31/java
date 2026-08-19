@@ -37,7 +37,7 @@ public class GlobalExceptionHandler {
                 "Request validation failed",
                 resolveCorrelationId(request),
                 fieldErrors,
-                Instant.now().toString()
+                Instant.now()
         );
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
@@ -52,7 +52,7 @@ public class GlobalExceptionHandler {
                 ex.getMessage(),
                 resolveCorrelationId(request),
                 null,
-                Instant.now().toString()
+                Instant.now()
         );
 
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
@@ -67,7 +67,7 @@ public class GlobalExceptionHandler {
                 "Access denied: You do not have permission for this resource",
                 resolveCorrelationId(request),
                 null,
-                Instant.now().toString()
+                Instant.now()
         );
 
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
@@ -82,7 +82,7 @@ public class GlobalExceptionHandler {
                 "An unexpected error occurred",
                 resolveCorrelationId(request),
                 null,
-                Instant.now().toString()
+                Instant.now()
         );
 
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
