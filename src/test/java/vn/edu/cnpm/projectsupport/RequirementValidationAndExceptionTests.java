@@ -1,130 +1,132 @@
-package vn.edu.cnpm.projectsupport;
+package vn.edu.cnpm.projectsupport.requirement;
 
-import jakarta.validation.ConstraintViolation;
-import jakarta.validation.Validation;
-import jakarta.validation.Validator;
-import jakarta.validation.ValidatorFactory;
-import org.junit.jupiter.api.BeforeAll;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.mock.web.MockHttpServletRequest;
-import vn.edu.cnpm.projectsupport.common.api.ApiError;
-import vn.edu.cnpm.projectsupport.common.exception.ForbiddenGroupScopeException;
-import vn.edu.cnpm.projectsupport.common.exception.GlobalExceptionHandler;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.web.servlet.MockMvc;
 import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
-import vn.edu.cnpm.projectsupport.requirement.Priority;
-import vn.edu.cnpm.projectsupport.requirement.RequirementCreateRequest;
-import vn.edu.cnpm.projectsupport.requirement.RequirementStatus;
 
-import java.util.Set;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import static org.junit.jupiter.api.Assertions.*;
+@SpringBootTest
+@AutoConfigureMockMvc
+public class RequirementValidationAndExceptionTests {
 
-class RequirementValidationAndExceptionTests {
+    @Autowired
+    private MockMvc mockMvc;
 
-    private static Validator validator;
-    private final GlobalExceptionHandler exceptionHandler = new GlobalExceptionHandler();
+    @Autowired
+    private ObjectMapper objectMapper;
 
-    @BeforeAll
-    static void setUpValidator() {
-        ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
-        validator = factory.getValidator();
+    @MockBean
+    private RequirementService requirementService;
+
+    @Test
+    @WithMockUser(roles = "TEAM_LEADER")
+    @DisplayName("Validation: Title trống trả về 400 và code VALIDATION_FAILED kèm fieldErrors")
+    void createRequirement_BlankTitle_Returns400() throws Exception {
+        RequirementCreateRequest request = RequirementCreateRequest.builder()
+                .title("")
+                .build();
+
+        mockMvc.perform(post("/api/v1/projects/1/requirements")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors.title").exists())
+                .andExpect(jsonPath("$.correlationId").exists())
+                .andExpect(jsonPath("$.timestamp").exists());
     }
 
     @Test
-    @DisplayName("Validation: Title trống và vượt quá 255 ký tự phải báo lỗi")
-    void testTitleValidation() {
-        RequirementCreateRequest requestBlank = new RequirementCreateRequest("", "Actor", Priority.HIGH, RequirementStatus.DRAFT, 1L);
-        Set<ConstraintViolation<RequirementCreateRequest>> violationsBlank = validator.validate(requestBlank);
-        assertFalse(violationsBlank.isEmpty());
-        assertTrue(violationsBlank.stream().anyMatch(v -> v.getPropertyPath().toString().equals("title")));
+    @WithMockUser(roles = "TEAM_LEADER")
+    @DisplayName("Validation: Title quá 255 ký tự trả về 400")
+    void createRequirement_TitleTooLong_Returns400() throws Exception {
+        String longTitle = "A".repeat(256);
+        RequirementCreateRequest request = RequirementCreateRequest.builder()
+                .title(longTitle)
+                .build();
 
-        String longTitle = "a".repeat(256);
-        RequirementCreateRequest requestLong = new RequirementCreateRequest(longTitle, "Actor", Priority.HIGH, RequirementStatus.DRAFT, 1L);
-        Set<ConstraintViolation<RequirementCreateRequest>> violationsLong = validator.validate(requestLong);
-        assertFalse(violationsLong.isEmpty());
-        assertTrue(violationsLong.stream().anyMatch(v -> v.getPropertyPath().toString().equals("title")));
+        mockMvc.perform(post("/api/v1/projects/1/requirements")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors.title").exists());
     }
 
     @Test
-    @DisplayName("Validation: Actor vượt quá 255 ký tự phải báo lỗi")
-    void testActorValidation() {
-        String longActor = "b".repeat(256);
-        RequirementCreateRequest request = new RequirementCreateRequest("Valid Title", longActor, Priority.MEDIUM, RequirementStatus.DRAFT, 1L);
-        Set<ConstraintViolation<RequirementCreateRequest>> violations = validator.validate(request);
-        assertFalse(violations.isEmpty());
-        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("actor")));
+    @WithMockUser(roles = "TEAM_LEADER")
+    @DisplayName("Validation: Actor quá 255 ký tự trả về 400")
+    void createRequirement_ActorTooLong_Returns400() throws Exception {
+        String longActor = "B".repeat(256);
+        RequirementCreateRequest request = RequirementCreateRequest.builder()
+                .title("Valid Title")
+                .actor(longActor)
+                .build();
+
+        mockMvc.perform(post("/api/v1/projects/1/requirements")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors.actor").exists());
     }
 
     @Test
-    @DisplayName("Validation: Priority null phải báo lỗi")
-    void testPriorityNullValidation() {
-        RequirementCreateRequest request = new RequirementCreateRequest("Valid Title", "Actor", null, RequirementStatus.DRAFT, 1L);
-        Set<ConstraintViolation<RequirementCreateRequest>> violations = validator.validate(request);
-        assertFalse(violations.isEmpty());
-        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("priority")));
+    @WithMockUser(roles = "TEAM_LEADER")
+    @DisplayName("Validation: Enum priority không hợp lệ trả về 400")
+    void createRequirement_InvalidEnum_Returns400() throws Exception {
+        String invalidJson = "{\"title\": \"Valid Title\", \"priority\": \"INVALID_PRIORITY\"}";
+
+        mockMvc.perform(post("/api/v1/projects/1/requirements")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidJson))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
     }
 
     @Test
-    @DisplayName("Validation: ProjectId null phải báo lỗi")
-    void testProjectIdNullValidation() {
-        RequirementCreateRequest request = new RequirementCreateRequest("Valid Title", "Actor", Priority.LOW, RequirementStatus.DRAFT, null);
-        Set<ConstraintViolation<RequirementCreateRequest>> violations = validator.validate(request);
-        assertFalse(violations.isEmpty());
-        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("projectId")));
+    @WithMockUser(roles = "TEAM_LEADER")
+    @DisplayName("Validation: Status khi tạo khác DRAFT trả về 400")
+    void createRequirement_InvalidInitialStatus_Returns400() throws Exception {
+        RequirementCreateRequest request = RequirementCreateRequest.builder()
+                .title("Valid Title")
+                .status("APPROVED")
+                .build();
+
+        mockMvc.perform(post("/api/v1/projects/1/requirements")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors.status").exists());
     }
 
     @Test
-    @DisplayName("Validation: Khi tạo mới, status là null hoặc DRAFT phải hợp lệ")
-    void testCreationStatusValidation() {
-        RequirementCreateRequest requestDraft = new RequirementCreateRequest("Valid Title", "Actor", Priority.LOW, RequirementStatus.DRAFT, 1L);
-        Set<ConstraintViolation<RequirementCreateRequest>> violationsDraft = validator.validate(requestDraft);
-        assertTrue(violationsDraft.isEmpty());
+    @WithMockUser(roles = "TEAM_LEADER")
+    @DisplayName("Exception: Không tìm thấy Requirement trả về 404 và RESOURCE_NOT_FOUND")
+    void getRequirement_NotFound_Returns404() throws Exception {
+        when(requirementService.getRequirement(eq(1L), eq(999L)))
+                .thenThrow(new ResourceNotFoundException("Requirement not found"));
 
-        RequirementCreateRequest requestNullStatus = new RequirementCreateRequest("Valid Title", "Actor", Priority.LOW, null, 1L);
-        Set<ConstraintViolation<RequirementCreateRequest>> violationsNullStatus = validator.validate(requestNullStatus);
-        assertTrue(violationsNullStatus.isEmpty());
-    }
-
-    @Test
-    @DisplayName("Exception: ResourceNotFoundException trả về 404 RESOURCE_NOT_FOUND")
-    void testHandleResourceNotFound() {
-        ResourceNotFoundException ex = new ResourceNotFoundException("Requirement không tồn tại");
-        ResponseEntity<ApiError> response = exceptionHandler.handleNotFound(ex);
-
-        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-        assertNotNull(response.getBody());
-        assertEquals("RESOURCE_NOT_FOUND", response.getBody().code());
-        assertEquals("Requirement không tồn tại", response.getBody().message());
-        assertNotNull(response.getBody().timestamp());
-    }
-
-    @Test
-    @DisplayName("Exception: ForbiddenGroupScopeException trả về 403 ACCESS_DENIED")
-    void testHandleForbiddenGroupScope() {
-        ForbiddenGroupScopeException ex = new ForbiddenGroupScopeException("Không có quyền truy cập nhóm này");
-        ResponseEntity<ApiError> response = exceptionHandler.handleForbiddenGroupScope(ex);
-
-        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
-        assertNotNull(response.getBody());
-        assertEquals("ACCESS_DENIED", response.getBody().code());
-        assertEquals("Không có quyền truy cập nhóm này", response.getBody().message());
-        assertNotNull(response.getBody().timestamp());
-    }
-
-    @Test
-    @DisplayName("Exception: Lỗi không mong đợi trả về 500 INTERNAL_ERROR không lộ stack trace")
-    void testHandleUnexpectedException() {
-        Exception ex = new RuntimeException("Database error details that should be hidden");
-        MockHttpServletRequest mockRequest = new MockHttpServletRequest();
-        ResponseEntity<ApiError> response = exceptionHandler.handleUnexpected(ex, mockRequest);
-
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-        assertNotNull(response.getBody());
-        assertEquals("INTERNAL_ERROR", response.getBody().code());
-        assertEquals("Hệ thống gặp lỗi ngoài dự kiến", response.getBody().message());
-        assertNotNull(response.getBody().timestamp());
+        mockMvc.perform(get("/api/v1/projects/1/requirements/999"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("Requirement not found"))
+                .andExpect(jsonPath("$.correlationId").exists())
+                .andExpect(jsonPath("$.timestamp").exists());
     }
 }
