@@ -2,19 +2,23 @@ import React, { useState, useEffect, useCallback } from "react";
 import { TaskService } from "./TaskService";
 import { currentUser } from "./authService";
 
-const ISSUE_TYPES = [
-    "Feature",
-    "Bug",
-    "Test",
-    "Docs",
-    "Refactor",
-    "Logging",
-    "Deployment",
-    "Research",
-    "UI-UX",
-];
+const ISSUE_TYPES = ["EPIC", "STORY", "TASK", "BUG", "SUBTASK"];
 const PRIORITIES = ["HIGHEST", "HIGH", "MEDIUM", "LOW", "LOWEST"];
-const TASK_STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "BLOCKED", "DONE"];
+const CLASSIFICATIONS = [
+    "FEATURE_RELATED",
+    "NEW_FEATURE",
+    "AUTO_TEST",
+    "AUTO_LOG",
+    "OTHER",
+];
+const ALL_STATUSES = [
+    "TO_DO",
+    "IN_PROGRESS",
+    "IN_REVIEW",
+    "DONE",
+    "BLOCKED",
+    "CANCELLED",
+];
 
 export default function TaskComponent({ projectId }) {
     const user = currentUser() || {};
@@ -22,31 +26,34 @@ export default function TaskComponent({ projectId }) {
         ? String(user.role).replace("ROLE_", "").toUpperCase()
         : null;
 
-    // Phân quyền chuẩn: Chỉ Trưởng nhóm (Leader) được tạo Task
     const isLeader = userRole === "TEAM_LEADER";
+    const isLecturer = userRole === "LECTURER";
+    const isMember = userRole === "TEAM_MEMBER" || userRole === "STUDENT";
 
     const [currentView, setCurrentView] = useState("list");
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    const [metadata, setMetadata] = useState({
-        assignees: [],
-        sprints: [],
-        features: [],
-    });
     const [selectedTask, setSelectedTask] = useState(null);
+    const [detailLoading, setDetailLoading] = useState(false);
+
+    // Modal nhập lý do khi chuyển sang BLOCKED hoặc CANCELLED
+    const [pendingStatusChange, setPendingStatusChange] = useState(null);
+    const [statusReason, setStatusReason] = useState("");
 
     const [formData, setFormData] = useState({
         title: "",
         description: "",
-        acceptance_criteria: "",
-        issue_type: "Feature",
+        acceptanceCriteria: "",
+        issueType: "TASK",
+        classification: "FEATURE_RELATED",
         priority: "MEDIUM",
         deadline: "",
-        assignee_user_id: "",
-        sprint_id: "",
-        feature_id: "",
+        assigneeUserId: "",
+        requirementId: "",
+        sprintId: "",
+        featureId: "",
     });
     const [formSubmitting, setFormSubmitting] = useState(false);
     const [formError, setFormError] = useState(null);
@@ -54,7 +61,6 @@ export default function TaskComponent({ projectId }) {
     const fetchTasks = useCallback(async () => {
         if (!projectId) {
             setTasks([]);
-            setMetadata({ assignees: [], sprints: [], features: [] });
             setLoading(false);
             setError(null);
             return;
@@ -65,14 +71,6 @@ export default function TaskComponent({ projectId }) {
         try {
             const data = await TaskService.getTasks(projectId);
             setTasks(Array.isArray(data) ? data : []);
-            try {
-                const meta = await TaskService.getTaskMetadata(projectId);
-                setMetadata(
-                    meta || { assignees: [], sprints: [], features: [] },
-                );
-            } catch {
-                setMetadata({ assignees: [], sprints: [], features: [] });
-            }
         } catch (err) {
             const status = err.response?.status;
             if (status === 401) {
@@ -98,14 +96,25 @@ export default function TaskComponent({ projectId }) {
     useEffect(() => {
         if (!projectId) {
             setTasks([]);
-            setMetadata({ assignees: [], sprints: [], features: [] });
             setLoading(false);
             setError(null);
             return;
         }
-
         fetchTasks();
     }, [projectId, fetchTasks]);
+
+    const handleOpenDetail = async (task) => {
+        setDetailLoading(true);
+        setSelectedTask(task);
+        try {
+            const fullTask = await TaskService.getTaskById(projectId, task.id);
+            setSelectedTask(fullTask || task);
+        } catch {
+            setSelectedTask(task);
+        } finally {
+            setDetailLoading(false);
+        }
+    };
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -115,22 +124,21 @@ export default function TaskComponent({ projectId }) {
     const handleCreateSubmit = async (e) => {
         e.preventDefault();
 
-        if (formSubmitting) {
-            return;
-        }
-
+        if (formSubmitting) return;
         if (!projectId) {
             setFormError("Chưa chọn dự án. Không thể tạo Task.");
             return;
         }
 
+        // Section 5.3 Validation: title, acceptanceCriteria, issueType, priority là bắt buộc
         if (
             !formData.title.trim() ||
-            !formData.acceptance_criteria.trim() ||
-            !formData.deadline
+            !formData.acceptanceCriteria.trim() ||
+            !formData.issueType ||
+            !formData.priority
         ) {
             setFormError(
-                "Vui lòng điền đầy đủ: Tiêu đề, Acceptance Criteria và Deadline.",
+                "Vui lòng điền đầy đủ các trường bắt buộc: Tiêu đề, Tiêu chí nghiệm thu, Issue Type và Priority.",
             );
             return;
         }
@@ -139,15 +147,26 @@ export default function TaskComponent({ projectId }) {
         setFormError(null);
         try {
             const payload = {
-                ...formData,
-                assignee_user_id: formData.assignee_user_id
-                    ? Number(formData.assignee_user_id)
+                title: formData.title.trim(),
+                description: formData.description?.trim() || null,
+                acceptanceCriteria: formData.acceptanceCriteria.trim(),
+                issueType: formData.issueType,
+                classification: formData.classification || "FEATURE_RELATED",
+                priority: formData.priority,
+                deadline: formData.deadline
+                    ? new Date(
+                          `${formData.deadline}T23:59:59.000Z`,
+                      ).toISOString()
                     : null,
-                sprint_id: formData.sprint_id
-                    ? Number(formData.sprint_id)
+                assigneeUserId: formData.assigneeUserId
+                    ? Number(formData.assigneeUserId)
                     : null,
-                feature_id: formData.feature_id
-                    ? Number(formData.feature_id)
+                requirementId: formData.requirementId
+                    ? Number(formData.requirementId)
+                    : null,
+                sprintId: formData.sprintId ? Number(formData.sprintId) : null,
+                featureId: formData.featureId
+                    ? Number(formData.featureId)
                     : null,
             };
 
@@ -157,13 +176,15 @@ export default function TaskComponent({ projectId }) {
             setFormData({
                 title: "",
                 description: "",
-                acceptance_criteria: "",
-                issue_type: "Feature",
+                acceptanceCriteria: "",
+                issueType: "TASK",
+                classification: "FEATURE_RELATED",
                 priority: "MEDIUM",
                 deadline: "",
-                assignee_user_id: "",
-                sprint_id: "",
-                feature_id: "",
+                assigneeUserId: "",
+                requirementId: "",
+                sprintId: "",
+                featureId: "",
             });
         } catch (err) {
             const status = err.response?.status;
@@ -185,9 +206,62 @@ export default function TaskComponent({ projectId }) {
         }
     };
 
-    const handleStatusChange = async (taskId, newStatus) => {
+    // Transition hợp lệ theo Section 3.3 & Section 7
+    const getAllowedStatusesForRole = (currentStatus) => {
+        if (isLecturer) return [];
+        if (isLeader) return ALL_STATUSES;
+        if (isMember) {
+            // Team member không được CANCELLED và không được TO_DO -> DONE
+            if (currentStatus === "TO_DO") {
+                return ["TO_DO", "IN_PROGRESS", "BLOCKED"];
+            }
+            if (currentStatus === "IN_PROGRESS") {
+                return ["IN_PROGRESS", "TO_DO", "IN_REVIEW", "BLOCKED"];
+            }
+            if (currentStatus === "IN_REVIEW") {
+                return ["IN_REVIEW", "IN_PROGRESS", "DONE", "BLOCKED"];
+            }
+            if (currentStatus === "BLOCKED") {
+                return ["BLOCKED", "TO_DO", "IN_PROGRESS"];
+            }
+            return [currentStatus];
+        }
+        return ALL_STATUSES;
+    };
+
+    const handleStatusSelectChange = (taskId, currentStatus, newStatus) => {
+        if (newStatus === currentStatus) return;
+
+        if (isMember) {
+            if (currentStatus === "TO_DO" && newStatus === "DONE") {
+                alert(
+                    "Thành viên nhóm không thể chuyển trực tiếp từ TO_DO sang DONE.",
+                );
+                return;
+            }
+            if (newStatus === "CANCELLED") {
+                alert("Thành viên nhóm không có quyền hủy (CANCELLED) task.");
+                return;
+            }
+        }
+
+        if (newStatus === "BLOCKED" || newStatus === "CANCELLED") {
+            setPendingStatusChange({ taskId, newStatus });
+            setStatusReason("");
+            return;
+        }
+
+        executeStatusChange(taskId, newStatus, "");
+    };
+
+    const executeStatusChange = async (taskId, newStatus, reason) => {
         try {
-            await TaskService.updateTaskStatus(projectId, taskId, newStatus);
+            await TaskService.updateTaskStatus(
+                projectId,
+                taskId,
+                newStatus,
+                reason,
+            );
             setTasks((prev) =>
                 prev.map((t) =>
                     t.id === taskId ? { ...t, status: newStatus } : t,
@@ -196,6 +270,8 @@ export default function TaskComponent({ projectId }) {
             if (selectedTask && selectedTask.id === taskId) {
                 setSelectedTask((prev) => ({ ...prev, status: newStatus }));
             }
+            setPendingStatusChange(null);
+            setStatusReason("");
         } catch (err) {
             alert(
                 err.response?.data?.message || "Không thể cập nhật trạng thái.",
@@ -205,76 +281,115 @@ export default function TaskComponent({ projectId }) {
 
     const renderSyncBadge = (status) => {
         const syncStatus = status || "NOT_SYNCED";
-        if (syncStatus === "SYNCED") {
+        switch (syncStatus) {
+            case "SYNCED":
+                return (
+                    <span
+                        data-testid="sync-badge"
+                        style={{
+                            padding: "3px 8px",
+                            fontSize: "11px",
+                            fontWeight: "bold",
+                            borderRadius: "4px",
+                            background: "#dcfce7",
+                            color: "#15803d",
+                            border: "1px solid #86efac",
+                        }}
+                    >
+                        SYNCED
+                    </span>
+                );
+            case "SYNCING":
+                return (
+                    <span
+                        data-testid="sync-badge"
+                        style={{
+                            padding: "3px 8px",
+                            fontSize: "11px",
+                            fontWeight: "bold",
+                            borderRadius: "4px",
+                            background: "#dbeafe",
+                            color: "#1d4ed8",
+                            border: "1px solid #93c5fd",
+                        }}
+                    >
+                        SYNCING
+                    </span>
+                );
+            case "PENDING":
+                return (
+                    <span
+                        data-testid="sync-badge"
+                        style={{
+                            padding: "3px 8px",
+                            fontSize: "11px",
+                            fontWeight: "bold",
+                            borderRadius: "4px",
+                            background: "#e0e7ff",
+                            color: "#4338ca",
+                            border: "1px solid #c7d2fe",
+                        }}
+                    >
+                        PENDING
+                    </span>
+                );
+            case "FAILED":
+                return (
+                    <span
+                        data-testid="sync-badge"
+                        style={{
+                            padding: "3px 8px",
+                            fontSize: "11px",
+                            fontWeight: "bold",
+                            borderRadius: "4px",
+                            background: "#fee2e2",
+                            color: "#b91c1c",
+                            border: "1px solid #fca5a5",
+                        }}
+                    >
+                        FAILED
+                    </span>
+                );
+            default:
+                return (
+                    <span
+                        data-testid="sync-badge"
+                        style={{
+                            padding: "3px 8px",
+                            fontSize: "11px",
+                            fontWeight: "bold",
+                            borderRadius: "4px",
+                            background: "#fef3c7",
+                            color: "#92400e",
+                            border: "1px solid #fcd34d",
+                        }}
+                    >
+                        NOT_SYNCED
+                    </span>
+                );
+        }
+    };
+
+    const getAssigneeName = (task) => {
+        if (!task?.assignee) return "Chưa gán";
+        if (typeof task.assignee === "object") {
             return (
-                <span
-                    data-testid="sync-badge"
-                    style={{
-                        padding: "3px 8px",
-                        fontSize: "11px",
-                        fontWeight: "bold",
-                        borderRadius: "4px",
-                        background: "#dcfce7",
-                        color: "#15803d",
-                        border: "1px solid #86efac",
-                    }}
-                >
-                    SYNCED
-                </span>
+                task.assignee.displayName ||
+                task.assignee.fullName ||
+                task.assignee.username ||
+                "Chưa gán"
             );
         }
-        if (syncStatus === "SYNCING") {
-            return (
-                <span
-                    data-testid="sync-badge"
-                    style={{
-                        padding: "3px 8px",
-                        fontSize: "11px",
-                        fontWeight: "bold",
-                        borderRadius: "4px",
-                        background: "#dbeafe",
-                        color: "#1d4ed8",
-                        border: "1px solid #93c5fd",
-                    }}
-                >
-                    SYNCING
-                </span>
-            );
+        return task.assignee;
+    };
+
+    const formatDeadlineDisplay = (deadline) => {
+        if (!deadline) return "Không có";
+        try {
+            return new Date(deadline).toLocaleDateString("vi-VN");
+        } catch {
+            return deadline;
         }
-        if (syncStatus === "SYNC_FAILED") {
-            return (
-                <span
-                    data-testid="sync-badge"
-                    style={{
-                        padding: "3px 8px",
-                        fontSize: "11px",
-                        fontWeight: "bold",
-                        borderRadius: "4px",
-                        background: "#fee2e2",
-                        color: "#b91c1c",
-                        border: "1px solid #fca5a5",
-                    }}
-                >
-                    SYNC_FAILED
-                </span>
-            );
-        }
-        return (
-            <span
-                data-testid="sync-badge"
-                style={{
-                    padding: "3px 8px",
-                    fontSize: "11px",
-                    fontWeight: "bold",
-                    borderRadius: "4px",
-                    background: "#fef3c7",
-                    color: "#92400e",
-                    border: "1px solid #fcd34d",
-                }}
-            >
-                NOT_SYNCED
-            </span>
-        );
     };
 
     return (
@@ -402,8 +517,8 @@ export default function TaskComponent({ projectId }) {
                                 </label>
                                 <select
                                     id="task-issue-type"
-                                    name="issue_type"
-                                    value={formData.issue_type}
+                                    name="issueType"
+                                    value={formData.issueType}
                                     onChange={handleInputChange}
                                     style={{
                                         width: "100%",
@@ -466,7 +581,7 @@ export default function TaskComponent({ projectId }) {
                         >
                             <div>
                                 <label
-                                    htmlFor="task-assignee"
+                                    htmlFor="task-classification"
                                     style={{
                                         display: "block",
                                         fontWeight: 600,
@@ -475,12 +590,12 @@ export default function TaskComponent({ projectId }) {
                                         color: "#334155",
                                     }}
                                 >
-                                    Người thực hiện (Assignee)
+                                    Phân loại (Classification)
                                 </label>
                                 <select
-                                    id="task-assignee"
-                                    name="assignee_user_id"
-                                    value={formData.assignee_user_id}
+                                    id="task-classification"
+                                    name="classification"
+                                    value={formData.classification}
                                     onChange={handleInputChange}
                                     style={{
                                         width: "100%",
@@ -491,19 +606,16 @@ export default function TaskComponent({ projectId }) {
                                         boxSizing: "border-box",
                                     }}
                                 >
-                                    <option value="">
-                                        -- Chọn thành viên --
-                                    </option>
-                                    {metadata.assignees?.map((u) => (
-                                        <option key={u.id} value={u.id}>
-                                            {u.full_name || u.username}
+                                    {CLASSIFICATIONS.map((c) => (
+                                        <option key={c} value={c}>
+                                            {c}
                                         </option>
                                     ))}
                                 </select>
                             </div>
                             <div>
                                 <label
-                                    htmlFor="task-deadline"
+                                    htmlFor="task-assignee-user-id"
                                     style={{
                                         display: "block",
                                         fontWeight: 600,
@@ -512,14 +624,15 @@ export default function TaskComponent({ projectId }) {
                                         color: "#334155",
                                     }}
                                 >
-                                    Hạn chót (Deadline) *
+                                    ID Người thực hiện (Assignee User ID)
                                 </label>
                                 <input
-                                    id="task-deadline"
-                                    type="date"
-                                    name="deadline"
-                                    value={formData.deadline}
+                                    id="task-assignee-user-id"
+                                    type="number"
+                                    name="assigneeUserId"
+                                    value={formData.assigneeUserId}
                                     onChange={handleInputChange}
+                                    placeholder="Nhập ID thành viên..."
                                     style={{
                                         width: "100%",
                                         padding: "8px 12px",
@@ -540,7 +653,7 @@ export default function TaskComponent({ projectId }) {
                         >
                             <div>
                                 <label
-                                    htmlFor="task-sprint"
+                                    htmlFor="task-deadline"
                                     style={{
                                         display: "block",
                                         fontWeight: 600,
@@ -549,33 +662,26 @@ export default function TaskComponent({ projectId }) {
                                         color: "#334155",
                                     }}
                                 >
-                                    Sprint
+                                    Hạn chót (Deadline - tùy chọn)
                                 </label>
-                                <select
-                                    id="task-sprint"
-                                    name="sprint_id"
-                                    value={formData.sprint_id}
+                                <input
+                                    id="task-deadline"
+                                    type="date"
+                                    name="deadline"
+                                    value={formData.deadline}
                                     onChange={handleInputChange}
                                     style={{
                                         width: "100%",
                                         padding: "8px 12px",
                                         borderRadius: "6px",
                                         border: "1px solid #cbd5e1",
-                                        background: "#fff",
                                         boxSizing: "border-box",
                                     }}
-                                >
-                                    <option value="">-- Chọn Sprint --</option>
-                                    {metadata.sprints?.map((s) => (
-                                        <option key={s.id} value={s.id}>
-                                            {s.name || `Sprint ${s.id}`}
-                                        </option>
-                                    ))}
-                                </select>
+                                />
                             </div>
                             <div>
                                 <label
-                                    htmlFor="task-feature"
+                                    htmlFor="task-requirement-id"
                                     style={{
                                         display: "block",
                                         fontWeight: 600,
@@ -584,29 +690,23 @@ export default function TaskComponent({ projectId }) {
                                         color: "#334155",
                                     }}
                                 >
-                                    Feature
+                                    Mã Requirement liên kết (Requirement ID)
                                 </label>
-                                <select
-                                    id="task-feature"
-                                    name="feature_id"
-                                    value={formData.feature_id}
+                                <input
+                                    id="task-requirement-id"
+                                    type="number"
+                                    name="requirementId"
+                                    value={formData.requirementId}
                                     onChange={handleInputChange}
+                                    placeholder="Ví dụ: 101"
                                     style={{
                                         width: "100%",
                                         padding: "8px 12px",
                                         borderRadius: "6px",
                                         border: "1px solid #cbd5e1",
-                                        background: "#fff",
                                         boxSizing: "border-box",
                                     }}
-                                >
-                                    <option value="">-- Chọn Feature --</option>
-                                    {metadata.features?.map((f) => (
-                                        <option key={f.id} value={f.id}>
-                                            {f.title || `Feature #${f.id}`}
-                                        </option>
-                                    ))}
-                                </select>
+                                />
                             </div>
                         </div>
 
@@ -625,8 +725,8 @@ export default function TaskComponent({ projectId }) {
                             </label>
                             <textarea
                                 id="task-acceptance"
-                                name="acceptance_criteria"
-                                value={formData.acceptance_criteria}
+                                name="acceptanceCriteria"
+                                value={formData.acceptanceCriteria}
                                 onChange={handleInputChange}
                                 rows="3"
                                 placeholder="Nhập tiêu chí nghiệm thu..."
@@ -737,16 +837,6 @@ export default function TaskComponent({ projectId }) {
                             >
                                 Danh sách công việc (Tasks)
                             </h2>
-                            <p
-                                style={{
-                                    fontSize: "13px",
-                                    color: "#64748b",
-                                    margin: "4px 0 0 0",
-                                }}
-                            >
-                                Theo dõi tiến độ, phân công và trạng thái đồng
-                                bộ Jira
-                            </p>
                         </div>
                         {isLeader && (
                             <button
@@ -900,136 +990,176 @@ export default function TaskComponent({ projectId }) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {tasks.map((task) => (
-                                        <tr
-                                            key={task.id}
-                                            data-testid={`task-row-${task.id}`}
-                                            style={{
-                                                borderBottom:
-                                                    "1px solid #f1f5f9",
-                                            }}
-                                        >
-                                            <td style={{ padding: "12px" }}>
-                                                <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                        setSelectedTask(task)
-                                                    }
-                                                    style={{
-                                                        background: "none",
-                                                        border: "none",
-                                                        color: "#1d4ed8",
-                                                        fontWeight: 600,
-                                                        cursor: "pointer",
-                                                        padding: 0,
-                                                        textAlign: "left",
-                                                        fontSize: "13px",
-                                                    }}
-                                                >
-                                                    {task.title}
-                                                </button>
-                                                <div
-                                                    style={{
-                                                        fontSize: "11px",
-                                                        color: "#94a3b8",
-                                                        fontFamily: "monospace",
-                                                    }}
-                                                >
-                                                    {task.jira_issue_key ||
-                                                        "Chưa gắn Jira Key"}
-                                                </div>
-                                            </td>
-                                            <td style={{ padding: "12px" }}>
-                                                <span
-                                                    style={{
-                                                        padding: "3px 8px",
-                                                        background: "#f1f5f9",
-                                                        borderRadius: "4px",
-                                                        fontSize: "11px",
-                                                        fontWeight: 600,
-                                                    }}
-                                                >
-                                                    {task.issue_type}
-                                                </span>
-                                            </td>
-                                            <td
+                                    {tasks.map((task) => {
+                                        const currentStatus =
+                                            task.status || "TO_DO";
+                                        const allowedStatuses =
+                                            getAllowedStatusesForRole(
+                                                currentStatus,
+                                            );
+
+                                        return (
+                                            <tr
+                                                key={task.id}
+                                                data-testid={`task-row-${task.id}`}
                                                 style={{
-                                                    padding: "12px",
-                                                    fontWeight: 600,
+                                                    borderBottom:
+                                                        "1px solid #f1f5f9",
                                                 }}
                                             >
-                                                {task.priority}
-                                            </td>
-                                            <td style={{ padding: "12px" }}>
-                                                {task.assignee_name ||
-                                                    task.assignee_user_id ||
-                                                    "Chưa gán"}
-                                            </td>
-                                            <td style={{ padding: "12px" }}>
-                                                {task.deadline}
-                                            </td>
-                                            <td style={{ padding: "12px" }}>
-                                                {renderSyncBadge(
-                                                    task.sync_status,
-                                                )}
-                                            </td>
-                                            <td style={{ padding: "12px" }}>
-                                                <select
-                                                    aria-label={`Trạng thái task ${task.id}`}
-                                                    value={
-                                                        task.status || "TODO"
-                                                    }
-                                                    onChange={(e) =>
-                                                        handleStatusChange(
-                                                            task.id,
-                                                            e.target.value,
-                                                        )
-                                                    }
+                                                <td style={{ padding: "12px" }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            handleOpenDetail(
+                                                                task,
+                                                            )
+                                                        }
+                                                        style={{
+                                                            background: "none",
+                                                            border: "none",
+                                                            color: "#1d4ed8",
+                                                            fontWeight: 600,
+                                                            cursor: "pointer",
+                                                            padding: 0,
+                                                            textAlign: "left",
+                                                            fontSize: "13px",
+                                                        }}
+                                                    >
+                                                        {task.title}
+                                                    </button>
+                                                    <div
+                                                        style={{
+                                                            fontSize: "11px",
+                                                            color: "#94a3b8",
+                                                            fontFamily:
+                                                                "monospace",
+                                                        }}
+                                                    >
+                                                        {task.jiraIssueKey ||
+                                                            "Chưa gắn Jira Key"}
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: "12px" }}>
+                                                    <span
+                                                        style={{
+                                                            padding: "3px 8px",
+                                                            background:
+                                                                "#f1f5f9",
+                                                            borderRadius: "4px",
+                                                            fontSize: "11px",
+                                                            fontWeight: 600,
+                                                        }}
+                                                    >
+                                                        {task.issueType}
+                                                    </span>
+                                                </td>
+                                                <td
                                                     style={{
-                                                        padding: "4px 8px",
-                                                        fontSize: "12px",
-                                                        borderRadius: "4px",
-                                                        border: "1px solid #cbd5e1",
-                                                        background: "#fff",
+                                                        padding: "12px",
+                                                        fontWeight: 600,
                                                     }}
                                                 >
-                                                    {TASK_STATUSES.map((st) => (
-                                                        <option
-                                                            key={st}
-                                                            value={st}
+                                                    {task.priority}
+                                                </td>
+                                                <td style={{ padding: "12px" }}>
+                                                    {getAssigneeName(task)}
+                                                </td>
+                                                <td style={{ padding: "12px" }}>
+                                                    {formatDeadlineDisplay(
+                                                        task.deadline,
+                                                    )}
+                                                </td>
+                                                <td style={{ padding: "12px" }}>
+                                                    {renderSyncBadge(
+                                                        task.syncStatus,
+                                                    )}
+                                                </td>
+                                                <td style={{ padding: "12px" }}>
+                                                    {isLecturer ? (
+                                                        <span
+                                                            style={{
+                                                                padding:
+                                                                    "4px 8px",
+                                                                fontSize:
+                                                                    "12px",
+                                                                fontWeight: 600,
+                                                                color: "#475569",
+                                                            }}
                                                         >
-                                                            {st}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </td>
-                                            <td
-                                                style={{
-                                                    padding: "12px",
-                                                    textAlign: "right",
-                                                }}
-                                            >
-                                                <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                        setSelectedTask(task)
-                                                    }
+                                                            {currentStatus}
+                                                        </span>
+                                                    ) : (
+                                                        <select
+                                                            aria-label={`Trạng thái task ${task.id}`}
+                                                            value={
+                                                                currentStatus
+                                                            }
+                                                            onChange={(e) =>
+                                                                handleStatusSelectChange(
+                                                                    task.id,
+                                                                    currentStatus,
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            style={{
+                                                                padding:
+                                                                    "4px 8px",
+                                                                fontSize:
+                                                                    "12px",
+                                                                borderRadius:
+                                                                    "4px",
+                                                                border: "1px solid #cbd5e1",
+                                                                background:
+                                                                    "#fff",
+                                                            }}
+                                                        >
+                                                            {allowedStatuses.map(
+                                                                (st) => (
+                                                                    <option
+                                                                        key={st}
+                                                                        value={
+                                                                            st
+                                                                        }
+                                                                    >
+                                                                        {st}
+                                                                    </option>
+                                                                ),
+                                                            )}
+                                                        </select>
+                                                    )}
+                                                </td>
+                                                <td
                                                     style={{
-                                                        padding: "5px 12px",
-                                                        fontSize: "12px",
-                                                        background: "#fff",
-                                                        border: "1px solid #94a3b8",
-                                                        borderRadius: "4px",
-                                                        cursor: "pointer",
-                                                        color: "#1e293b",
-                                                        fontWeight: 500,
+                                                        padding: "12px",
+                                                        textAlign: "right",
                                                     }}
                                                 >
-                                                    Xem chi tiết
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            handleOpenDetail(
+                                                                task,
+                                                            )
+                                                        }
+                                                        style={{
+                                                            padding: "5px 12px",
+                                                            fontSize: "12px",
+                                                            background: "#fff",
+                                                            border: "1px solid #94a3b8",
+                                                            borderRadius: "4px",
+                                                            cursor: "pointer",
+                                                            color: "#1e293b",
+                                                            fontWeight: 500,
+                                                        }}
+                                                    >
+                                                        Xem chi tiết
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
@@ -1099,9 +1229,9 @@ export default function TaskComponent({ projectId }) {
                                     fontWeight: "bold",
                                 }}
                             >
-                                {selectedTask.issue_type}
+                                {selectedTask.issueType}
                             </span>
-                            {renderSyncBadge(selectedTask.sync_status)}
+                            {renderSyncBadge(selectedTask.syncStatus)}
                         </div>
                         <h3
                             style={{
@@ -1121,7 +1251,7 @@ export default function TaskComponent({ projectId }) {
                             }}
                         >
                             Jira Key:{" "}
-                            {selectedTask.jira_issue_key || "Chưa liên kết"}
+                            {selectedTask.jiraIssueKey || "Chưa liên kết"}
                         </p>
 
                         <div
@@ -1146,21 +1276,28 @@ export default function TaskComponent({ projectId }) {
                             </div>
                             <div>
                                 <strong>Người thực hiện:</strong>{" "}
-                                {selectedTask.assignee_name ||
-                                    selectedTask.assignee_user_id ||
-                                    "Chưa gán"}
+                                {getAssigneeName(selectedTask)}
                             </div>
                             <div>
                                 <strong>Hạn chót:</strong>{" "}
-                                {selectedTask.deadline}
+                                {formatDeadlineDisplay(selectedTask.deadline)}
+                            </div>
+                            <div>
+                                <strong>Requirement ID:</strong>{" "}
+                                {selectedTask.requirementId || "None"}
                             </div>
                             <div>
                                 <strong>Sprint ID:</strong>{" "}
-                                {selectedTask.sprint_id || "None"}
+                                {selectedTask.sprintId || "None"}
                             </div>
                             <div>
                                 <strong>Feature ID:</strong>{" "}
-                                {selectedTask.feature_id || "None"}
+                                {selectedTask.featureId || "None"}
+                            </div>
+                            <div>
+                                <strong>Phân loại:</strong>{" "}
+                                {selectedTask.classification ||
+                                    "FEATURE_RELATED"}
                             </div>
                         </div>
 
@@ -1208,7 +1345,7 @@ export default function TaskComponent({ projectId }) {
                                     color: "#78350f",
                                 }}
                             >
-                                {selectedTask.acceptance_criteria ||
+                                {selectedTask.acceptanceCriteria ||
                                     "Không có tiêu chí nghiệm thu."}
                             </div>
                         </div>
@@ -1234,6 +1371,104 @@ export default function TaskComponent({ projectId }) {
                                 }}
                             >
                                 Đóng
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* REASON MODAL CHO BLOCKED HOẶC CANCELLED (Section 5.5) */}
+            {pendingStatusChange && (
+                <div
+                    data-testid="reason-modal"
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        background: "rgba(0,0,0,0.5)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 1100,
+                        padding: "16px",
+                    }}
+                >
+                    <div
+                        style={{
+                            background: "#fff",
+                            borderRadius: "8px",
+                            maxWidth: "450px",
+                            width: "100%",
+                            padding: "20px",
+                        }}
+                    >
+                        <h4
+                            style={{
+                                margin: "0 0 10px 0",
+                                fontSize: "16px",
+                                color: "#b91c1c",
+                            }}
+                        >
+                            Nhập lý do chuyển sang{" "}
+                            {pendingStatusChange.newStatus}
+                        </h4>
+                        <textarea
+                            value={statusReason}
+                            onChange={(e) => setStatusReason(e.target.value)}
+                            placeholder="Vui lòng nhập lý do (bắt buộc)..."
+                            rows="3"
+                            style={{
+                                width: "100%",
+                                padding: "8px",
+                                borderRadius: "4px",
+                                border: "1px solid #cbd5e1",
+                                boxSizing: "border-box",
+                                marginBottom: "12px",
+                            }}
+                        />
+                        <div
+                            style={{
+                                display: "flex",
+                                justifyContent: "flex-end",
+                                gap: "8px",
+                            }}
+                        >
+                            <button
+                                type="button"
+                                onClick={() => setPendingStatusChange(null)}
+                                style={{
+                                    padding: "6px 14px",
+                                    background: "#f1f5f9",
+                                    border: "1px solid #94a3b8",
+                                    borderRadius: "4px",
+                                    cursor: "pointer",
+                                }}
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (!statusReason.trim()) {
+                                        alert("Vui lòng nhập lý do!");
+                                        return;
+                                    }
+                                    executeStatusChange(
+                                        pendingStatusChange.taskId,
+                                        pendingStatusChange.newStatus,
+                                        statusReason.trim(),
+                                    );
+                                }}
+                                style={{
+                                    padding: "6px 16px",
+                                    background: "#dc2626",
+                                    color: "#fff",
+                                    border: "none",
+                                    borderRadius: "4px",
+                                    fontWeight: "bold",
+                                    cursor: "pointer",
+                                }}
+                            >
+                                Xác nhận
                             </button>
                         </div>
                     </div>

@@ -1,42 +1,47 @@
 import api from "./api";
 
 export const TaskService = {
-    // 1. Lấy danh sách tasks của dự án từ backend
-    getTasks: async (projectId) => {
-        const response = await api.get(`/api/v1/projects/${projectId}/tasks`);
-        return response.data?.data || response.data || [];
+    // 1. Lấy danh sách task (Section 5.2 - hỗ trợ phân trang chuẩn success envelope & page response)
+    getTasks: async (projectId, params = {}) => {
+        const response = await api.get(`/projects/${projectId}/tasks`, {
+            params,
+        });
+        const resData = response.data?.data || response.data;
+        if (Array.isArray(resData?.content)) {
+            return resData.content;
+        }
+        if (Array.isArray(resData)) {
+            return resData;
+        }
+        return [];
     },
 
-    // 2. Lấy chi tiết một task theo ID
+    // 2. Lấy chi tiết task theo ID (Section 5.4)
     getTaskById: async (projectId, taskId) => {
         const response = await api.get(
-            `/api/v1/projects/${projectId}/tasks/${taskId}`,
+            `/projects/${projectId}/tasks/${taskId}`,
         );
         return response.data?.data || response.data;
     },
 
-    // 3. Tạo mới task (Gửi payload đầy đủ: title, issue_type, priority, deadline, acceptance_criteria, ...)
+    // 3. Tạo mới task (Section 5.3 - gửi payload camelCase)
     createTask: async (projectId, taskData) => {
         const response = await api.post(
-            `/api/v1/projects/${projectId}/tasks`,
+            `/projects/${projectId}/tasks`,
             taskData,
         );
         return response.data?.data || response.data;
     },
 
-    // 4. Cập nhật trạng thái task (TODO -> IN_PROGRESS -> DONE, ...)
-    updateTaskStatus: async (projectId, taskId, status) => {
+    // 4. Chuyển trạng thái task (Section 5.5 - gửi kèm reason nếu BLOCKED/CANCELLED)
+    updateTaskStatus: async (projectId, taskId, status, reason = "") => {
+        const payload = { status };
+        if (reason) {
+            payload.reason = reason;
+        }
         const response = await api.patch(
-            `/api/v1/projects/${projectId}/tasks/${taskId}/status`,
-            { status },
-        );
-        return response.data?.data || response.data;
-    },
-
-    // 5. Lấy metadata thực của dự án (danh sách thành viên assignee, sprints, features)
-    getTaskMetadata: async (projectId) => {
-        const response = await api.get(
-            `/api/v1/projects/${projectId}/task-metadata`,
+            `/projects/${projectId}/tasks/${taskId}/status`,
+            payload,
         );
         return response.data?.data || response.data;
     },
