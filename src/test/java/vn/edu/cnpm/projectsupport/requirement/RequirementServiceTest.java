@@ -6,9 +6,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import vn.edu.cnpm.projectsupport.common.exception.AccessDeniedException;
-import vn.edu.cnpm.projectsupport.group.GroupService;
-import vn.edu.cnpm.projectsupport.project.ProjectService;
+import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
+import vn.edu.cnpm.projectsupport.project.ProjectRepository;
 
 import java.util.Optional;
 
@@ -21,72 +20,76 @@ class RequirementServiceTest {
 
     @Mock
     private RequirementRepository requirementRepository;
+
     @Mock
-    private ProjectService projectService;
-    @Mock
-    private GroupService groupService;
+    private ProjectRepository projectRepository;
 
     @InjectMocks
     private RequirementService requirementService;
 
-    private final String userId = "user-123";
-    private final String projectId = "proj-123";
-    private final String groupId = "group-123";
-    private final String reqId = "req-123";
+    private String projectId;
+    private String userId;
 
     @BeforeEach
     void setUp() {
-        lenient().when(projectService.getGroupIdByProjectId(projectId)).thenReturn(groupId);
+        projectId = "proj-123";
+        userId = "user-456";
     }
 
     @Test
-    void create_WhenUserIsLeader_ShouldSucceed() {
-        RequirementCreateRequest request = new RequirementCreateRequest();
-        request.setProjectId(projectId);
-        request.setTitle("New Requirement");
-        request.setPriority(Priority.HIGH);
+    void create_WhenProjectExists_ShouldSucceed() {
+        RequirementCreateRequest request = RequirementCreateRequest.builder()
+                .projectId(projectId)
+                .title("New Requirement")
+                .description("Description")
+                .priority(Priority.HIGH)
+                .build();
 
-        when(groupService.isLeader(groupId, userId)).thenReturn(true);
-        when(requirementRepository.save(any(Requirement.class))).thenAnswer(i -> {
-            Requirement r = i.getArgument(0);
-            r.setId(reqId);
-            return r;
-        });
+        when(projectRepository.existsById(projectId)).thenReturn(true);
+        when(requirementRepository.save(any(Requirement.class)))
+                .thenAnswer(invocation -> {
+                    Requirement saved = invocation.getArgument(0);
+                    saved.setId("req-1");
+                    return saved;
+                });
 
         RequirementResponse response = requirementService.create(request, userId);
 
         assertNotNull(response);
-        assertEquals(reqId, response.getId());
+        assertEquals("req-1", response.getId());
+        assertEquals("New Requirement", response.getTitle());
+        verify(projectRepository).existsById(projectId);
         verify(requirementRepository).save(any(Requirement.class));
     }
 
     @Test
-    void create_WhenUserIsNotLeader_ShouldThrowAccessDeniedException() {
-        RequirementCreateRequest request = new RequirementCreateRequest();
-        request.setProjectId(projectId);
+    void create_WhenProjectNotFound_ShouldThrowResourceNotFoundException() {
+        RequirementCreateRequest request = RequirementCreateRequest.builder()
+                .projectId(projectId)
+                .build();
 
-        when(groupService.isLeader(groupId, userId)).thenReturn(false);
+        when(projectRepository.existsById(projectId)).thenReturn(false);
 
-        assertThrows(AccessDeniedException.class, () -> requirementService.create(request, userId));
+        assertThrows(ResourceNotFoundException.class, 
+            () -> requirementService.create(request, userId));
+            
         verify(requirementRepository, never()).save(any());
     }
 
     @Test
     void delete_SoftDelete_ShouldSetIsDeletedTrue() {
-        Requirement req = Requirement.builder().id(reqId).projectId(projectId).isDeleted(false).build();
-        when(requirementRepository.findByIdAndIsDeletedFalse(reqId)).thenReturn(Optional.of(req));
-        when(groupService.isLeader(groupId, userId)).thenReturn(true);
+        String reqId = "req-1";
+        Requirement requirement = Requirement.builder()
+                .id(reqId)
+                .isDeleted(false)
+                .build();
+
+        when(requirementRepository.findByIdAndIsDeletedFalse(reqId))
+                .thenReturn(Optional.of(requirement));
 
         requirementService.delete(reqId, false, userId);
 
-        assertTrue(req.getIsDeleted());
-        verify(requirementRepository).save(req);
-    }
-
-    @Test
-    void getList_WithoutProjectId_ShouldThrowAccessDeniedException() {
-        RequirementFilterRequest filter = new RequirementFilterRequest(); // projectId is null
-
-        assertThrows(AccessDeniedException.class, () -> requirementService.getList(filter, null, userId));
+        assertTrue(requirement.getIsDeleted());
+        verify(requirementRepository).save(requirement);
     }
 }

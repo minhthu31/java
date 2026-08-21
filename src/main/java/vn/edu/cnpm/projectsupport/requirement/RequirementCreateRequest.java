@@ -2,11 +2,7 @@ package vn.edu.cnpm.projectsupport.requirement;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 @Getter
 @Setter
@@ -25,12 +21,4 @@ public class RequirementCreateRequest {
     private String description;
     private Priority priority;
     private RequirementStatus status;
-
-    // Constructor phục vụ cho unit test / khởi tạo nhanh
-    public RequirementCreateRequest(String projectId, String title, Priority priority, RequirementStatus status) {
-        this.projectId = projectId;
-        this.title = title;
-        this.priority = priority;
-        this.status = status;
-    }
 }
