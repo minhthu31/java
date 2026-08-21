@@ -139,7 +139,7 @@ describe("TaskComponent Full Scope Tests (CNPM-65)", () => {
         });
     });
 
-    test("2. Hiển thị lỗi API và hỗ trợ bấm nút 'Thử lại'", async () => {
+    test("2. Hiển thị lỗi API và hỗ trợ bấm nút 'Thử lại' để gọi lại đúng trang", async () => {
         TaskService.getTasks.mockRejectedValueOnce({
             response: { status: 500, data: { message: "Lỗi kết nối máy chủ" } },
         });
@@ -164,7 +164,21 @@ describe("TaskComponent Full Scope Tests (CNPM-65)", () => {
         });
     });
 
-    test("3a. Phân quyền: ADMIN và TEAM_LEADER thấy nút 'Tạo Task mới'", async () => {
+    test("3a. Phân quyền: TEAM_LEADER thấy nút 'Tạo Task mới'", async () => {
+        authService.currentUser.mockReturnValue({
+            id: 1,
+            username: "leader.user",
+            role: "TEAM_LEADER",
+        });
+
+        await act(async () => {
+            render(<TaskComponent projectId={1} />);
+        });
+
+        expect(screen.getByTestId("create-task-btn")).toBeInTheDocument();
+    });
+
+    test("3b. Phân quyền: ADMIN và role không hợp lệ không thấy nút tạo Task và không có control mutation", async () => {
         authService.currentUser.mockReturnValue({
             id: 99,
             username: "admin.user",
@@ -175,13 +189,39 @@ describe("TaskComponent Full Scope Tests (CNPM-65)", () => {
             render(<TaskComponent projectId={1} />);
         });
 
-        expect(screen.getByTestId("create-task-btn")).toBeInTheDocument();
+        expect(screen.queryByTestId("create-task-btn")).not.toBeInTheDocument();
+        expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+        expect(screen.getByTestId("error-message")).toHaveTextContent(
+            "Bạn không có quyền truy cập module Task của dự án này.",
+        );
+        expect(TaskService.getTasks).not.toHaveBeenCalled();
+        expect(TaskService.createTask).not.toHaveBeenCalled();
+        expect(TaskService.updateTaskStatus).not.toHaveBeenCalled();
     });
 
-    test("3b. Phân quyền: TEAM_MEMBER bị ẩn nút 'Tạo Task mới'", async () => {
+    test("3c. Phân quyền: LECTURER chỉ đọc (read-only), không thấy nút tạo và không có dropdown trạng thái", async () => {
         authService.currentUser.mockReturnValue({
-            id: 2,
-            username: "member.user",
+            id: 88,
+            username: "lecturer.user",
+            role: "LECTURER",
+        });
+
+        await act(async () => {
+            render(<TaskComponent projectId={1} />);
+        });
+
+        await waitFor(() => {
+            expect(screen.getByText("Task TO_DO")).toBeInTheDocument();
+        });
+
+        expect(screen.queryByTestId("create-task-btn")).not.toBeInTheDocument();
+        expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    });
+
+    test("3d. Phân quyền: TEAM_MEMBER chỉ được thao tác dropdown với Task được phân công cho mình", async () => {
+        authService.currentUser.mockReturnValue({
+            id: 10,
+            username: "dev1",
             role: "TEAM_MEMBER",
         });
 
@@ -190,10 +230,15 @@ describe("TaskComponent Full Scope Tests (CNPM-65)", () => {
         });
 
         await waitFor(() => {
-            expect(
-                screen.queryByTestId("create-task-btn"),
-            ).not.toBeInTheDocument();
+            expect(screen.getByText("Task TO_DO")).toBeInTheDocument();
         });
+
+        const row1 = screen.getByTestId("task-row-1");
+        expect(within(row1).getByRole("combobox")).toBeInTheDocument();
+
+        const row4 = screen.getByTestId("task-row-4");
+        expect(within(row4).queryByRole("combobox")).not.toBeInTheDocument();
+        expect(within(row4).getByText("BLOCKED")).toBeInTheDocument();
     });
 
     test("4. Form tạo task loại trừ SUBTASK và validate các trường bắt buộc", async () => {
@@ -216,6 +261,47 @@ describe("TaskComponent Full Scope Tests (CNPM-65)", () => {
 
         expect(screen.getByTestId("form-error")).toHaveTextContent(
             "Vui lòng điền đầy đủ: Tiêu đề, Tiêu chí nghiệm thu, Issue Type và Priority.",
+        );
+    });
+
+    test("4b. Validate title tối đa 255 ký tự và deadline không ở quá khứ", async () => {
+        await act(async () => {
+            render(<TaskComponent projectId={1} />);
+        });
+
+        await act(async () => {
+            fireEvent.click(screen.getByTestId("create-task-btn"));
+        });
+
+        const longTitle = "A".repeat(256);
+        fireEvent.change(screen.getByLabelText(/Tiêu đề/i), {
+            target: { value: longTitle },
+        });
+        fireEvent.change(screen.getByLabelText(/Tiêu chí nghiệm thu/i), {
+            target: { value: "Criteria test" },
+        });
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole("button", { name: /Lưu Task/i }));
+        });
+
+        expect(screen.getByTestId("form-error")).toHaveTextContent(
+            "Tiêu đề không được vượt quá 255 ký tự.",
+        );
+
+        fireEvent.change(screen.getByLabelText(/Tiêu đề/i), {
+            target: { value: "Task title hợp lệ" },
+        });
+        fireEvent.change(screen.getByLabelText(/Hạn chót/i), {
+            target: { value: "2020-01-01" },
+        });
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole("button", { name: /Lưu Task/i }));
+        });
+
+        expect(screen.getByTestId("form-error")).toHaveTextContent(
+            "Hạn chót (Deadline) không được ở trong quá khứ.",
         );
     });
 
@@ -538,8 +624,7 @@ describe("TaskComponent Full Scope Tests (CNPM-65)", () => {
             response: {
                 status: 403,
                 data: {
-                    message:
-                        "Chỉ Trưởng nhóm (Leader) hoặc Admin mới có quyền tạo Task.",
+                    message: "Chỉ Trưởng nhóm (Leader) mới có quyền tạo Task.",
                 },
             },
         });
@@ -564,7 +649,7 @@ describe("TaskComponent Full Scope Tests (CNPM-65)", () => {
         });
 
         expect(screen.getByTestId("form-error")).toHaveTextContent(
-            "Chỉ Trưởng nhóm (Leader) hoặc Admin mới có quyền tạo Task.",
+            "Chỉ Trưởng nhóm (Leader) mới có quyền tạo Task.",
         );
     });
 

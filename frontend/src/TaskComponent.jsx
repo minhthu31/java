@@ -18,10 +18,11 @@ export default function TaskComponent({ projectId }) {
         ? String(user.role).replace("ROLE_", "").toUpperCase()
         : null;
 
-    const isAdmin = userRole === "ADMIN";
-    const isLeader = userRole === "TEAM_LEADER" || isAdmin;
+    // Phân quyền chuẩn Sprint 2: ADMIN không có quyền trong Task module
+    const isLeader = userRole === "TEAM_LEADER";
     const isLecturer = userRole === "LECTURER";
     const isMember = userRole === "TEAM_MEMBER" || userRole === "STUDENT";
+    const isValidRole = isLeader || isLecturer || isMember;
 
     const [currentView, setCurrentView] = useState("list");
     const [tasks, setTasks] = useState([]);
@@ -61,10 +62,16 @@ export default function TaskComponent({ projectId }) {
 
     const fetchTasks = useCallback(
         async (page = 0) => {
-            if (!projectId) {
+            if (!projectId || !isValidRole) {
                 setTasks([]);
                 setLoading(false);
-                setError(null);
+                if (!isValidRole && projectId) {
+                    setError(
+                        "Bạn không có quyền truy cập module Task của dự án này.",
+                    );
+                } else {
+                    setError(null);
+                }
                 return;
             }
 
@@ -127,16 +134,10 @@ export default function TaskComponent({ projectId }) {
                 setLoading(false);
             }
         },
-        [projectId],
+        [projectId, isValidRole],
     );
 
     useEffect(() => {
-        if (!projectId) {
-            setTasks([]);
-            setLoading(false);
-            setError(null);
-            return;
-        }
         fetchTasks(0);
     }, [projectId, fetchTasks]);
 
@@ -164,14 +165,23 @@ export default function TaskComponent({ projectId }) {
         e.preventDefault();
 
         if (formSubmitting) return;
+        if (!isLeader) {
+            setFormError(
+                "Chỉ Trưởng nhóm (Team Leader) mới có quyền tạo Task.",
+            );
+            return;
+        }
         if (!projectId) {
             setFormError("Chưa chọn dự án. Không thể tạo Task.");
             return;
         }
 
+        const trimmedTitle = formData.title.trim();
+        const trimmedAcceptance = formData.acceptanceCriteria.trim();
+
         if (
-            !formData.title.trim() ||
-            !formData.acceptanceCriteria.trim() ||
+            !trimmedTitle ||
+            !trimmedAcceptance ||
             !formData.issueType ||
             !formData.priority
         ) {
@@ -181,13 +191,28 @@ export default function TaskComponent({ projectId }) {
             return;
         }
 
+        if (trimmedTitle.length > 255) {
+            setFormError("Tiêu đề không được vượt quá 255 ký tự.");
+            return;
+        }
+
+        if (formData.deadline) {
+            const selectedDate = new Date(formData.deadline);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            if (selectedDate < today) {
+                setFormError("Hạn chót (Deadline) không được ở trong quá khứ.");
+                return;
+            }
+        }
+
         setFormSubmitting(true);
         setFormError(null);
         try {
             const payload = {
-                title: formData.title.trim(),
+                title: trimmedTitle,
                 description: formData.description?.trim() || null,
-                acceptanceCriteria: formData.acceptanceCriteria.trim(),
+                acceptanceCriteria: trimmedAcceptance,
                 issueType: formData.issueType,
                 classification: formData.classification || "FEATURE_RELATED",
                 priority: formData.priority,
@@ -229,9 +254,7 @@ export default function TaskComponent({ projectId }) {
             if (status === 401) {
                 setFormError("Phiên làm việc hết hạn khi tạo Task.");
             } else if (status === 403) {
-                setFormError(
-                    "Chỉ Trưởng nhóm (Leader) hoặc Admin mới có quyền tạo Task.",
-                );
+                setFormError("Chỉ Trưởng nhóm (Leader) mới có quyền tạo Task.");
             } else if (status === 404) {
                 setFormError("Không tìm thấy dự án tương ứng.");
             } else {
@@ -246,8 +269,27 @@ export default function TaskComponent({ projectId }) {
         }
     };
 
-    const getAllowedStatusesForRole = (currentStatus) => {
-        if (isLecturer) return [];
+    const isTaskAssignedToCurrentMember = (task) => {
+        if (!isMember) return false;
+        if (!task) return false;
+        if (task.assigneeUserId && user.id && task.assigneeUserId === user.id)
+            return true;
+        if (task.assignee && typeof task.assignee === "object") {
+            if (task.assignee.id && user.id && task.assignee.id === user.id)
+                return true;
+            if (
+                task.assignee.username &&
+                user.username &&
+                task.assignee.username === user.username
+            )
+                return true;
+        }
+        return false;
+    };
+
+    const getAllowedStatusesForRole = (currentStatus, task) => {
+        if (!isValidRole || isLecturer) return [];
+        if (isMember && !isTaskAssignedToCurrentMember(task)) return [];
         if (currentStatus === "DONE" || currentStatus === "CANCELLED") {
             return [currentStatus];
         }
@@ -275,8 +317,9 @@ export default function TaskComponent({ projectId }) {
         return transitions;
     };
 
-    // Hàm chuyển đổi trạng thái đã được bảo vệ chặt chẽ bằng allowedStatuses
-    const handleStatusSelectChange = (taskId, currentStatus, newStatus) => {
+    const handleStatusSelectChange = (task, newStatus) => {
+        const taskId = task.id;
+        const currentStatus = task.status || "TO_DO";
         if (newStatus === currentStatus) return;
 
         if (currentStatus === "DONE" || currentStatus === "CANCELLED") {
@@ -284,7 +327,7 @@ export default function TaskComponent({ projectId }) {
             return;
         }
 
-        const allowedStatuses = getAllowedStatusesForRole(currentStatus);
+        const allowedStatuses = getAllowedStatusesForRole(currentStatus, task);
         if (!allowedStatuses.includes(newStatus)) {
             alert("Không được phép chuyển sang trạng thái này.");
             return;
@@ -534,7 +577,7 @@ export default function TaskComponent({ projectId }) {
                                 name="title"
                                 value={formData.title}
                                 onChange={handleInputChange}
-                                placeholder="Nhập tiêu đề task..."
+                                placeholder="Nhập tiêu đề task (tối đa 255 ký tự)..."
                                 style={{
                                     width: "100%",
                                     padding: "8px 12px",
@@ -925,23 +968,25 @@ export default function TaskComponent({ projectId }) {
                             }}
                         >
                             <span style={{ fontSize: "13px" }}>{error}</span>
-                            <button
-                                type="button"
-                                onClick={() => fetchTasks(pageInfo.page)}
-                                data-testid="retry-btn"
-                                style={{
-                                    padding: "6px 14px",
-                                    background: "#dc2626",
-                                    color: "#fff",
-                                    border: "none",
-                                    borderRadius: "4px",
-                                    cursor: "pointer",
-                                    fontSize: "12px",
-                                    fontWeight: "bold",
-                                }}
-                            >
-                                Thử lại
-                            </button>
+                            {isValidRole && (
+                                <button
+                                    type="button"
+                                    onClick={() => fetchTasks(pageInfo.page)}
+                                    data-testid="retry-btn"
+                                    style={{
+                                        padding: "6px 14px",
+                                        background: "#dc2626",
+                                        color: "#fff",
+                                        border: "none",
+                                        borderRadius: "4px",
+                                        cursor: "pointer",
+                                        fontSize: "12px",
+                                        fontWeight: "bold",
+                                    }}
+                                >
+                                    Thử lại
+                                </button>
+                            )}
                         </div>
                     )}
 
@@ -959,30 +1004,33 @@ export default function TaskComponent({ projectId }) {
                         </div>
                     )}
 
-                    {!loading && !error && tasks.length === 0 && (
-                        <div
-                            data-testid="empty-state"
-                            style={{
-                                padding: "40px",
-                                textAlign: "center",
-                                background: "#f8fafc",
-                                border: "2px dashed #cbd5e1",
-                                borderRadius: "8px",
-                            }}
-                        >
-                            <p
+                    {!loading &&
+                        !error &&
+                        tasks.length === 0 &&
+                        isValidRole && (
+                            <div
+                                data-testid="empty-state"
                                 style={{
-                                    color: "#64748b",
-                                    fontSize: "14px",
-                                    margin: 0,
+                                    padding: "40px",
+                                    textAlign: "center",
+                                    background: "#f8fafc",
+                                    border: "2px dashed #cbd5e1",
+                                    borderRadius: "8px",
                                 }}
                             >
-                                Chưa có công việc nào trong dự án này.
-                            </p>
-                        </div>
-                    )}
+                                <p
+                                    style={{
+                                        color: "#64748b",
+                                        fontSize: "14px",
+                                        margin: 0,
+                                    }}
+                                >
+                                    Chưa có công việc nào trong dự án này.
+                                </p>
+                            </div>
+                        )}
 
-                    {!loading && !error && tasks.length > 0 && (
+                    {!loading && !error && tasks.length > 0 && isValidRole && (
                         <>
                             <div
                                 style={{
@@ -1048,10 +1096,15 @@ export default function TaskComponent({ projectId }) {
                                             const allowedStatuses =
                                                 getAllowedStatusesForRole(
                                                     currentStatus,
+                                                    task,
                                                 );
                                             const isTerminal =
                                                 currentStatus === "DONE" ||
                                                 currentStatus === "CANCELLED";
+                                            const canEditStatus =
+                                                allowedStatuses.length > 1 &&
+                                                !isTerminal &&
+                                                !isLecturer;
 
                                             return (
                                                 <tr
@@ -1162,8 +1215,7 @@ export default function TaskComponent({ projectId }) {
                                                             padding: "12px",
                                                         }}
                                                     >
-                                                        {isLecturer ||
-                                                        isTerminal ? (
+                                                        {!canEditStatus ? (
                                                             <span
                                                                 style={{
                                                                     padding:
@@ -1191,8 +1243,7 @@ export default function TaskComponent({ projectId }) {
                                                                 }
                                                                 onChange={(e) =>
                                                                     handleStatusSelectChange(
-                                                                        task.id,
-                                                                        currentStatus,
+                                                                        task,
                                                                         e.target
                                                                             .value,
                                                                     )
@@ -1349,7 +1400,6 @@ export default function TaskComponent({ projectId }) {
                 </div>
             )}
 
-            {/* DETAIL MODAL */}
             {selectedTask && (
                 <div
                     data-testid="detail-modal"
