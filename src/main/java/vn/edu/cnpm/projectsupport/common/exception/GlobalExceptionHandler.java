@@ -65,6 +65,50 @@ public class GlobalExceptionHandler {
                 request);
     }
 
+    @ExceptionHandler(ResourceInUseException.class)
+    public ResponseEntity<ApiError> handleResourceInUse(
+            ResourceInUseException exception, WebRequest request) {
+        return error(
+                HttpStatus.CONFLICT,
+                "RESOURCE_IN_USE",
+                exception.getMessage(),
+                Map.of(),
+                request);
+    }
+
+    @ExceptionHandler(InvalidStatusTransitionException.class)
+    public ResponseEntity<ApiError> handleInvalidStatusTransition(
+            InvalidStatusTransitionException exception, WebRequest request) {
+        return error(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "INVALID_STATUS_TRANSITION",
+                exception.getMessage(),
+                Map.of(),
+                request);
+    }
+
+    @ExceptionHandler(AssigneeOutsideGroupException.class)
+    public ResponseEntity<ApiError> handleAssigneeOutsideGroup(
+            AssigneeOutsideGroupException exception, WebRequest request) {
+        return error(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "ASSIGNEE_OUTSIDE_GROUP",
+                exception.getMessage(),
+                Map.of(),
+                request);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiError> handleIllegalArgument(
+            IllegalArgumentException exception, WebRequest request) {
+        return error(
+                HttpStatus.BAD_REQUEST,
+                "VALIDATION_FAILED",
+                exception.getMessage(),
+                Map.of(),
+                request);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleUnexpected(Exception exception, WebRequest request) {
         return error(

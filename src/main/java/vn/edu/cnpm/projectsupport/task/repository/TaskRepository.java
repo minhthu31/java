@@ -9,8 +9,10 @@ import vn.edu.cnpm.projectsupport.task.domain.TaskStatus;
 
 public interface TaskRepository extends JpaRepository<Task, Long> {
     List<Task> findByProjectId(Long projectId);
+    List<Task> findByProjectIdAndAssigneeUserId(Long projectId, Long assigneeUserId);
     List<Task> findByAssigneeUserId(Long assigneeUserId);
     List<Task> findByStatus(TaskStatus status);
     List<Task> findByIssueType(TaskIssueType issueType);
     Optional<Task> findByIdempotencyKey(String idempotencyKey);
+    boolean existsByRequirementId(Long requirementId);
 }
