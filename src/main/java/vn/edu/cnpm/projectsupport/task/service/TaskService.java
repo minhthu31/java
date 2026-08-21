@@ -1,10 +1,13 @@
 package vn.edu.cnpm.projectsupport.task.service;
 
-import vn.edu.cnpm.projectsupport.task.domain.Task;
-import vn.edu.cnpm.projectsupport.task.domain.TaskStatus;
+import java.util.List;
 import vn.edu.cnpm.projectsupport.task.dto.CreateTaskRequest;
+import vn.edu.cnpm.projectsupport.task.dto.TaskResponse;
+import vn.edu.cnpm.projectsupport.task.dto.TaskStatusUpdateRequest;
 
 public interface TaskService {
-    Task createTask(Long projectId, Long leaderUserId, CreateTaskRequest request);
-    Task updateTaskStatusByMember(Long memberUserId, Long taskId, TaskStatus status, String reason);
+    TaskResponse createTask(Long projectId, Long leaderUserId, CreateTaskRequest request);
+    TaskResponse updateTaskStatusByMember(Long projectId, Long memberUserId, Long taskId, TaskStatusUpdateRequest request);
+    TaskResponse getTaskById(Long projectId, Long taskId);
+    List<TaskResponse> getTasksByProject(Long projectId);
 }

@@ -1,42 +1,30 @@
 package vn.edu.cnpm.projectsupport.task.service;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import vn.edu.cnpm.projectsupport.task.domain.Task;
-import vn.edu.cnpm.projectsupport.task.domain.TaskClassification;
-import vn.edu.cnpm.projectsupport.task.domain.TaskIssueType;
-import vn.edu.cnpm.projectsupport.task.domain.TaskPriority;
-import vn.edu.cnpm.projectsupport.task.domain.TaskStatus;
-import vn.edu.cnpm.projectsupport.task.dto.CreateTaskRequest;
+import vn.edu.cnpm.projectsupport.task.domain.*;
+import vn.edu.cnpm.projectsupport.task.dto.*;
+import vn.edu.cnpm.projectsupport.task.repository.TaskActivityLogRepository;
 import vn.edu.cnpm.projectsupport.task.repository.TaskRepository;
 
 @Service
 public class TaskServiceImpl implements TaskService {
 
-    private static final Logger log = LoggerFactory.getLogger(TaskServiceImpl.class);
-
     private final TaskRepository taskRepository;
+    private final TaskActivityLogRepository activityLogRepository;
 
-    public TaskServiceImpl(TaskRepository taskRepository) {
+    public TaskServiceImpl(TaskRepository taskRepository, TaskActivityLogRepository activityLogRepository) {
         this.taskRepository = taskRepository;
+        this.activityLogRepository = activityLogRepository;
     }
 
     @Override
     @Transactional
-    public Task createTask(Long projectId, Long leaderUserId, CreateTaskRequest request) {
-        if (request.getAcceptanceCriteria() == null || request.getAcceptanceCriteria().isBlank()) {
-            throw new IllegalArgumentException("Acceptance Criteria không được để trống.");
-        }
-
-       
-        TaskIssueType issueType = request.getIssueType() != null ? request.getIssueType() : TaskIssueType.TASK;
-        TaskPriority priority = request.getPriority() != null ? request.getPriority() : TaskPriority.MEDIUM;
-
-        Task task = new Task(projectId, request.getTitle(), request.getAcceptanceCriteria(), issueType, priority);
-
+    public TaskResponse createTask(Long projectId, Long leaderUserId, CreateTaskRequest request) {
+        Task task = new Task(projectId, request.getTitle(), request.getAcceptanceCriteria(), request.getIssueType(), request.getPriority());
+        
         task.setDescription(request.getDescription());
         task.setRequirementId(request.getRequirementId());
         task.setFeatureId(request.getFeatureId());
@@ -44,68 +32,111 @@ public class TaskServiceImpl implements TaskService {
         task.setAssigneeUserId(request.getAssigneeUserId());
         task.setDeadline(request.getDeadline());
 
-        // Phân loại Task
-        TaskClassification classification = request.getClassification() != null
-                ? request.getClassification()
-                : autoClassifyTask(request.getAcceptanceCriteria());
-
+        TaskClassification classification = request.getClassification() != null 
+                ? request.getClassification() 
+                : autoClassifyTask(request.getTitle(), request.getDescription(), request.getAcceptanceCriteria(), request.getFeatureId(), request.getRequirementId());
+        
         task.setClassification(classification);
         task.setStatus(TaskStatus.TO_DO);
 
-        log.info("[TASK_CLASSIFICATION] Task '{}' (Project ID: {}) classified as: {}",
-                request.getTitle(), projectId, classification);
-
-        return taskRepository.save(task);
+        Task savedTask = taskRepository.save(task);
+        return TaskResponse.fromEntity(savedTask);
     }
 
     @Override
     @Transactional
-    public Task updateTaskStatusByMember(Long memberUserId, Long taskId, TaskStatus status, String reason) {
+    public TaskResponse updateTaskStatusByMember(Long projectId, Long memberUserId, Long taskId, TaskStatusUpdateRequest request) {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy Task với ID: " + taskId));
 
-        if (memberUserId != null && task.getAssigneeUserId() != null) {
-            if (!memberUserId.equals(task.getAssigneeUserId())) {
-                throw new IllegalStateException("Bạn không có quyền cập nhật Task của người khác.");
-            }
+        if (!task.getProjectId().equals(projectId)) {
+            throw new IllegalArgumentException("Task không thuộc Project này.");
+        }
+
+        // Bắt buộc Task phải được gán và đúng Assignee
+        if (memberUserId == null || task.getAssigneeUserId() == null || !memberUserId.equals(task.getAssigneeUserId())) {
+            throw new IllegalStateException("Bạn không có quyền cập nhật Task này.");
         }
 
         TaskStatus currentStatus = task.getStatus();
+        TaskStatus targetStatus = request.getStatus();
 
-        // Quy tắc chuyển trạng thái
-        if (status == TaskStatus.CANCELLED) {
-            throw new IllegalStateException("Team Member không được quyền tự CANCELLED Task.");
-        }
-        if (currentStatus == TaskStatus.TO_DO && status == TaskStatus.DONE) {
-            throw new IllegalStateException("Team Member không được chuyển trực tiếp từ TO_DO sang DONE.");
-        }
+        // Kiểm tra Ma trận Trạng thái (Transition Matrix)
+        validateTransition(currentStatus, targetStatus, false);
 
-        // Kiểm tra bắt buộc truyền lý do khi BLOCKED hoặc CANCELLED
-        if ((status == TaskStatus.BLOCKED || status == TaskStatus.CANCELLED) && (reason == null || reason.isBlank())) {
-            throw new IllegalArgumentException("Cần cung cấp lý do khi chuyển trạng thái sang " + status);
+        // Lý do bắt buộc khi BLOCKED hoặc CANCELLED
+        if ((targetStatus == TaskStatus.BLOCKED || targetStatus == TaskStatus.CANCELLED) 
+                && (request.getReason() == null || request.getReason().isBlank())) {
+            throw new IllegalArgumentException("Cần cung cấp lý do khi chuyển trạng thái sang " + targetStatus);
         }
 
-        task.setStatus(status);
+        task.setStatus(targetStatus);
+        Task updatedTask = taskRepository.save(task);
 
-        log.info("[ACTIVITY_LOG] Task ID: {} | Member ID: {} | Status changed: {} -> {} | Reason: {}",
-                taskId, memberUserId, currentStatus, status, reason != null ? reason : "N/A");
+        // Ghi Activity Log vào Database
+        TaskActivityLog activityLog = new TaskActivityLog(taskId, memberUserId, currentStatus, targetStatus, request.getReason());
+        activityLogRepository.save(activityLog);
 
-        return taskRepository.save(task);
+        return TaskResponse.fromEntity(updatedTask);
     }
 
-    private TaskClassification autoClassifyTask(String criteria) {
-        if (criteria == null || criteria.isBlank()) return TaskClassification.OTHER;
+    @Override
+    @Transactional(readOnly = true)
+    public TaskResponse getTaskById(Long projectId, Long taskId) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy Task ID: " + taskId));
+        if (!task.getProjectId().equals(projectId)) {
+            throw new IllegalArgumentException("Task không thuộc Project này.");
+        }
+        return TaskResponse.fromEntity(task);
+    }
 
-        String lower = criteria.toLowerCase();
+    @Override
+    @Transactional(readOnly = true)
+    public List<TaskResponse> getTasksByProject(Long projectId) {
+        return taskRepository.findByProjectId(projectId).stream()
+                .map(TaskResponse::fromEntity)
+                .toList();
+    }
 
-        if (lower.contains("test") || lower.contains("coverage") || lower.contains("kiểm thử")) {
+    private void validateTransition(TaskStatus from, TaskStatus to, boolean isLeader) {
+        if (from == TaskStatus.DONE || from == TaskStatus.CANCELLED) {
+            throw new IllegalStateException("Không thể chuyển trạng thái từ trạng thái kết thúc: " + from);
+        }
+        if (!isLeader && to == TaskStatus.CANCELLED) {
+            throw new IllegalStateException("Team Member không được quyền tự CANCELLED Task.");
+        }
+
+        boolean valid = switch (from) {
+            case TO_DO -> to == TaskStatus.IN_PROGRESS || to == TaskStatus.BLOCKED || to == TaskStatus.CANCELLED;
+            case IN_PROGRESS -> to == TaskStatus.TO_DO || to == TaskStatus.IN_REVIEW || to == TaskStatus.BLOCKED || to == TaskStatus.CANCELLED;
+            case IN_REVIEW -> to == TaskStatus.IN_PROGRESS || to == TaskStatus.DONE || to == TaskStatus.BLOCKED;
+            case BLOCKED -> to == TaskStatus.TO_DO || to == TaskStatus.IN_PROGRESS || to == TaskStatus.CANCELLED;
+            default -> false;
+        };
+
+        if (!valid) {
+            throw new IllegalStateException("Chuyển trạng thái không hợp lệ: " + from + " -> " + to);
+        }
+    }
+
+    private TaskClassification autoClassifyTask(String title, String desc, String criteria, Long featureId, Long reqId) {
+        String combined = ((title != null ? title : "") + " " 
+                        + (desc != null ? desc : "") + " " 
+                        + (criteria != null ? criteria : "")).toLowerCase();
+
+        if (combined.contains("test") || combined.contains("coverage") || combined.contains("kiểm thử")) {
             return TaskClassification.AUTO_TEST;
         }
-        if (lower.contains("log") || lower.contains("logging") || lower.contains("trace") || lower.contains("monitor")) {
+        // Sử dụng Regex word boundary để tránh nhận nhầm từ "logic", "login", "dialog", "catalog"
+        if (combined.matches(".*\\b(log|logs|logging|trace|monitor)\\b.*")) {
             return TaskClassification.AUTO_LOG;
         }
-        if (lower.contains("feature") || lower.contains("chức năng") || lower.contains("tính năng")) {
+        if (combined.contains("new feature") || combined.contains("tạo mới tính năng")) {
             return TaskClassification.NEW_FEATURE;
+        }
+        if (featureId != null || reqId != null || combined.contains("feature") || combined.contains("tính năng")) {
+            return TaskClassification.FEATURE_RELATED;
         }
 
         return TaskClassification.OTHER;
