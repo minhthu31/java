@@ -3,6 +3,7 @@ package vn.edu.cnpm.projectsupport.task.service;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import vn.edu.cnpm.projectsupport.audit.domain.ActivityLog;
 import vn.edu.cnpm.projectsupport.audit.repository.ActivityLogRepository;
@@ -15,6 +16,7 @@ import vn.edu.cnpm.projectsupport.project.domain.Project;
 import vn.edu.cnpm.projectsupport.project.repository.ProjectRepository;
 import vn.edu.cnpm.projectsupport.requirement.RequirementRepository;
 import vn.edu.cnpm.projectsupport.sprint.repository.SprintRepository;
+import vn.edu.cnpm.projectsupport.security.ProjectAuthorizationService;
 import vn.edu.cnpm.projectsupport.task.domain.*;
 import vn.edu.cnpm.projectsupport.task.dto.*;
 import vn.edu.cnpm.projectsupport.task.repository.TaskRepository;
@@ -28,6 +30,7 @@ public class TaskServiceImpl implements TaskService {
     private final RequirementRepository requirementRepository;
     private final FeatureRepository featureRepository;
     private final SprintRepository sprintRepository;
+    private final ProjectAuthorizationService projectAuthorization;
 
     public TaskServiceImpl(
             TaskRepository taskRepository,
@@ -35,18 +38,32 @@ public class TaskServiceImpl implements TaskService {
             ProjectRepository projectRepository,
             RequirementRepository requirementRepository,
             FeatureRepository featureRepository,
-            SprintRepository sprintRepository) {
+            SprintRepository sprintRepository,
+            ProjectAuthorizationService projectAuthorization) {
         this.taskRepository = taskRepository;
         this.activityLogRepository = activityLogRepository;
         this.projectRepository = projectRepository;
         this.requirementRepository = requirementRepository;
         this.featureRepository = featureRepository;
         this.sprintRepository = sprintRepository;
+        this.projectAuthorization = projectAuthorization;
     }
 
     @Override
     @Transactional
+    @PreAuthorize("@projectAuthorization.canManageTasks(#projectId)")
+    public TaskResponse createTask(Long projectId, CreateTaskRequest request) {
+        return createTaskInternal(projectId, projectAuthorization.currentUserId(), request);
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize("@projectAuthorization.canManageTasks(#projectId) and @projectAuthorization.isCurrentUser(#leaderUserId)")
     public TaskResponse createTask(Long projectId, Long leaderUserId, CreateTaskRequest request) {
+        return createTaskInternal(projectId, leaderUserId, request);
+    }
+
+    private TaskResponse createTaskInternal(Long projectId, Long leaderUserId, CreateTaskRequest request) {
         Project project = requireProject(projectId);
         if (leaderUserId == null || projectRepository.countActiveLeader(projectId, leaderUserId) == 0) {
             throw new ForbiddenGroupScopeException("Chỉ Team Leader của group sở hữu Project được tạo Task");
@@ -57,8 +74,13 @@ public class TaskServiceImpl implements TaskService {
             throw new IllegalArgumentException("Sprint 2 chưa hỗ trợ tạo SUBTASK khi chưa có parentTaskId");
         }
 
-        Task task = new Task(projectId, request.getTitle(), request.getAcceptanceCriteria(), request.getIssueType(), request.getPriority());
-        
+        Task task = new Task(
+                projectId,
+                request.getTitle(),
+                request.getAcceptanceCriteria(),
+                request.getIssueType(),
+                request.getPriority());
+
         task.setDescription(request.getDescription());
         task.setRequirementId(request.getRequirementId());
         task.setFeatureId(request.getFeatureId());
@@ -66,10 +88,15 @@ public class TaskServiceImpl implements TaskService {
         task.setAssigneeUserId(request.getAssigneeUserId());
         task.setDeadline(request.getDeadline());
 
-        TaskClassification classification = request.getClassification() != null 
-                ? request.getClassification() 
-                : autoClassifyTask(request.getTitle(), request.getDescription(), request.getAcceptanceCriteria(), request.getFeatureId(), request.getRequirementId());
-        
+        TaskClassification classification = request.getClassification() != null
+                ? request.getClassification()
+                : autoClassifyTask(
+                        request.getTitle(),
+                        request.getDescription(),
+                        request.getAcceptanceCriteria(),
+                        request.getFeatureId(),
+                        request.getRequirementId());
+
         task.setClassification(classification);
         task.setStatus(TaskStatus.TO_DO);
 
@@ -81,7 +108,27 @@ public class TaskServiceImpl implements TaskService {
 
     @Override
     @Transactional
+    @PreAuthorize("@projectAuthorization.canUpdateTask(#projectId, #taskId)")
+    public TaskResponse updateTaskStatus(
+            Long projectId, Long taskId, TaskStatusUpdateRequest request) {
+        Long actorUserId = projectAuthorization.currentUserId();
+        boolean leader = projectAuthorization.isCurrentUserLeader(projectId);
+        return updateTaskStatusInternal(projectId, actorUserId, taskId, request, leader);
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize("@projectAuthorization.canUpdateTask(#projectId, #taskId) and @projectAuthorization.isCurrentUser(#memberUserId)")
     public TaskResponse updateTaskStatusByMember(Long projectId, Long memberUserId, Long taskId, TaskStatusUpdateRequest request) {
+        return updateTaskStatusInternal(projectId, memberUserId, taskId, request, false);
+    }
+
+    private TaskResponse updateTaskStatusInternal(
+            Long projectId,
+            Long actorUserId,
+            Long taskId,
+            TaskStatusUpdateRequest request,
+            boolean leader) {
         Project project = requireProject(projectId);
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy Task với ID: " + taskId));
@@ -91,10 +138,12 @@ public class TaskServiceImpl implements TaskService {
         }
 
         // Bắt buộc Task phải được gán và đúng Assignee
-        if (memberUserId == null || task.getAssigneeUserId() == null || !memberUserId.equals(task.getAssigneeUserId())) {
+        if (!leader && (actorUserId == null
+                || task.getAssigneeUserId() == null
+                || !actorUserId.equals(task.getAssigneeUserId()))) {
             throw new ForbiddenGroupScopeException("Bạn không có quyền cập nhật Task này");
         }
-        if (projectRepository.countActiveMember(projectId, memberUserId) == 0) {
+        if (!leader && projectRepository.countActiveMember(projectId, actorUserId) == 0) {
             throw new ForbiddenGroupScopeException("Thành viên không còn hoạt động trong group của Project");
         }
 
@@ -102,10 +151,10 @@ public class TaskServiceImpl implements TaskService {
         TaskStatus targetStatus = request.getStatus();
 
         // Kiểm tra Ma trận Trạng thái (Transition Matrix)
-        validateTransition(currentStatus, targetStatus, false);
+        validateTransition(currentStatus, targetStatus, leader);
 
         // Lý do bắt buộc khi BLOCKED hoặc CANCELLED
-        if ((targetStatus == TaskStatus.BLOCKED || targetStatus == TaskStatus.CANCELLED) 
+        if ((targetStatus == TaskStatus.BLOCKED || targetStatus == TaskStatus.CANCELLED)
                 && (request.getReason() == null || request.getReason().isBlank())) {
             throw new IllegalArgumentException("Cần cung cấp lý do khi chuyển trạng thái sang " + targetStatus);
         }
@@ -114,7 +163,7 @@ public class TaskServiceImpl implements TaskService {
         Task updatedTask = taskRepository.save(task);
 
         activityLogRepository.save(ActivityLog.taskStatusChanged(
-                project.getGroupId(), taskId, memberUserId,
+                project.getGroupId(), taskId, actorUserId,
                 currentStatus.name(), targetStatus.name(), request.getReason()));
 
         return TaskResponse.fromEntity(updatedTask);
@@ -122,6 +171,7 @@ public class TaskServiceImpl implements TaskService {
 
     @Override
     @Transactional(readOnly = true)
+    @PreAuthorize("@projectAuthorization.canViewTask(#projectId, #taskId)")
     public TaskResponse getTaskById(Long projectId, Long taskId) {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy Task ID: " + taskId));
@@ -133,8 +183,13 @@ public class TaskServiceImpl implements TaskService {
 
     @Override
     @Transactional(readOnly = true)
+    @PreAuthorize("@projectAuthorization.canViewTasks(#projectId)")
     public List<TaskResponse> getTasksByProject(Long projectId) {
-        return taskRepository.findByProjectId(projectId).stream()
+        List<Task> tasks = projectAuthorization.isCurrentUserTeamMember(projectId)
+                ? taskRepository.findByProjectIdAndAssigneeUserId(
+                        projectId, projectAuthorization.currentUserId())
+                : taskRepository.findByProjectId(projectId);
+        return tasks.stream()
                 .map(TaskResponse::fromEntity)
                 .toList();
     }
@@ -187,8 +242,8 @@ public class TaskServiceImpl implements TaskService {
     }
 
     private TaskClassification autoClassifyTask(String title, String desc, String criteria, Long featureId, Long reqId) {
-        String combined = ((title != null ? title : "") + " " 
-                        + (desc != null ? desc : "") + " " 
+        String combined = ((title != null ? title : "") + " "
+                        + (desc != null ? desc : "") + " "
                         + (criteria != null ? criteria : "")).toLowerCase();
 
         if (combined.contains("test") || combined.contains("coverage") || combined.contains("kiểm thử")) {

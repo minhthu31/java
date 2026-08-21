@@ -18,6 +18,7 @@ import vn.edu.cnpm.projectsupport.project.domain.Project;
 import vn.edu.cnpm.projectsupport.project.repository.ProjectRepository;
 import vn.edu.cnpm.projectsupport.requirement.RequirementRepository;
 import vn.edu.cnpm.projectsupport.sprint.repository.SprintRepository;
+import vn.edu.cnpm.projectsupport.security.ProjectAuthorizationService;
 import vn.edu.cnpm.projectsupport.task.domain.*;
 import vn.edu.cnpm.projectsupport.task.dto.*;
 import vn.edu.cnpm.projectsupport.task.repository.TaskRepository;
@@ -37,6 +38,7 @@ class TaskServiceTest {
     @Mock private RequirementRepository requirementRepository;
     @Mock private FeatureRepository featureRepository;
     @Mock private SprintRepository sprintRepository;
+    @Mock private ProjectAuthorizationService projectAuthorization;
 
     private TaskServiceImpl taskService;
 
@@ -51,7 +53,8 @@ class TaskServiceTest {
                 projectRepository,
                 requirementRepository,
                 featureRepository,
-                sprintRepository);
+                sprintRepository,
+                projectAuthorization);
         createReq = new CreateTaskRequest();
         createReq.setTitle("Phát triển API Task");
         createReq.setAcceptanceCriteria("Hoàn tất giao diện và API");
@@ -182,7 +185,7 @@ class TaskServiceTest {
         updateReq.setStatus(TaskStatus.BLOCKED);
         updateReq.setReason(""); // Lý do rỗng
 
-        assertThrows(IllegalArgumentException.class, 
+        assertThrows(IllegalArgumentException.class,
             () -> taskService.updateTaskStatusByMember(1L, 100L, 1L, updateReq));
     }
 

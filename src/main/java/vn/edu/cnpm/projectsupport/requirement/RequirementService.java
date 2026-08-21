@@ -4,6 +4,7 @@ import java.util.Set;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import vn.edu.cnpm.projectsupport.common.api.PageResponse;
@@ -33,6 +34,7 @@ public class RequirementService {
     }
 
     @Transactional
+    @PreAuthorize("@projectAuthorization.canManageRequirements(#projectId)")
     public RequirementResponse createRequirement(Long projectId, RequirementCreateRequest request) {
         requireProject(projectId);
 
@@ -45,6 +47,7 @@ public class RequirementService {
     }
 
     @Transactional(readOnly = true)
+    @PreAuthorize("@projectAuthorization.canViewRequirements(#projectId)")
     public PageResponse<RequirementResponse> getRequirements(Long projectId, RequirementFilterRequest filter) {
         requireProject(projectId);
         RequirementFilterRequest safeFilter = filter == null ? new RequirementFilterRequest() : filter;
@@ -56,11 +59,13 @@ public class RequirementService {
     }
 
     @Transactional(readOnly = true)
+    @PreAuthorize("@projectAuthorization.canViewRequirements(#projectId)")
     public RequirementResponse getRequirementById(Long projectId, Long requirementId) {
         return toResponse(requireRequirement(projectId, requirementId));
     }
 
     @Transactional
+    @PreAuthorize("@projectAuthorization.canManageRequirements(#projectId)")
     public RequirementResponse updateRequirement(
             Long projectId, Long requirementId, RequirementUpdateRequest request) {
         Requirement requirement = requireRequirement(projectId, requirementId);
@@ -72,6 +77,7 @@ public class RequirementService {
     }
 
     @Transactional
+    @PreAuthorize("@projectAuthorization.canManageRequirements(#projectId)")
     public RequirementResponse updateStatus(
             Long projectId, Long requirementId, RequirementStatusUpdateRequest request) {
         Requirement requirement = requireRequirement(projectId, requirementId);
@@ -81,6 +87,7 @@ public class RequirementService {
     }
 
     @Transactional
+    @PreAuthorize("@projectAuthorization.canManageRequirements(#projectId)")
     public void deleteRequirement(Long projectId, Long requirementId) {
         Requirement requirement = requireRequirement(projectId, requirementId);
         if (requirement.getStatus() != RequirementStatus.DRAFT) {
