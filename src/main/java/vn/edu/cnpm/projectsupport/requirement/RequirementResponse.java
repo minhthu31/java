@@ -1,6 +1,5 @@
 package vn.edu.cnpm.projectsupport.requirement;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 import java.time.LocalDateTime;
 
@@ -18,10 +17,6 @@ public class RequirementResponse {
     private Priority priority;
     private RequirementStatus status;
     private String createdBy;
-
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;
-
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime updatedAt;
 }
