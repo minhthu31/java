@@ -4,25 +4,59 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import vn.edu.cnpm.projectsupport.audit.domain.ActivityLog;
+import vn.edu.cnpm.projectsupport.audit.repository.ActivityLogRepository;
+import vn.edu.cnpm.projectsupport.common.exception.AssigneeOutsideGroupException;
+import vn.edu.cnpm.projectsupport.common.exception.ForbiddenGroupScopeException;
+import vn.edu.cnpm.projectsupport.common.exception.InvalidStatusTransitionException;
+import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
+import vn.edu.cnpm.projectsupport.feature.repository.FeatureRepository;
+import vn.edu.cnpm.projectsupport.project.domain.Project;
+import vn.edu.cnpm.projectsupport.project.repository.ProjectRepository;
+import vn.edu.cnpm.projectsupport.requirement.RequirementRepository;
+import vn.edu.cnpm.projectsupport.sprint.repository.SprintRepository;
 import vn.edu.cnpm.projectsupport.task.domain.*;
 import vn.edu.cnpm.projectsupport.task.dto.*;
-import vn.edu.cnpm.projectsupport.task.repository.TaskActivityLogRepository;
 import vn.edu.cnpm.projectsupport.task.repository.TaskRepository;
 
 @Service
 public class TaskServiceImpl implements TaskService {
 
     private final TaskRepository taskRepository;
-    private final TaskActivityLogRepository activityLogRepository;
+    private final ActivityLogRepository activityLogRepository;
+    private final ProjectRepository projectRepository;
+    private final RequirementRepository requirementRepository;
+    private final FeatureRepository featureRepository;
+    private final SprintRepository sprintRepository;
 
-    public TaskServiceImpl(TaskRepository taskRepository, TaskActivityLogRepository activityLogRepository) {
+    public TaskServiceImpl(
+            TaskRepository taskRepository,
+            ActivityLogRepository activityLogRepository,
+            ProjectRepository projectRepository,
+            RequirementRepository requirementRepository,
+            FeatureRepository featureRepository,
+            SprintRepository sprintRepository) {
         this.taskRepository = taskRepository;
         this.activityLogRepository = activityLogRepository;
+        this.projectRepository = projectRepository;
+        this.requirementRepository = requirementRepository;
+        this.featureRepository = featureRepository;
+        this.sprintRepository = sprintRepository;
     }
 
     @Override
     @Transactional
     public TaskResponse createTask(Long projectId, Long leaderUserId, CreateTaskRequest request) {
+        Project project = requireProject(projectId);
+        if (leaderUserId == null || projectRepository.countActiveLeader(projectId, leaderUserId) == 0) {
+            throw new ForbiddenGroupScopeException("Chỉ Team Leader của group sở hữu Project được tạo Task");
+        }
+        validateReferences(projectId, request);
+        validateAssignee(projectId, request.getAssigneeUserId());
+        if (request.getIssueType() == TaskIssueType.SUBTASK) {
+            throw new IllegalArgumentException("Sprint 2 chưa hỗ trợ tạo SUBTASK khi chưa có parentTaskId");
+        }
+
         Task task = new Task(projectId, request.getTitle(), request.getAcceptanceCriteria(), request.getIssueType(), request.getPriority());
         
         task.setDescription(request.getDescription());
@@ -40,22 +74,28 @@ public class TaskServiceImpl implements TaskService {
         task.setStatus(TaskStatus.TO_DO);
 
         Task savedTask = taskRepository.save(task);
+        activityLogRepository.save(ActivityLog.taskCreated(
+                project.getGroupId(), savedTask.getId(), leaderUserId));
         return TaskResponse.fromEntity(savedTask);
     }
 
     @Override
     @Transactional
     public TaskResponse updateTaskStatusByMember(Long projectId, Long memberUserId, Long taskId, TaskStatusUpdateRequest request) {
+        Project project = requireProject(projectId);
         Task task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy Task với ID: " + taskId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy Task với ID: " + taskId));
 
         if (!task.getProjectId().equals(projectId)) {
-            throw new IllegalArgumentException("Task không thuộc Project này.");
+            throw new ResourceNotFoundException("Không tìm thấy Task " + taskId + " trong Project " + projectId);
         }
 
         // Bắt buộc Task phải được gán và đúng Assignee
         if (memberUserId == null || task.getAssigneeUserId() == null || !memberUserId.equals(task.getAssigneeUserId())) {
-            throw new IllegalStateException("Bạn không có quyền cập nhật Task này.");
+            throw new ForbiddenGroupScopeException("Bạn không có quyền cập nhật Task này");
+        }
+        if (projectRepository.countActiveMember(projectId, memberUserId) == 0) {
+            throw new ForbiddenGroupScopeException("Thành viên không còn hoạt động trong group của Project");
         }
 
         TaskStatus currentStatus = task.getStatus();
@@ -73,9 +113,9 @@ public class TaskServiceImpl implements TaskService {
         task.setStatus(targetStatus);
         Task updatedTask = taskRepository.save(task);
 
-        // Ghi Activity Log vào Database
-        TaskActivityLog activityLog = new TaskActivityLog(taskId, memberUserId, currentStatus, targetStatus, request.getReason());
-        activityLogRepository.save(activityLog);
+        activityLogRepository.save(ActivityLog.taskStatusChanged(
+                project.getGroupId(), taskId, memberUserId,
+                currentStatus.name(), targetStatus.name(), request.getReason()));
 
         return TaskResponse.fromEntity(updatedTask);
     }
@@ -84,9 +124,9 @@ public class TaskServiceImpl implements TaskService {
     @Transactional(readOnly = true)
     public TaskResponse getTaskById(Long projectId, Long taskId) {
         Task task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy Task ID: " + taskId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy Task ID: " + taskId));
         if (!task.getProjectId().equals(projectId)) {
-            throw new IllegalArgumentException("Task không thuộc Project này.");
+            throw new ResourceNotFoundException("Không tìm thấy Task " + taskId + " trong Project " + projectId);
         }
         return TaskResponse.fromEntity(task);
     }
@@ -101,10 +141,10 @@ public class TaskServiceImpl implements TaskService {
 
     private void validateTransition(TaskStatus from, TaskStatus to, boolean isLeader) {
         if (from == TaskStatus.DONE || from == TaskStatus.CANCELLED) {
-            throw new IllegalStateException("Không thể chuyển trạng thái từ trạng thái kết thúc: " + from);
+            throw new InvalidStatusTransitionException("Không thể chuyển trạng thái từ trạng thái kết thúc: " + from);
         }
         if (!isLeader && to == TaskStatus.CANCELLED) {
-            throw new IllegalStateException("Team Member không được quyền tự CANCELLED Task.");
+            throw new InvalidStatusTransitionException("Team Member không được quyền tự CANCELLED Task");
         }
 
         boolean valid = switch (from) {
@@ -116,7 +156,33 @@ public class TaskServiceImpl implements TaskService {
         };
 
         if (!valid) {
-            throw new IllegalStateException("Chuyển trạng thái không hợp lệ: " + from + " -> " + to);
+            throw new InvalidStatusTransitionException("Chuyển trạng thái không hợp lệ: " + from + " -> " + to);
+        }
+    }
+
+    private Project requireProject(Long projectId) {
+        return projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy Project với ID: " + projectId));
+    }
+
+    private void validateReferences(Long projectId, CreateTaskRequest request) {
+        if (request.getRequirementId() != null
+                && requirementRepository.findByIdAndProjectId(request.getRequirementId(), projectId).isEmpty()) {
+            throw new ResourceNotFoundException("Requirement không thuộc Project này");
+        }
+        if (request.getFeatureId() != null
+                && featureRepository.findByIdAndProjectId(request.getFeatureId(), projectId).isEmpty()) {
+            throw new ResourceNotFoundException("Feature không thuộc Project này");
+        }
+        if (request.getSprintId() != null
+                && sprintRepository.findByIdAndProjectId(request.getSprintId(), projectId).isEmpty()) {
+            throw new ResourceNotFoundException("Sprint không thuộc Project này");
+        }
+    }
+
+    private void validateAssignee(Long projectId, Long assigneeUserId) {
+        if (assigneeUserId != null && projectRepository.countActiveMember(projectId, assigneeUserId) == 0) {
+            throw new AssigneeOutsideGroupException("Assignee phải là thành viên ACTIVE của group sở hữu Project");
         }
     }
 

@@ -4,13 +4,22 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import vn.edu.cnpm.projectsupport.audit.domain.ActivityLog;
+import vn.edu.cnpm.projectsupport.audit.repository.ActivityLogRepository;
+import vn.edu.cnpm.projectsupport.common.exception.ForbiddenGroupScopeException;
+import vn.edu.cnpm.projectsupport.common.exception.InvalidStatusTransitionException;
+import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
+import vn.edu.cnpm.projectsupport.feature.repository.FeatureRepository;
+import vn.edu.cnpm.projectsupport.feature.domain.Feature;
+import vn.edu.cnpm.projectsupport.project.domain.Project;
+import vn.edu.cnpm.projectsupport.project.repository.ProjectRepository;
+import vn.edu.cnpm.projectsupport.requirement.RequirementRepository;
+import vn.edu.cnpm.projectsupport.sprint.repository.SprintRepository;
 import vn.edu.cnpm.projectsupport.task.domain.*;
 import vn.edu.cnpm.projectsupport.task.dto.*;
-import vn.edu.cnpm.projectsupport.task.repository.TaskActivityLogRepository;
 import vn.edu.cnpm.projectsupport.task.repository.TaskRepository;
 
 import java.util.Optional;
@@ -23,15 +32,26 @@ import static org.mockito.Mockito.*;
 class TaskServiceTest {
 
     @Mock private TaskRepository taskRepository;
-    @Mock private TaskActivityLogRepository activityLogRepository;
+    @Mock private ActivityLogRepository activityLogRepository;
+    @Mock private ProjectRepository projectRepository;
+    @Mock private RequirementRepository requirementRepository;
+    @Mock private FeatureRepository featureRepository;
+    @Mock private SprintRepository sprintRepository;
 
-    @InjectMocks private TaskServiceImpl taskService;
+    private TaskServiceImpl taskService;
 
     private CreateTaskRequest createReq;
     private TaskStatusUpdateRequest updateReq;
 
     @BeforeEach
     void setUp() {
+        taskService = new TaskServiceImpl(
+                taskRepository,
+                activityLogRepository,
+                projectRepository,
+                requirementRepository,
+                featureRepository,
+                sprintRepository);
         createReq = new CreateTaskRequest();
         createReq.setTitle("Phát triển API Task");
         createReq.setAcceptanceCriteria("Hoàn tất giao diện và API");
@@ -39,6 +59,11 @@ class TaskServiceTest {
         createReq.setPriority(TaskPriority.HIGH);
 
         updateReq = new TaskStatusUpdateRequest();
+
+        lenient().when(projectRepository.findById(1L))
+                .thenReturn(Optional.of(new Project(10L, "Project")));
+        lenient().when(projectRepository.countActiveLeader(1L, 100L)).thenReturn(1L);
+        lenient().when(projectRepository.countActiveMember(1L, 100L)).thenReturn(1L);
     }
 
     // --- TEST CLASSIFICATION ---
@@ -77,6 +102,8 @@ class TaskServiceTest {
     @DisplayName("Tự động phân loại FEATURE_RELATED khi gắn featureId")
     void createTask_FeatureRelated() {
         createReq.setFeatureId(10L);
+        when(featureRepository.findByIdAndProjectId(10L, 1L))
+                .thenReturn(Optional.of(new Feature(1L, "Feature")));
         when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
 
         TaskResponse res = taskService.createTask(1L, 100L, createReq);
@@ -107,7 +134,7 @@ class TaskServiceTest {
         TaskResponse res = taskService.updateTaskStatusByMember(1L, 100L, 1L, updateReq);
 
         assertEquals(TaskStatus.IN_PROGRESS, res.getStatus());
-        verify(activityLogRepository, times(1)).save(any(TaskActivityLog.class));
+        verify(activityLogRepository, times(1)).save(any(ActivityLog.class));
     }
 
     @Test
@@ -118,7 +145,7 @@ class TaskServiceTest {
 
         updateReq.setStatus(TaskStatus.IN_PROGRESS);
 
-        assertThrows(IllegalArgumentException.class, 
+        assertThrows(ResourceNotFoundException.class,
             () -> taskService.updateTaskStatusByMember(1L, 100L, 1L, updateReq));
     }
 
@@ -130,7 +157,7 @@ class TaskServiceTest {
 
         updateReq.setStatus(TaskStatus.IN_PROGRESS);
 
-        assertThrows(IllegalStateException.class, 
+        assertThrows(ForbiddenGroupScopeException.class,
             () -> taskService.updateTaskStatusByMember(1L, 100L, 1L, updateReq));
     }
 
@@ -142,7 +169,7 @@ class TaskServiceTest {
 
         updateReq.setStatus(TaskStatus.IN_PROGRESS);
 
-        assertThrows(IllegalStateException.class, 
+        assertThrows(ForbiddenGroupScopeException.class,
             () -> taskService.updateTaskStatusByMember(1L, 100L, 1L, updateReq)); // Current user = 100
     }
 
@@ -168,7 +195,7 @@ class TaskServiceTest {
         updateReq.setStatus(TaskStatus.CANCELLED);
         updateReq.setReason("Hủy bỏ task");
 
-        assertThrows(IllegalStateException.class, 
+        assertThrows(InvalidStatusTransitionException.class,
             () -> taskService.updateTaskStatusByMember(1L, 100L, 1L, updateReq));
     }
 
@@ -180,7 +207,7 @@ class TaskServiceTest {
 
         updateReq.setStatus(TaskStatus.IN_PROGRESS);
 
-        assertThrows(IllegalStateException.class, 
+        assertThrows(InvalidStatusTransitionException.class,
             () -> taskService.updateTaskStatusByMember(1L, 100L, 1L, updateReq));
     }
 

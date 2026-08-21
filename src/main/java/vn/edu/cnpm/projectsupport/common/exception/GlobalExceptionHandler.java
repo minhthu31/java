@@ -87,6 +87,17 @@ public class GlobalExceptionHandler {
                 request);
     }
 
+    @ExceptionHandler(AssigneeOutsideGroupException.class)
+    public ResponseEntity<ApiError> handleAssigneeOutsideGroup(
+            AssigneeOutsideGroupException exception, WebRequest request) {
+        return error(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "ASSIGNEE_OUTSIDE_GROUP",
+                exception.getMessage(),
+                Map.of(),
+                request);
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiError> handleIllegalArgument(
             IllegalArgumentException exception, WebRequest request) {

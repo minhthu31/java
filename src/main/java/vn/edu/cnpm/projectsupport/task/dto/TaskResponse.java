@@ -24,6 +24,8 @@ public class TaskResponse {
     private Long sprintId;
     private Long assigneeUserId;
     private Instant deadline;
+    private Instant createdAt;
+    private Instant updatedAt;
 
     public static TaskResponse fromEntity(Task task) {
         TaskResponse res = new TaskResponse();
@@ -42,6 +44,8 @@ public class TaskResponse {
         res.sprintId = task.getSprintId();
         res.assigneeUserId = task.getAssigneeUserId();
         res.deadline = task.getDeadline();
+        res.createdAt = task.getCreatedAt();
+        res.updatedAt = task.getUpdatedAt();
         return res;
     }
 
@@ -61,4 +65,6 @@ public class TaskResponse {
     public Long getSprintId() { return sprintId; }
     public Long getAssigneeUserId() { return assigneeUserId; }
     public Instant getDeadline() { return deadline; }
+    public Instant getCreatedAt() { return createdAt; }
+    public Instant getUpdatedAt() { return updatedAt; }
 }
