@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { TaskService } from "./TaskService";
 import { currentUser } from "./authService";
 
-const ISSUE_TYPES = ["EPIC", "STORY", "TASK", "BUG", "SUBTASK"];
+const FORM_ISSUE_TYPES = ["TASK", "EPIC", "STORY", "BUG"];
 const PRIORITIES = ["HIGHEST", "HIGH", "MEDIUM", "LOW", "LOWEST"];
 const CLASSIFICATIONS = [
     "FEATURE_RELATED",
@@ -10,14 +10,6 @@ const CLASSIFICATIONS = [
     "AUTO_TEST",
     "AUTO_LOG",
     "OTHER",
-];
-const ALL_STATUSES = [
-    "TO_DO",
-    "IN_PROGRESS",
-    "IN_REVIEW",
-    "DONE",
-    "BLOCKED",
-    "CANCELLED",
 ];
 
 export default function TaskComponent({ projectId }) {
@@ -35,10 +27,16 @@ export default function TaskComponent({ projectId }) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    const [selectedTask, setSelectedTask] = useState(null);
-    const [detailLoading, setDetailLoading] = useState(false);
+    const [pageInfo, setPageInfo] = useState({
+        page: 0,
+        size: 20,
+        totalPages: 0,
+        totalElements: 0,
+        first: true,
+        last: true,
+    });
 
-    // Modal nhập lý do khi chuyển sang BLOCKED hoặc CANCELLED
+    const [selectedTask, setSelectedTask] = useState(null);
     const [pendingStatusChange, setPendingStatusChange] = useState(null);
     const [statusReason, setStatusReason] = useState("");
 
@@ -58,40 +56,76 @@ export default function TaskComponent({ projectId }) {
     const [formSubmitting, setFormSubmitting] = useState(false);
     const [formError, setFormError] = useState(null);
 
-    const fetchTasks = useCallback(async () => {
-        if (!projectId) {
-            setTasks([]);
-            setLoading(false);
-            setError(null);
-            return;
-        }
-
-        setLoading(true);
-        setError(null);
-        try {
-            const data = await TaskService.getTasks(projectId);
-            setTasks(Array.isArray(data) ? data : []);
-        } catch (err) {
-            const status = err.response?.status;
-            if (status === 401) {
-                setError("Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.");
-            } else if (status === 403) {
-                setError(
-                    "Bạn không có quyền truy cập danh sách Task của dự án này.",
-                );
-            } else if (status === 404) {
-                setError("Không tìm thấy dữ liệu dự án hoặc danh sách Task.");
-            } else {
-                setError(
-                    err.response?.data?.message ||
-                        err.message ||
-                        "Hệ thống gặp lỗi ngoài dự kiến",
-                );
+    const fetchTasks = useCallback(
+        async (page = 0) => {
+            if (!projectId) {
+                setTasks([]);
+                setLoading(false);
+                setError(null);
+                return;
             }
-        } finally {
-            setLoading(false);
-        }
-    }, [projectId]);
+
+            setLoading(true);
+            setError(null);
+            try {
+                const res = await TaskService.getTasks(projectId, {
+                    page,
+                    size: 20,
+                });
+                if (Array.isArray(res)) {
+                    setTasks(res);
+                    setPageInfo({
+                        page: 0,
+                        size: res.length,
+                        totalPages: 1,
+                        totalElements: res.length,
+                        first: true,
+                        last: true,
+                    });
+                } else if (res && Array.isArray(res.content)) {
+                    setTasks(res.content);
+                    setPageInfo({
+                        page: res.page ?? page,
+                        size: res.size ?? 20,
+                        totalPages: res.totalPages ?? 1,
+                        totalElements: res.totalElements ?? res.content.length,
+                        first: res.first ?? page === 0,
+                        last:
+                            res.last ??
+                            (res.totalPages
+                                ? page >= res.totalPages - 1
+                                : true),
+                    });
+                } else {
+                    setTasks([]);
+                }
+            } catch (err) {
+                const status = err.response?.status;
+                if (status === 401) {
+                    setError(
+                        "Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.",
+                    );
+                } else if (status === 403) {
+                    setError(
+                        "Bạn không có quyền truy cập danh sách Task của dự án này.",
+                    );
+                } else if (status === 404) {
+                    setError(
+                        "Không tìm thấy dữ liệu dự án hoặc danh sách Task.",
+                    );
+                } else {
+                    setError(
+                        err.response?.data?.message ||
+                            err.message ||
+                            "Hệ thống gặp lỗi ngoài dự kiến",
+                    );
+                }
+            } finally {
+                setLoading(false);
+            }
+        },
+        [projectId],
+    );
 
     useEffect(() => {
         if (!projectId) {
@@ -100,19 +134,16 @@ export default function TaskComponent({ projectId }) {
             setError(null);
             return;
         }
-        fetchTasks();
+        fetchTasks(0);
     }, [projectId, fetchTasks]);
 
     const handleOpenDetail = async (task) => {
-        setDetailLoading(true);
         setSelectedTask(task);
         try {
             const fullTask = await TaskService.getTaskById(projectId, task.id);
             setSelectedTask(fullTask || task);
         } catch {
             setSelectedTask(task);
-        } finally {
-            setDetailLoading(false);
         }
     };
 
@@ -130,7 +161,6 @@ export default function TaskComponent({ projectId }) {
             return;
         }
 
-        // Section 5.3 Validation: title, acceptanceCriteria, issueType, priority là bắt buộc
         if (
             !formData.title.trim() ||
             !formData.acceptanceCriteria.trim() ||
@@ -138,7 +168,7 @@ export default function TaskComponent({ projectId }) {
             !formData.priority
         ) {
             setFormError(
-                "Vui lòng điền đầy đủ các trường bắt buộc: Tiêu đề, Tiêu chí nghiệm thu, Issue Type và Priority.",
+                "Vui lòng điền đầy đủ: Tiêu đề, Tiêu chí nghiệm thu, Issue Type và Priority.",
             );
             return;
         }
@@ -170,9 +200,9 @@ export default function TaskComponent({ projectId }) {
                     : null,
             };
 
-            const created = await TaskService.createTask(projectId, payload);
-            setTasks((prev) => [created, ...prev]);
+            await TaskService.createTask(projectId, payload);
             setCurrentView("list");
+            fetchTasks(0);
             setFormData({
                 title: "",
                 description: "",
@@ -206,43 +236,51 @@ export default function TaskComponent({ projectId }) {
         }
     };
 
-    // Transition hợp lệ theo Section 3.3 & Section 7
     const getAllowedStatusesForRole = (currentStatus) => {
         if (isLecturer) return [];
-        if (isLeader) return ALL_STATUSES;
-        if (isMember) {
-            // Team member không được CANCELLED và không được TO_DO -> DONE
-            if (currentStatus === "TO_DO") {
-                return ["TO_DO", "IN_PROGRESS", "BLOCKED"];
-            }
-            if (currentStatus === "IN_PROGRESS") {
-                return ["IN_PROGRESS", "TO_DO", "IN_REVIEW", "BLOCKED"];
-            }
-            if (currentStatus === "IN_REVIEW") {
-                return ["IN_REVIEW", "IN_PROGRESS", "DONE", "BLOCKED"];
-            }
-            if (currentStatus === "BLOCKED") {
-                return ["BLOCKED", "TO_DO", "IN_PROGRESS"];
-            }
+        if (currentStatus === "DONE" || currentStatus === "CANCELLED") {
             return [currentStatus];
         }
-        return ALL_STATUSES;
+
+        let transitions = [];
+        switch (currentStatus) {
+            case "TO_DO":
+                transitions = ["TO_DO", "IN_PROGRESS", "BLOCKED"];
+                if (isLeader) transitions.push("CANCELLED");
+                break;
+            case "IN_PROGRESS":
+                transitions = ["IN_PROGRESS", "TO_DO", "IN_REVIEW", "BLOCKED"];
+                if (isLeader) transitions.push("CANCELLED");
+                break;
+            case "IN_REVIEW":
+                transitions = ["IN_REVIEW", "IN_PROGRESS", "DONE", "BLOCKED"];
+                break;
+            case "BLOCKED":
+                transitions = ["BLOCKED", "TO_DO", "IN_PROGRESS"];
+                if (isLeader) transitions.push("CANCELLED");
+                break;
+            default:
+                transitions = [currentStatus];
+        }
+        return transitions;
     };
 
     const handleStatusSelectChange = (taskId, currentStatus, newStatus) => {
         if (newStatus === currentStatus) return;
 
-        if (isMember) {
-            if (currentStatus === "TO_DO" && newStatus === "DONE") {
-                alert(
-                    "Thành viên nhóm không thể chuyển trực tiếp từ TO_DO sang DONE.",
-                );
-                return;
-            }
-            if (newStatus === "CANCELLED") {
-                alert("Thành viên nhóm không có quyền hủy (CANCELLED) task.");
-                return;
-            }
+        if (currentStatus === "DONE" || currentStatus === "CANCELLED") {
+            alert("Trạng thái này là trạng thái kết thúc, không thể thay đổi.");
+            return;
+        }
+
+        if (currentStatus === "TO_DO" && newStatus === "DONE") {
+            alert("Không thể chuyển trực tiếp từ TO_DO sang DONE.");
+            return;
+        }
+
+        if (isMember && newStatus === "CANCELLED") {
+            alert("Thành viên nhóm không có quyền hủy (CANCELLED) task.");
+            return;
         }
 
         if (newStatus === "BLOCKED" || newStatus === "CANCELLED") {
@@ -529,7 +567,7 @@ export default function TaskComponent({ projectId }) {
                                         boxSizing: "border-box",
                                     }}
                                 >
-                                    {ISSUE_TYPES.map((t) => (
+                                    {FORM_ISSUE_TYPES.map((t) => (
                                         <option key={t} value={t}>
                                             {t}
                                         </option>
@@ -877,7 +915,7 @@ export default function TaskComponent({ projectId }) {
                             <span style={{ fontSize: "13px" }}>{error}</span>
                             <button
                                 type="button"
-                                onClick={fetchTasks}
+                                onClick={() => fetchTasks(pageInfo.page)}
                                 data-testid="retry-btn"
                                 style={{
                                     padding: "6px 14px",
@@ -933,241 +971,372 @@ export default function TaskComponent({ projectId }) {
                     )}
 
                     {!loading && !error && tasks.length > 0 && (
-                        <div
-                            style={{
-                                overflowX: "auto",
-                                border: "1px solid #e2e8f0",
-                                borderRadius: "8px",
-                            }}
-                        >
-                            <table
+                        <>
+                            <div
                                 style={{
-                                    width: "100%",
-                                    borderCollapse: "collapse",
-                                    textAlign: "left",
-                                    fontSize: "13px",
+                                    overflowX: "auto",
+                                    border: "1px solid #e2e8f0",
+                                    borderRadius: "8px",
                                 }}
                             >
-                                <thead>
-                                    <tr
-                                        style={{
-                                            background: "#f8fafc",
-                                            borderBottom: "1px solid #e2e8f0",
-                                            color: "#475569",
-                                            fontSize: "12px",
-                                            textTransform: "uppercase",
-                                        }}
-                                    >
-                                        <th style={{ padding: "12px" }}>
-                                            Tiêu đề / Jira Key
-                                        </th>
-                                        <th style={{ padding: "12px" }}>
-                                            Type
-                                        </th>
-                                        <th style={{ padding: "12px" }}>
-                                            Priority
-                                        </th>
-                                        <th style={{ padding: "12px" }}>
-                                            Assignee
-                                        </th>
-                                        <th style={{ padding: "12px" }}>
-                                            Deadline
-                                        </th>
-                                        <th style={{ padding: "12px" }}>
-                                            Sync Jira
-                                        </th>
-                                        <th style={{ padding: "12px" }}>
-                                            Trạng thái
-                                        </th>
-                                        <th
+                                <table
+                                    style={{
+                                        width: "100%",
+                                        borderCollapse: "collapse",
+                                        textAlign: "left",
+                                        fontSize: "13px",
+                                    }}
+                                >
+                                    <thead>
+                                        <tr
                                             style={{
-                                                padding: "12px",
-                                                textAlign: "right",
+                                                background: "#f8fafc",
+                                                borderBottom:
+                                                    "1px solid #e2e8f0",
+                                                color: "#475569",
+                                                fontSize: "12px",
+                                                textTransform: "uppercase",
                                             }}
                                         >
-                                            Hành động
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {tasks.map((task) => {
-                                        const currentStatus =
-                                            task.status || "TO_DO";
-                                        const allowedStatuses =
-                                            getAllowedStatusesForRole(
-                                                currentStatus,
-                                            );
-
-                                        return (
-                                            <tr
-                                                key={task.id}
-                                                data-testid={`task-row-${task.id}`}
+                                            <th style={{ padding: "12px" }}>
+                                                Tiêu đề / Jira Key
+                                            </th>
+                                            <th style={{ padding: "12px" }}>
+                                                Type
+                                            </th>
+                                            <th style={{ padding: "12px" }}>
+                                                Priority
+                                            </th>
+                                            <th style={{ padding: "12px" }}>
+                                                Assignee
+                                            </th>
+                                            <th style={{ padding: "12px" }}>
+                                                Deadline
+                                            </th>
+                                            <th style={{ padding: "12px" }}>
+                                                Sync Jira
+                                            </th>
+                                            <th style={{ padding: "12px" }}>
+                                                Trạng thái
+                                            </th>
+                                            <th
                                                 style={{
-                                                    borderBottom:
-                                                        "1px solid #f1f5f9",
+                                                    padding: "12px",
+                                                    textAlign: "right",
                                                 }}
                                             >
-                                                <td style={{ padding: "12px" }}>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            handleOpenDetail(
-                                                                task,
-                                                            )
-                                                        }
-                                                        style={{
-                                                            background: "none",
-                                                            border: "none",
-                                                            color: "#1d4ed8",
-                                                            fontWeight: 600,
-                                                            cursor: "pointer",
-                                                            padding: 0,
-                                                            textAlign: "left",
-                                                            fontSize: "13px",
-                                                        }}
-                                                    >
-                                                        {task.title}
-                                                    </button>
-                                                    <div
-                                                        style={{
-                                                            fontSize: "11px",
-                                                            color: "#94a3b8",
-                                                            fontFamily:
-                                                                "monospace",
-                                                        }}
-                                                    >
-                                                        {task.jiraIssueKey ||
-                                                            "Chưa gắn Jira Key"}
-                                                    </div>
-                                                </td>
-                                                <td style={{ padding: "12px" }}>
-                                                    <span
-                                                        style={{
-                                                            padding: "3px 8px",
-                                                            background:
-                                                                "#f1f5f9",
-                                                            borderRadius: "4px",
-                                                            fontSize: "11px",
-                                                            fontWeight: 600,
-                                                        }}
-                                                    >
-                                                        {task.issueType}
-                                                    </span>
-                                                </td>
-                                                <td
+                                                Hành động
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {tasks.map((task) => {
+                                            const currentStatus =
+                                                task.status || "TO_DO";
+                                            const allowedStatuses =
+                                                getAllowedStatusesForRole(
+                                                    currentStatus,
+                                                );
+                                            const isTerminal =
+                                                currentStatus === "DONE" ||
+                                                currentStatus === "CANCELLED";
+
+                                            return (
+                                                <tr
+                                                    key={task.id}
+                                                    data-testid={`task-row-${task.id}`}
                                                     style={{
-                                                        padding: "12px",
-                                                        fontWeight: 600,
+                                                        borderBottom:
+                                                            "1px solid #f1f5f9",
                                                     }}
                                                 >
-                                                    {task.priority}
-                                                </td>
-                                                <td style={{ padding: "12px" }}>
-                                                    {getAssigneeName(task)}
-                                                </td>
-                                                <td style={{ padding: "12px" }}>
-                                                    {formatDeadlineDisplay(
-                                                        task.deadline,
-                                                    )}
-                                                </td>
-                                                <td style={{ padding: "12px" }}>
-                                                    {renderSyncBadge(
-                                                        task.syncStatus,
-                                                    )}
-                                                </td>
-                                                <td style={{ padding: "12px" }}>
-                                                    {isLecturer ? (
+                                                    <td
+                                                        style={{
+                                                            padding: "12px",
+                                                        }}
+                                                    >
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                handleOpenDetail(
+                                                                    task,
+                                                                )
+                                                            }
+                                                            style={{
+                                                                background:
+                                                                    "none",
+                                                                border: "none",
+                                                                color: "#1d4ed8",
+                                                                fontWeight: 600,
+                                                                cursor: "pointer",
+                                                                padding: 0,
+                                                                textAlign:
+                                                                    "left",
+                                                                fontSize:
+                                                                    "13px",
+                                                            }}
+                                                        >
+                                                            {task.title}
+                                                        </button>
+                                                        <div
+                                                            style={{
+                                                                fontSize:
+                                                                    "11px",
+                                                                color: "#94a3b8",
+                                                                fontFamily:
+                                                                    "monospace",
+                                                            }}
+                                                        >
+                                                            {task.jiraIssueKey ||
+                                                                "Chưa gắn Jira Key"}
+                                                        </div>
+                                                    </td>
+                                                    <td
+                                                        style={{
+                                                            padding: "12px",
+                                                        }}
+                                                    >
                                                         <span
                                                             style={{
                                                                 padding:
-                                                                    "4px 8px",
+                                                                    "3px 8px",
+                                                                background:
+                                                                    "#f1f5f9",
+                                                                borderRadius:
+                                                                    "4px",
                                                                 fontSize:
-                                                                    "12px",
+                                                                    "11px",
                                                                 fontWeight: 600,
-                                                                color: "#475569",
                                                             }}
                                                         >
-                                                            {currentStatus}
+                                                            {task.issueType}
                                                         </span>
-                                                    ) : (
-                                                        <select
-                                                            aria-label={`Trạng thái task ${task.id}`}
-                                                            value={
-                                                                currentStatus
-                                                            }
-                                                            onChange={(e) =>
-                                                                handleStatusSelectChange(
-                                                                    task.id,
-                                                                    currentStatus,
-                                                                    e.target
-                                                                        .value,
+                                                    </td>
+                                                    <td
+                                                        style={{
+                                                            padding: "12px",
+                                                            fontWeight: 600,
+                                                        }}
+                                                    >
+                                                        {task.priority}
+                                                    </td>
+                                                    <td
+                                                        style={{
+                                                            padding: "12px",
+                                                        }}
+                                                    >
+                                                        {getAssigneeName(task)}
+                                                    </td>
+                                                    <td
+                                                        style={{
+                                                            padding: "12px",
+                                                        }}
+                                                    >
+                                                        {formatDeadlineDisplay(
+                                                            task.deadline,
+                                                        )}
+                                                    </td>
+                                                    <td
+                                                        style={{
+                                                            padding: "12px",
+                                                        }}
+                                                    >
+                                                        {renderSyncBadge(
+                                                            task.syncStatus,
+                                                        )}
+                                                    </td>
+                                                    <td
+                                                        style={{
+                                                            padding: "12px",
+                                                        }}
+                                                    >
+                                                        {isLecturer ||
+                                                        isTerminal ? (
+                                                            <span
+                                                                style={{
+                                                                    padding:
+                                                                        "4px 8px",
+                                                                    fontSize:
+                                                                        "12px",
+                                                                    fontWeight: 600,
+                                                                    color:
+                                                                        currentStatus ===
+                                                                        "DONE"
+                                                                            ? "#15803d"
+                                                                            : currentStatus ===
+                                                                                "CANCELLED"
+                                                                              ? "#b91c1c"
+                                                                              : "#475569",
+                                                                }}
+                                                            >
+                                                                {currentStatus}
+                                                            </span>
+                                                        ) : (
+                                                            <select
+                                                                aria-label={`Trạng thái task ${task.id}`}
+                                                                value={
+                                                                    currentStatus
+                                                                }
+                                                                onChange={(e) =>
+                                                                    handleStatusSelectChange(
+                                                                        task.id,
+                                                                        currentStatus,
+                                                                        e.target
+                                                                            .value,
+                                                                    )
+                                                                }
+                                                                style={{
+                                                                    padding:
+                                                                        "4px 8px",
+                                                                    fontSize:
+                                                                        "12px",
+                                                                    borderRadius:
+                                                                        "4px",
+                                                                    border: "1px solid #cbd5e1",
+                                                                    background:
+                                                                        "#fff",
+                                                                }}
+                                                            >
+                                                                {allowedStatuses.map(
+                                                                    (st) => (
+                                                                        <option
+                                                                            key={
+                                                                                st
+                                                                            }
+                                                                            value={
+                                                                                st
+                                                                            }
+                                                                        >
+                                                                            {st}
+                                                                        </option>
+                                                                    ),
+                                                                )}
+                                                            </select>
+                                                        )}
+                                                    </td>
+                                                    <td
+                                                        style={{
+                                                            padding: "12px",
+                                                            textAlign: "right",
+                                                        }}
+                                                    >
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                handleOpenDetail(
+                                                                    task,
                                                                 )
                                                             }
                                                             style={{
                                                                 padding:
-                                                                    "4px 8px",
+                                                                    "5px 12px",
                                                                 fontSize:
                                                                     "12px",
-                                                                borderRadius:
-                                                                    "4px",
-                                                                border: "1px solid #cbd5e1",
                                                                 background:
                                                                     "#fff",
+                                                                border: "1px solid #94a3b8",
+                                                                borderRadius:
+                                                                    "4px",
+                                                                cursor: "pointer",
+                                                                color: "#1e293b",
+                                                                fontWeight: 500,
                                                             }}
                                                         >
-                                                            {allowedStatuses.map(
-                                                                (st) => (
-                                                                    <option
-                                                                        key={st}
-                                                                        value={
-                                                                            st
-                                                                        }
-                                                                    >
-                                                                        {st}
-                                                                    </option>
-                                                                ),
-                                                            )}
-                                                        </select>
-                                                    )}
-                                                </td>
-                                                <td
-                                                    style={{
-                                                        padding: "12px",
-                                                        textAlign: "right",
-                                                    }}
-                                                >
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            handleOpenDetail(
-                                                                task,
-                                                            )
-                                                        }
-                                                        style={{
-                                                            padding: "5px 12px",
-                                                            fontSize: "12px",
-                                                            background: "#fff",
-                                                            border: "1px solid #94a3b8",
-                                                            borderRadius: "4px",
-                                                            cursor: "pointer",
-                                                            color: "#1e293b",
-                                                            fontWeight: 500,
-                                                        }}
-                                                    >
-                                                        Xem chi tiết
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
+                                                            Xem chi tiết
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div
+                                data-testid="pagination"
+                                style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    marginTop: "16px",
+                                    paddingTop: "12px",
+                                    borderTop: "1px solid #e2e8f0",
+                                }}
+                            >
+                                <span
+                                    data-testid="page-info"
+                                    style={{
+                                        fontSize: "13px",
+                                        color: "#64748b",
+                                    }}
+                                >
+                                    Trang {pageInfo.page + 1} /{" "}
+                                    {pageInfo.totalPages || 1} (Tổng cộng{" "}
+                                    {pageInfo.totalElements} công việc)
+                                </span>
+                                <div style={{ display: "flex", gap: "8px" }}>
+                                    <button
+                                        type="button"
+                                        data-testid="prev-page-btn"
+                                        disabled={pageInfo.page <= 0}
+                                        onClick={() =>
+                                            fetchTasks(pageInfo.page - 1)
+                                        }
+                                        style={{
+                                            padding: "6px 14px",
+                                            fontSize: "12px",
+                                            background: "#fff",
+                                            border: "1px solid #cbd5e1",
+                                            borderRadius: "4px",
+                                            cursor:
+                                                pageInfo.page <= 0
+                                                    ? "not-allowed"
+                                                    : "pointer",
+                                            opacity:
+                                                pageInfo.page <= 0 ? 0.5 : 1,
+                                            fontWeight: 500,
+                                        }}
+                                    >
+                                        ← Trang trước
+                                    </button>
+                                    <button
+                                        type="button"
+                                        data-testid="next-page-btn"
+                                        disabled={
+                                            pageInfo.page >=
+                                            pageInfo.totalPages - 1
+                                        }
+                                        onClick={() =>
+                                            fetchTasks(pageInfo.page + 1)
+                                        }
+                                        style={{
+                                            padding: "6px 14px",
+                                            fontSize: "12px",
+                                            background: "#fff",
+                                            border: "1px solid #cbd5e1",
+                                            borderRadius: "4px",
+                                            cursor:
+                                                pageInfo.page >=
+                                                pageInfo.totalPages - 1
+                                                    ? "not-allowed"
+                                                    : "pointer",
+                                            opacity:
+                                                pageInfo.page >=
+                                                pageInfo.totalPages - 1
+                                                    ? 0.5
+                                                    : 1,
+                                            fontWeight: 500,
+                                        }}
+                                    >
+                                        Trang sau →
+                                    </button>
+                                </div>
+                            </div>
+                        </>
                     )}
                 </div>
             )}
 
-            {/* DETAIL MODAL */}
             {selectedTask && (
                 <div
                     data-testid="detail-modal"
@@ -1377,7 +1546,6 @@ export default function TaskComponent({ projectId }) {
                 </div>
             )}
 
-            {/* REASON MODAL CHO BLOCKED HOẶC CANCELLED (Section 5.5) */}
             {pendingStatusChange && (
                 <div
                     data-testid="reason-modal"

@@ -5,6 +5,7 @@ import {
     fireEvent,
     waitFor,
     act,
+    within,
 } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import TaskComponent from "./TaskComponent";
@@ -14,74 +15,78 @@ import * as authService from "./authService";
 jest.mock("./TaskService");
 jest.mock("./authService");
 
-const mockContractTasks = [
-    {
-        id: 1,
-        title: "Xây dựng API đăng nhập",
-        issueType: "TASK",
-        classification: "FEATURE_RELATED",
-        priority: "HIGH",
-        assignee: {
-            id: 10,
-            username: "member1",
-            displayName: "Nguyễn Văn A",
+const mockComprehensiveTasks = {
+    content: [
+        {
+            id: 1,
+            title: "Task TO_DO",
+            issueType: "TASK",
+            classification: "FEATURE_RELATED",
+            priority: "HIGH",
+            status: "TO_DO",
+            assignee: { id: 10, username: "dev1", displayName: "Dev One" },
+            syncStatus: "NOT_SYNCED",
         },
-        deadline: "2026-09-01T23:59:59.000Z",
-        syncStatus: "NOT_SYNCED",
-        status: "TO_DO",
-        jiraIssueKey: null,
-        acceptanceCriteria: "Trả về JWT Token hợp lệ",
-        description: "Chi tiết kỹ thuật API",
-    },
-    {
-        id: 2,
-        title: "Tối ưu truy vấn SQL",
-        issueType: "BUG",
-        classification: "AUTO_TEST",
-        priority: "MEDIUM",
-        assignee: {
-            id: 11,
-            username: "member2",
-            displayName: "Trần Thị B",
+        {
+            id: 2,
+            title: "Task IN_PROGRESS",
+            issueType: "TASK",
+            classification: "FEATURE_RELATED",
+            priority: "MEDIUM",
+            status: "IN_PROGRESS",
+            assignee: { id: 10, username: "dev1", displayName: "Dev One" },
+            syncStatus: "SYNCED",
         },
-        deadline: "2026-09-05T23:59:59.000Z",
-        syncStatus: "SYNCED",
-        status: "IN_PROGRESS",
-        jiraIssueKey: "CNPM-65",
-        acceptanceCriteria: "Query chạy dưới 100ms",
-        description: "Thêm index cho bảng task",
-    },
-    {
-        id: 3,
-        title: "Đồng bộ Jira thất bại",
-        issueType: "STORY",
-        classification: "NEW_FEATURE",
-        priority: "LOW",
-        assignee: null,
-        deadline: null,
-        syncStatus: "FAILED",
-        status: "BLOCKED",
-        jiraIssueKey: "CNPM-66",
-        acceptanceCriteria: "Lỗi kết nối Jira",
-        description: "",
-    },
-    {
-        id: 4,
-        title: "Đang chờ đồng bộ Jira",
-        issueType: "SUBTASK",
-        classification: "OTHER",
-        priority: "LOWEST",
-        assignee: { id: 12, username: "member3", displayName: "Lê Văn C" },
-        deadline: "2026-09-12T23:59:59.000Z",
-        syncStatus: "PENDING",
-        status: "IN_REVIEW",
-        jiraIssueKey: "CNPM-67",
-        acceptanceCriteria: "Tài liệu kỹ thuật",
-        description: "",
-    },
-];
+        {
+            id: 3,
+            title: "Task IN_REVIEW",
+            issueType: "TASK",
+            classification: "FEATURE_RELATED",
+            priority: "MEDIUM",
+            status: "IN_REVIEW",
+            assignee: { id: 10, username: "dev1", displayName: "Dev One" },
+            syncStatus: "SYNCED",
+        },
+        {
+            id: 4,
+            title: "Task BLOCKED",
+            issueType: "BUG",
+            classification: "FEATURE_RELATED",
+            priority: "LOW",
+            status: "BLOCKED",
+            assignee: { id: 11, username: "dev2", displayName: "Dev Two" },
+            syncStatus: "FAILED",
+        },
+        {
+            id: 5,
+            title: "Task CANCELLED",
+            issueType: "TASK",
+            classification: "OTHER",
+            priority: "LOW",
+            status: "CANCELLED",
+            assignee: null,
+            syncStatus: "NOT_SYNCED",
+        },
+        {
+            id: 6,
+            title: "Task DONE",
+            issueType: "TASK",
+            classification: "FEATURE_RELATED",
+            priority: "HIGH",
+            status: "DONE",
+            assignee: { id: 10, username: "dev1", displayName: "Dev One" },
+            syncStatus: "SYNCED",
+        },
+    ],
+    page: 0,
+    size: 20,
+    totalPages: 1,
+    totalElements: 6,
+    first: true,
+    last: true,
+};
 
-describe("TaskComponent Sprint 2 Contract Tests (CNPM-52 / CNPM-65)", () => {
+describe("TaskComponent Complete State Transition Tests (CNPM-52 / Section 3.3)", () => {
     beforeEach(() => {
         jest.clearAllMocks();
         authService.currentUser.mockReturnValue({
@@ -89,170 +94,46 @@ describe("TaskComponent Sprint 2 Contract Tests (CNPM-52 / CNPM-65)", () => {
             username: "leader.user",
             role: "TEAM_LEADER",
         });
-        TaskService.getTasks.mockResolvedValue(mockContractTasks);
+        TaskService.getTasks.mockResolvedValue(mockComprehensiveTasks);
         TaskService.getTaskById.mockImplementation((projId, taskId) => {
-            const found = mockContractTasks.find((t) => t.id === taskId);
+            const found = mockComprehensiveTasks.content.find(
+                (t) => t.id === taskId,
+            );
             return Promise.resolve(found);
         });
     });
 
-    test("1. Hiển thị danh sách task chuẩn camelCase, nested assignee.displayName và các enum (NOT_SYNCED, SYNCED, FAILED, PENDING)", async () => {
+    test("1. Trạng thái kết thúc CANCELLED bị khóa hoàn toàn, không thể chuyển sang bất kỳ trạng thái nào và không gọi API", async () => {
         await act(async () => {
             render(<TaskComponent projectId={1} />);
         });
 
         await waitFor(() => {
-            expect(
-                screen.getByText("Xây dựng API đăng nhập"),
-            ).toBeInTheDocument();
-            expect(screen.getByText("Nguyễn Văn A")).toBeInTheDocument();
-            expect(screen.getByText("Trần Thị B")).toBeInTheDocument();
-            expect(screen.getByText("NOT_SYNCED")).toBeInTheDocument();
-            expect(screen.getByText("SYNCED")).toBeInTheDocument();
-            expect(screen.getByText("FAILED")).toBeInTheDocument();
-            expect(screen.getByText("PENDING")).toBeInTheDocument();
+            expect(screen.getByText("Task CANCELLED")).toBeInTheDocument();
         });
+
+        const row5 = screen.getByTestId("task-row-5");
+        expect(within(row5).queryByRole("combobox")).not.toBeInTheDocument();
+        expect(within(row5).getByText("CANCELLED")).toBeInTheDocument();
+        expect(TaskService.updateTaskStatus).not.toHaveBeenCalled();
     });
 
-    test("2. Phân quyền: TEAM_LEADER thấy nút tạo, TEAM_MEMBER và LECTURER không thấy", async () => {
-        const { unmount } = render(<TaskComponent projectId={1} />);
-        await waitFor(() => {
-            expect(screen.getByTestId("create-task-btn")).toBeInTheDocument();
-        });
-        unmount();
-
-        authService.currentUser.mockReturnValue({
-            id: 2,
-            username: "member",
-            role: "TEAM_MEMBER",
-        });
-        const { unmount: unmountMember } = render(
-            <TaskComponent projectId={1} />,
-        );
-        await waitFor(() => {
-            expect(
-                screen.queryByTestId("create-task-btn"),
-            ).not.toBeInTheDocument();
-        });
-        unmountMember();
-
-        authService.currentUser.mockReturnValue({
-            id: 3,
-            username: "teacher",
-            role: "LECTURER",
-        });
-        render(<TaskComponent projectId={1} />);
-        await waitFor(() => {
-            expect(
-                screen.queryByTestId("create-task-btn"),
-            ).not.toBeInTheDocument();
-        });
-    });
-
-    test("3. Mở modal chi tiết gọi TaskService.getTaskById và hiển thị thông tin", async () => {
+    test("2. Trạng thái kết thúc DONE bị khóa hoàn toàn, không thể chuyển sang bất kỳ trạng thái nào và không gọi API", async () => {
         await act(async () => {
             render(<TaskComponent projectId={1} />);
         });
 
         await waitFor(() => {
-            expect(
-                screen.getByText("Xây dựng API đăng nhập"),
-            ).toBeInTheDocument();
+            expect(screen.getByText("Task DONE")).toBeInTheDocument();
         });
 
-        const taskBtn = screen.getByText("Xây dựng API đăng nhập");
-        await act(async () => {
-            fireEvent.click(taskBtn);
-        });
-
-        expect(TaskService.getTaskById).toHaveBeenCalledWith(1, 1);
-        expect(screen.getByTestId("detail-modal")).toBeInTheDocument();
-        expect(screen.getByText("Trả về JWT Token hợp lệ")).toBeInTheDocument();
-
-        const closeBtn = screen.getByTestId("close-modal-btn");
-        await act(async () => {
-            fireEvent.click(closeBtn);
-        });
-        expect(screen.queryByTestId("detail-modal")).not.toBeInTheDocument();
+        const row6 = screen.getByTestId("task-row-6");
+        expect(within(row6).queryByRole("combobox")).not.toBeInTheDocument();
+        expect(within(row6).getByText("DONE")).toBeInTheDocument();
+        expect(TaskService.updateTaskStatus).not.toHaveBeenCalled();
     });
 
-    test("4. Form Validation: Báo lỗi khi thiếu Title hoặc Acceptance Criteria", async () => {
-        await act(async () => {
-            render(<TaskComponent projectId={1} />);
-        });
-
-        const createBtn = await screen.findByTestId("create-task-btn");
-        await act(async () => {
-            fireEvent.click(createBtn);
-        });
-
-        const submitBtn = screen.getByRole("button", { name: /Lưu Task/i });
-        await act(async () => {
-            fireEvent.click(submitBtn);
-        });
-
-        expect(screen.getByTestId("form-error")).toBeInTheDocument();
-        expect(TaskService.createTask).not.toHaveBeenCalled();
-    });
-
-    test("5. Tạo Task thành công gửi payload assigneeUserId, classification và deadline ISO-8601", async () => {
-        const createdTask = {
-            id: 5,
-            title: "Task mới chuẩn contract",
-            issueType: "TASK",
-            classification: "FEATURE_RELATED",
-            priority: "HIGH",
-            deadline: "2026-09-20T23:59:59.000Z",
-            syncStatus: "NOT_SYNCED",
-            status: "TO_DO",
-            acceptanceCriteria: "Tiêu chí hợp lệ",
-        };
-
-        TaskService.createTask.mockResolvedValue(createdTask);
-
-        await act(async () => {
-            render(<TaskComponent projectId={1} />);
-        });
-
-        await act(async () => {
-            fireEvent.click(screen.getByTestId("create-task-btn"));
-        });
-
-        fireEvent.change(screen.getByLabelText(/Tiêu đề/i), {
-            target: { value: "Task mới chuẩn contract" },
-        });
-        fireEvent.change(screen.getByLabelText(/Tiêu chí nghiệm thu/i), {
-            target: { value: "Tiêu chí hợp lệ" },
-        });
-        fireEvent.change(screen.getByLabelText(/Hạn chót/i), {
-            target: { value: "2026-09-20" },
-        });
-        fireEvent.change(screen.getByLabelText(/ID Người thực hiện/i), {
-            target: { value: "4" },
-        });
-
-        const submitBtn = screen.getByRole("button", { name: /Lưu Task/i });
-        await act(async () => {
-            fireEvent.click(submitBtn);
-        });
-
-        expect(TaskService.createTask).toHaveBeenCalledWith(
-            1,
-            expect.objectContaining({
-                title: "Task mới chuẩn contract",
-                acceptanceCriteria: "Tiêu chí hợp lệ",
-                assigneeUserId: 4,
-                deadline: "2026-09-20T23:59:59.000Z",
-            }),
-        );
-        await waitFor(() => {
-            expect(
-                screen.getByText("Task mới chuẩn contract"),
-            ).toBeInTheDocument();
-        });
-    });
-
-    test("6. Chuyển trạng thái sang BLOCKED yêu cầu nhập lý do và gửi reason lên API", async () => {
+    test("3. Chuyển đổi hợp lệ: TO_DO -> IN_PROGRESS", async () => {
         TaskService.updateTaskStatus.mockResolvedValue({});
 
         await act(async () => {
@@ -260,20 +141,118 @@ describe("TaskComponent Sprint 2 Contract Tests (CNPM-52 / CNPM-65)", () => {
         });
 
         await waitFor(() => {
-            expect(
-                screen.getByText("Xây dựng API đăng nhập"),
-            ).toBeInTheDocument();
+            expect(screen.getByText("Task TO_DO")).toBeInTheDocument();
         });
 
         const statusSelect = screen.getByLabelText("Trạng thái task 1");
         await act(async () => {
-            fireEvent.change(statusSelect, { target: { value: "BLOCKED" } });
+            fireEvent.change(statusSelect, {
+                target: { value: "IN_PROGRESS" },
+            });
+        });
+
+        expect(TaskService.updateTaskStatus).toHaveBeenCalledWith(
+            1,
+            1,
+            "IN_PROGRESS",
+            "",
+        );
+    });
+
+    test("4. Chuyển đổi hợp lệ: IN_PROGRESS -> IN_REVIEW", async () => {
+        TaskService.updateTaskStatus.mockResolvedValue({});
+
+        await act(async () => {
+            render(<TaskComponent projectId={1} />);
+        });
+
+        await waitFor(() => {
+            expect(screen.getByText("Task IN_PROGRESS")).toBeInTheDocument();
+        });
+
+        const statusSelect = screen.getByLabelText("Trạng thái task 2");
+        await act(async () => {
+            fireEvent.change(statusSelect, { target: { value: "IN_REVIEW" } });
+        });
+
+        expect(TaskService.updateTaskStatus).toHaveBeenCalledWith(
+            1,
+            2,
+            "IN_REVIEW",
+            "",
+        );
+    });
+
+    test("5. Chuyển đổi hợp lệ: IN_REVIEW -> DONE", async () => {
+        TaskService.updateTaskStatus.mockResolvedValue({});
+
+        await act(async () => {
+            render(<TaskComponent projectId={1} />);
+        });
+
+        await waitFor(() => {
+            expect(screen.getByText("Task IN_REVIEW")).toBeInTheDocument();
+        });
+
+        const statusSelect = screen.getByLabelText("Trạng thái task 3");
+        await act(async () => {
+            fireEvent.change(statusSelect, { target: { value: "DONE" } });
+        });
+
+        expect(TaskService.updateTaskStatus).toHaveBeenCalledWith(
+            1,
+            3,
+            "DONE",
+            "",
+        );
+    });
+
+    test("6. Chuyển đổi hợp lệ: BLOCKED -> IN_PROGRESS", async () => {
+        TaskService.updateTaskStatus.mockResolvedValue({});
+
+        await act(async () => {
+            render(<TaskComponent projectId={1} />);
+        });
+
+        await waitFor(() => {
+            expect(screen.getByText("Task BLOCKED")).toBeInTheDocument();
+        });
+
+        const statusSelect = screen.getByLabelText("Trạng thái task 4");
+        await act(async () => {
+            fireEvent.change(statusSelect, {
+                target: { value: "IN_PROGRESS" },
+            });
+        });
+
+        expect(TaskService.updateTaskStatus).toHaveBeenCalledWith(
+            1,
+            4,
+            "IN_PROGRESS",
+            "",
+        );
+    });
+
+    test("7. Team Leader chuyển sang CANCELLED bắt buộc nhập lý do (reason) và gọi updateTaskStatus kèm reason", async () => {
+        TaskService.updateTaskStatus.mockResolvedValue({});
+
+        await act(async () => {
+            render(<TaskComponent projectId={1} />);
+        });
+
+        await waitFor(() => {
+            expect(screen.getByText("Task TO_DO")).toBeInTheDocument();
+        });
+
+        const statusSelect = screen.getByLabelText("Trạng thái task 1");
+        await act(async () => {
+            fireEvent.change(statusSelect, { target: { value: "CANCELLED" } });
         });
 
         expect(screen.getByTestId("reason-modal")).toBeInTheDocument();
 
         fireEvent.change(screen.getByPlaceholderText(/Vui lòng nhập lý do/i), {
-            target: { value: "Chờ duyệt API" },
+            target: { value: "Yêu cầu thay đổi từ khách hàng" },
         });
 
         await act(async () => {
@@ -283,81 +262,82 @@ describe("TaskComponent Sprint 2 Contract Tests (CNPM-52 / CNPM-65)", () => {
         expect(TaskService.updateTaskStatus).toHaveBeenCalledWith(
             1,
             1,
-            "BLOCKED",
-            "Chờ duyệt API",
+            "CANCELLED",
+            "Yêu cầu thay đổi từ khách hàng",
         );
     });
 
-    test("7. Thành viên nhóm không thể chuyển trực tiếp từ TO_DO sang DONE và không có CANCELLED", async () => {
-        authService.currentUser.mockReturnValue({
-            id: 2,
-            username: "member",
-            role: "TEAM_MEMBER",
-        });
-
+    test("8. Chặn chuyển trực tiếp TO_DO -> DONE cho cả Leader và không gọi API", async () => {
         await act(async () => {
             render(<TaskComponent projectId={1} />);
         });
 
         await waitFor(() => {
-            expect(
-                screen.getByText("Xây dựng API đăng nhập"),
-            ).toBeInTheDocument();
+            expect(screen.getByText("Task TO_DO")).toBeInTheDocument();
         });
 
         const statusSelect = screen.getByLabelText("Trạng thái task 1");
         const options = Array.from(statusSelect.options).map((o) => o.value);
         expect(options).not.toContain("DONE");
-        expect(options).not.toContain("CANCELLED");
+        expect(TaskService.updateTaskStatus).not.toHaveBeenCalled();
     });
 
-    test("8. LECTURER không thể chỉnh sửa trạng thái Task (chỉ hiển thị text)", async () => {
-        authService.currentUser.mockReturnValue({
-            id: 3,
-            username: "teacher",
-            role: "LECTURER",
-        });
+    test("9. Chuyển sang trang tiếp theo khi click Trang sau và gọi đúng API params page: 1", async () => {
+        TaskService.getTasks
+            .mockResolvedValueOnce({
+                content: [
+                    {
+                        id: 1,
+                        title: "Page 1 Task",
+                        issueType: "TASK",
+                        status: "TO_DO",
+                    },
+                ],
+                page: 0,
+                size: 20,
+                totalPages: 2,
+                totalElements: 21,
+                first: true,
+                last: false,
+            })
+            .mockResolvedValueOnce({
+                content: [
+                    {
+                        id: 21,
+                        title: "Page 2 Task",
+                        issueType: "TASK",
+                        status: "TO_DO",
+                    },
+                ],
+                page: 1,
+                size: 20,
+                totalPages: 2,
+                totalElements: 21,
+                first: false,
+                last: true,
+            });
 
         await act(async () => {
             render(<TaskComponent projectId={1} />);
         });
 
         await waitFor(() => {
-            expect(
-                screen.getByText("Xây dựng API đăng nhập"),
-            ).toBeInTheDocument();
+            expect(screen.getByText("Page 1 Task")).toBeInTheDocument();
         });
 
-        expect(
-            screen.queryByLabelText("Trạng thái task 1"),
-        ).not.toBeInTheDocument();
-        expect(screen.getByText("TO_DO")).toBeInTheDocument();
-    });
-
-    test("9. Xử lý lỗi API khi tải danh sách: 401, 403, 404", async () => {
-        TaskService.getTasks.mockRejectedValueOnce({
-            response: { status: 403 },
-        });
+        const nextButton = screen.getByTestId("next-page-btn");
+        expect(nextButton).not.toBeDisabled();
 
         await act(async () => {
-            render(<TaskComponent projectId={1} />);
+            fireEvent.click(nextButton);
         });
 
         await waitFor(() => {
-            expect(screen.getByTestId("error-message")).toHaveTextContent(
-                "Bạn không có quyền truy cập danh sách Task của dự án này.",
-            );
+            expect(TaskService.getTasks).toHaveBeenCalledWith(1, {
+                page: 1,
+                size: 20,
+            });
+            expect(screen.getByText("Page 2 Task")).toBeInTheDocument();
         });
-    });
-
-    test("10. Không có projectId thì không gọi API", async () => {
-        await act(async () => {
-            render(<TaskComponent projectId={null} />);
-        });
-
-        await waitFor(() => {
-            expect(TaskService.getTasks).not.toHaveBeenCalled();
-        });
-        expect(screen.queryByTestId("loading-state")).not.toBeInTheDocument();
     });
 });

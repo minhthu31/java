@@ -8,26 +8,30 @@ describe("TaskService Contract Unit Tests (CNPM-52)", () => {
         jest.clearAllMocks();
     });
 
-    test("1. getTasks gọi đúng URL /projects/:id/tasks (không lặp /api/v1) và trích xuất content từ page response", async () => {
+    test("1. getTasks gọi đúng URL /projects/:id/tasks (không lặp /api/v1) và giữ nguyên thông tin phân trang (content, totalPages, page)", async () => {
         const mockPageResponse = {
             data: {
                 data: {
                     content: [{ id: 1, title: "Task 1" }],
                     page: 0,
                     size: 20,
-                    totalPages: 1,
-                    totalElements: 1,
+                    totalPages: 2,
+                    totalElements: 25,
+                    first: true,
+                    last: false,
                 },
             },
         };
         api.get.mockResolvedValue(mockPageResponse);
 
-        const result = await TaskService.getTasks(10);
+        const result = await TaskService.getTasks(10, { page: 0, size: 20 });
 
         expect(api.get).toHaveBeenCalledWith("/projects/10/tasks", {
-            params: {},
+            params: { page: 0, size: 20 },
         });
-        expect(result).toEqual([{ id: 1, title: "Task 1" }]);
+        expect(result.content).toEqual([{ id: 1, title: "Task 1" }]);
+        expect(result.totalPages).toBe(2);
+        expect(result.totalElements).toBe(25);
     });
 
     test("2. createTask gửi payload camelCase và assigneeUserId đúng contract Section 5.3", async () => {
