@@ -1,4 +1,4 @@
-package vn.edu.cnpm.projectsupport.task.sevice;
+package vn.edu.cnpm.projectsupport.task.service;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -7,13 +7,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import vn.edu.cnpm.projectsupport.task.domain.SyncStatus;
+import vn.edu.cnpm.projectsupport.task.domain.Task;
+import vn.edu.cnpm.projectsupport.task.domain.TaskIssueType;
+import vn.edu.cnpm.projectsupport.task.domain.TaskPriority;
+import vn.edu.cnpm.projectsupport.task.domain.TaskStatus;
 import vn.edu.cnpm.projectsupport.task.dto.CreateTaskRequest;
-import vn.edu.cnpm.projectsupport.task.entity.Task;
-import vn.edu.cnpm.projectsupport.task.enums.SyncStatus;
-import vn.edu.cnpm.projectsupport.task.enums.TaskStatus;
-import vn.edu.cnpm.projectsupport.task.enums.TaskType;
 import vn.edu.cnpm.projectsupport.task.repository.TaskRepository;
-import vn.edu.cnpm.projectsupport.task.service.TaskServiceImpl;
 
 import java.util.Optional;
 
@@ -38,10 +39,10 @@ class TaskServiceTest {
         validRequest.setTitle("Viết Unit Test cho Task Service");
         validRequest.setDescription("Mô tả chi tiết task");
         validRequest.setAcceptanceCriteria("Phủ > 80% code coverage");
-        validRequest.setType(TaskType.TEST);
-        validRequest.setProjectId("PROJ_01");
-        validRequest.setFeatureId("FEAT_01");
-        validRequest.setAssigneeId("MEMBER_01");
+        validRequest.setIssueType(TaskIssueType.TASK);
+        validRequest.setPriority(TaskPriority.HIGH);
+        validRequest.setFeatureId(10L);
+        validRequest.setAssigneeUserId(100L);
     }
 
     @Test
@@ -49,12 +50,12 @@ class TaskServiceTest {
     void createTask_Success() {
         when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Task createdTask = taskService.createTask("LEADER_01", validRequest);
+        Task createdTask = taskService.createTask(1L, 1000L, validRequest);
 
         assertNotNull(createdTask);
-        assertEquals("LEADER_01", createdTask.getCreatedById());
         assertEquals(SyncStatus.NOT_SYNCED, createdTask.getSyncStatus());
-        assertEquals(TaskStatus.TODO, createdTask.getStatus());
+        assertEquals(TaskStatus.TO_DO, createdTask.getStatus());
+        assertEquals(TaskPriority.HIGH, createdTask.getPriority());
         verify(taskRepository, times(1)).save(any(Task.class));
     }
 
@@ -65,7 +66,7 @@ class TaskServiceTest {
 
         IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
-            () -> taskService.createTask("LEADER_01", validRequest)
+            () -> taskService.createTask(1L, 1000L, validRequest)
         );
 
         assertEquals("Acceptance Criteria không được để trống.", exception.getMessage());
@@ -73,17 +74,16 @@ class TaskServiceTest {
     }
 
     @Test
-    @DisplayName("Member cập nhật trạng thái Task thành công khi đúng người được giao")
+    @DisplayName("Member cập nhật trạng thái Task thành công")
     void updateTaskStatus_Success_WhenAssignedToMember() {
-        Task mockTask = new Task();
-        mockTask.setId("TASK_01");
-        mockTask.setAssigneeId("MEMBER_01");
-        mockTask.setStatus(TaskStatus.TODO);
+        Task mockTask = new Task(1L, "Viết Unit Test", "Criteria", TaskIssueType.TASK, TaskPriority.MEDIUM);
+        mockTask.setAssigneeUserId(100L);
+        mockTask.setStatus(TaskStatus.TO_DO);
 
-        when(taskRepository.findById("TASK_01")).thenReturn(Optional.of(mockTask));
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(mockTask));
         when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Task updatedTask = taskService.updateTaskStatusByMember("MEMBER_01", "TASK_01", TaskStatus.IN_PROGRESS);
+        Task updatedTask = taskService.updateTaskStatusByMember(100L, 1L, TaskStatus.IN_PROGRESS, null);
 
         assertEquals(TaskStatus.IN_PROGRESS, updatedTask.getStatus());
     }
@@ -91,19 +91,52 @@ class TaskServiceTest {
     @Test
     @DisplayName("Ném lỗi khi Member cố tình cập nhật Task của người khác")
     void updateTaskStatus_ThrowsException_WhenNotAssignedMember() {
-        Task mockTask = new Task();
-        mockTask.setId("TASK_01");
-        mockTask.setAssigneeId("MEMBER_01");
-        mockTask.setStatus(TaskStatus.TODO);
+        Task mockTask = new Task(1L, "Viết Unit Test", "Criteria", TaskIssueType.TASK, TaskPriority.MEDIUM);
+        mockTask.setAssigneeUserId(100L);
+        mockTask.setStatus(TaskStatus.TO_DO);
 
-        when(taskRepository.findById("TASK_01")).thenReturn(Optional.of(mockTask));
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(mockTask));
 
         IllegalStateException exception = assertThrows(
             IllegalStateException.class,
-            () -> taskService.updateTaskStatusByMember("MEMBER_02", "TASK_01", TaskStatus.IN_PROGRESS)
+            () -> taskService.updateTaskStatusByMember(200L, 1L, TaskStatus.IN_PROGRESS, null)
         );
 
         assertEquals("Bạn không có quyền cập nhật Task của người khác.", exception.getMessage());
         verify(taskRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Ném lỗi khi chuyển sang BLOCKED nhưng không truyền lý do")
+    void updateTaskStatus_ThrowsException_WhenBlockedWithoutReason() {
+        Task mockTask = new Task(1L, "Viết Unit Test", "Criteria", TaskIssueType.TASK, TaskPriority.MEDIUM);
+        mockTask.setAssigneeUserId(100L);
+        mockTask.setStatus(TaskStatus.IN_PROGRESS);
+
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(mockTask));
+
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> taskService.updateTaskStatusByMember(100L, 1L, TaskStatus.BLOCKED, "")
+        );
+
+        assertEquals("Cần cung cấp lý do khi chuyển trạng thái sang BLOCKED", exception.getMessage());
+    }
+
+    @Test
+    @DisplayName("Ném lỗi khi Member cố gắng chuyển từ TO_DO sang DONE trực tiếp")
+    void updateTaskStatus_ThrowsException_WhenDirectFromToDoToDone() {
+        Task mockTask = new Task(1L, "Viết Unit Test", "Criteria", TaskIssueType.TASK, TaskPriority.MEDIUM);
+        mockTask.setAssigneeUserId(100L);
+        mockTask.setStatus(TaskStatus.TO_DO);
+
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(mockTask));
+
+        IllegalStateException exception = assertThrows(
+            IllegalStateException.class,
+            () -> taskService.updateTaskStatusByMember(100L, 1L, TaskStatus.DONE, null)
+        );
+
+        assertEquals("Team Member không được chuyển trực tiếp từ TO_DO sang DONE.", exception.getMessage());
     }
 }
