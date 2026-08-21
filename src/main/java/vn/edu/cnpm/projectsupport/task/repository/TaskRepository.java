@@ -13,4 +13,5 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     List<Task> findByStatus(TaskStatus status);
     List<Task> findByIssueType(TaskIssueType issueType);
     Optional<Task> findByIdempotencyKey(String idempotencyKey);
+    boolean existsByRequirementId(Long requirementId);
 }
