@@ -18,7 +18,8 @@ export default function TaskComponent({ projectId }) {
         ? String(user.role).replace("ROLE_", "").toUpperCase()
         : null;
 
-    const isLeader = userRole === "TEAM_LEADER";
+    const isAdmin = userRole === "ADMIN";
+    const isLeader = userRole === "TEAM_LEADER" || isAdmin;
     const isLecturer = userRole === "LECTURER";
     const isMember = userRole === "TEAM_MEMBER" || userRole === "STUDENT";
 
@@ -37,6 +38,8 @@ export default function TaskComponent({ projectId }) {
     });
 
     const [selectedTask, setSelectedTask] = useState(null);
+    const [detailError, setDetailError] = useState(null);
+
     const [pendingStatusChange, setPendingStatusChange] = useState(null);
     const [statusReason, setStatusReason] = useState("");
 
@@ -138,12 +141,17 @@ export default function TaskComponent({ projectId }) {
     }, [projectId, fetchTasks]);
 
     const handleOpenDetail = async (task) => {
+        setDetailError(null);
         setSelectedTask(task);
         try {
             const fullTask = await TaskService.getTaskById(projectId, task.id);
             setSelectedTask(fullTask || task);
-        } catch {
-            setSelectedTask(task);
+        } catch (err) {
+            const msg =
+                err.response?.data?.message ||
+                err.message ||
+                "Không thể tải thông tin chi tiết của task từ máy chủ.";
+            setDetailError(msg);
         }
     };
 
@@ -221,7 +229,9 @@ export default function TaskComponent({ projectId }) {
             if (status === 401) {
                 setFormError("Phiên làm việc hết hạn khi tạo Task.");
             } else if (status === 403) {
-                setFormError("Chỉ Trưởng nhóm (Leader) mới có quyền tạo Task.");
+                setFormError(
+                    "Chỉ Trưởng nhóm (Leader) hoặc Admin mới có quyền tạo Task.",
+                );
             } else if (status === 404) {
                 setFormError("Không tìm thấy dự án tương ứng.");
             } else {
@@ -265,6 +275,7 @@ export default function TaskComponent({ projectId }) {
         return transitions;
     };
 
+    // Hàm chuyển đổi trạng thái đã được bảo vệ chặt chẽ bằng allowedStatuses
     const handleStatusSelectChange = (taskId, currentStatus, newStatus) => {
         if (newStatus === currentStatus) return;
 
@@ -273,8 +284,9 @@ export default function TaskComponent({ projectId }) {
             return;
         }
 
-        if (currentStatus === "TO_DO" && newStatus === "DONE") {
-            alert("Không thể chuyển trực tiếp từ TO_DO sang DONE.");
+        const allowedStatuses = getAllowedStatusesForRole(currentStatus);
+        if (!allowedStatuses.includes(newStatus)) {
+            alert("Không được phép chuyển sang trạng thái này.");
             return;
         }
 
@@ -1337,6 +1349,7 @@ export default function TaskComponent({ projectId }) {
                 </div>
             )}
 
+            {/* DETAIL MODAL */}
             {selectedTask && (
                 <div
                     data-testid="detail-modal"
@@ -1380,6 +1393,24 @@ export default function TaskComponent({ projectId }) {
                         >
                             ✕
                         </button>
+
+                        {detailError && (
+                            <div
+                                data-testid="detail-error"
+                                style={{
+                                    padding: "10px 14px",
+                                    background: "#fee2e2",
+                                    color: "#991b1b",
+                                    border: "1px solid #f87171",
+                                    borderRadius: "6px",
+                                    marginBottom: "14px",
+                                    fontSize: "13px",
+                                }}
+                            >
+                                ⚠️ {detailError}
+                            </div>
+                        )}
+
                         <div
                             style={{
                                 display: "flex",
@@ -1546,6 +1577,7 @@ export default function TaskComponent({ projectId }) {
                 </div>
             )}
 
+            {/* REASON MODAL CHO BLOCKED HOẶC CANCELLED */}
             {pendingStatusChange && (
                 <div
                     data-testid="reason-modal"
