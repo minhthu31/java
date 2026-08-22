@@ -6,4 +6,5 @@ import vn.edu.cnpm.projectsupport.audit.domain.ActivityLog;
 
 public interface ActivityLogRepository extends JpaRepository<ActivityLog, Long> {
     List<ActivityLog> findByEntityTypeAndEntityIdOrderByCreatedAtDesc(String entityType, String entityId);
+    boolean existsByEntityTypeAndEntityIdAndActionNot(String entityType, String entityId, String action);
 }
