@@ -1,15 +1,43 @@
 package vn.edu.cnpm.projectsupport.security;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class PermissionEvaluatorServiceTest {
 
+    private PermissionEvaluatorService permissionEvaluator;
+
+    @BeforeEach
+    void setUp() {
+        permissionEvaluator = new PermissionEvaluatorService();
+    }
+
     @Test
-    @DisplayName("Sample security unit test")
-    void sampleSecurityTest() {
-        assertTrue(true);
+    @DisplayName("Permission Check - LECTURER chỉ được truy cập Project được phân công")
+    void testLecturerProjectScope() {
+        assertTrue(permissionEvaluator.isLecturerAssignedToProject("LECTURER_01", 101L));
+        assertFalse(permissionEvaluator.isLecturerAssignedToProject("LECTURER_01", 999L));
+    }
+
+    @Test
+    @DisplayName("Permission Check - TEAM_LEADER quản lý dữ liệu thuộc nhóm mình")
+    void testTeamLeaderGroupScope() {
+        assertTrue(permissionEvaluator.isLeaderOfGroup("LEADER_01", 50L));
+    }
+
+    @Test
+    @DisplayName("Permission Check - TEAM_MEMBER chỉ cập nhật Task nếu là Assignee")
+    void testTaskAssigneePermission() {
+        assertTrue(permissionEvaluator.isTaskAssignee("MEMBER_01", "MEMBER_01"));
+        assertFalse(permissionEvaluator.isTaskAssignee("MEMBER_01", "MEMBER_02"));
+    }
+
+    @Test
+    @DisplayName("Permission Check - ADMIN không thực hiện thao tác trên tài nguyên học thuật")
+    void testAdminAcademicResourceRestriction() {
+        assertFalse(permissionEvaluator.canAdminModifyAcademicResource("ADMIN_ROLE"));
     }
 }
