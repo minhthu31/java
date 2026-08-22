@@ -10,9 +10,11 @@ import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
+import vn.edu.cnpm.projectsupport.task.dto.CreateTaskRequest;
+import vn.edu.cnpm.projectsupport.task.dto.UpdateTaskStatusRequest;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -43,7 +45,7 @@ class TaskControllerTest {
     @DisplayName("POST - Forbidden (403) when user is TEAM_MEMBER")
     @WithMockUser(roles = "TEAM_MEMBER")
     void createTask_Forbidden_WhenTeamMember() throws Exception {
-        TaskCreateRequest request = new TaskCreateRequest();
+        CreateTaskRequest request = new CreateTaskRequest();
 
         mockMvc.perform(post(BASE_URL)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -55,10 +57,9 @@ class TaskControllerTest {
     @DisplayName("PATCH Status - Successful when user is TEAM_MEMBER")
     @WithMockUser(roles = "TEAM_MEMBER")
     void updateTaskStatus_Success_WhenTeamMember() throws Exception {
-        TaskStatusUpdateRequest request = new TaskStatusUpdateRequest();
-        TaskResponse response = new TaskResponse();
+        UpdateTaskStatusRequest request = new UpdateTaskStatusRequest();
 
-        when(taskService.updateStatus(eq(1L), eq(10L), any())).thenReturn(response);
+        when(taskService.updateStatus(eq(1L), eq(10L), any())).thenReturn(null);
 
         mockMvc.perform(patch(BASE_URL + "/10/status")
                 .contentType(MediaType.APPLICATION_JSON)
