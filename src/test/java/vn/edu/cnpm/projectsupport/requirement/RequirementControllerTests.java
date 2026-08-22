@@ -1,4 +1,4 @@
-package vn.edu.cnpm.projectsupport.requirement;
+package vn.edu.cnpm.projectsupport.task;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -10,6 +10,10 @@ import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
+// Import đầy đủ các DTO từ package dto
+import vn.edu.cnpm.projectsupport.task.dto.CreateTaskRequest;
+import vn.edu.cnpm.projectsupport.task.dto.UpdateTaskStatusRequest;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
@@ -17,8 +21,8 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(RequirementController.class)
-class RequirementControllerTests {
+@WebMvcTest(TaskController.class)
+class TaskControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -27,31 +31,23 @@ class RequirementControllerTests {
     private ObjectMapper objectMapper;
 
     @MockBean
-    private RequirementService requirementService;
+    private TaskService taskService;
 
-    private final String BASE_URL = "/api/v1/projects/1/requirements";
+    private final String BASE_URL = "/api/v1/projects/1/tasks";
 
     @Test
-    @DisplayName("POST - Successful when user is TEAM_LEADER")
-    @WithMockUser(roles = "TEAM_LEADER")
-    void createRequirement_Success_WhenTeamLeader() throws Exception {
-        RequirementCreateRequest request = new RequirementCreateRequest();
-        RequirementResponse response = new RequirementResponse(); 
-
-        when(requirementService.createRequirement(eq(1L), any())).thenReturn(response);
-
-        mockMvc.perform(post(BASE_URL)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.status").value("SUCCESS"));
+    @DisplayName("GET List - Successful when user is TEAM_MEMBER")
+    @WithMockUser(roles = "TEAM_MEMBER")
+    void getTasks_Success_WhenTeamMember() throws Exception {
+        mockMvc.perform(get(BASE_URL))
+                .andExpect(status().isOk());
     }
 
     @Test
-    @DisplayName("POST - Forbidden (403) when user is LECTURER")
-    @WithMockUser(roles = "LECTURER")
-    void createRequirement_Forbidden_WhenLecturer() throws Exception {
-        RequirementCreateRequest request = new RequirementCreateRequest();
+    @DisplayName("POST - Forbidden (403) when user is TEAM_MEMBER")
+    @WithMockUser(roles = "TEAM_MEMBER")
+    void createTask_Forbidden_WhenTeamMember() throws Exception {
+        CreateTaskRequest request = new CreateTaskRequest();
 
         mockMvc.perform(post(BASE_URL)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -60,20 +56,17 @@ class RequirementControllerTests {
     }
 
     @Test
-    @DisplayName("GET List - Successful when user is LECTURER")
-    @WithMockUser(roles = "LECTURER")
-    void getRequirements_Success_WhenLecturer() throws Exception {
-        mockMvc.perform(get(BASE_URL))
+    @DisplayName("PATCH Status - Successful when user is TEAM_MEMBER")
+    @WithMockUser(roles = "TEAM_MEMBER")
+    void updateTaskStatus_Success_WhenTeamMember() throws Exception {
+        UpdateTaskStatusRequest request = new UpdateTaskStatusRequest();
+        TaskResponse response = new TaskResponse();
+
+        when(taskService.updateStatus(eq(1L), eq(10L), any())).thenReturn(response);
+
+        mockMvc.perform(patch(BASE_URL + "/10/status")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk());
-    }
-
-    @Test
-    @DisplayName("DELETE - Successful (204 No Content) when user is TEAM_LEADER")
-    @WithMockUser(roles = "TEAM_LEADER")
-    void deleteRequirement_Success_WhenTeamLeader() throws Exception {
-        doNothing().when(requirementService).deleteRequirement(1L, 10L);
-
-        mockMvc.perform(delete(BASE_URL + "/10"))
-                .andExpect(status().isNoContent());
     }
 }
