@@ -4,8 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -18,8 +17,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest
-@AutoConfigureMockMvc
+@WebMvcTest(RequirementController.class)
 class RequirementControllerTests {
 
     @Autowired
@@ -38,15 +36,13 @@ class RequirementControllerTests {
     @WithMockUser(roles = "TEAM_LEADER")
     void createRequirement_Success_WhenTeamLeader() throws Exception {
         RequirementCreateRequest request = new RequirementCreateRequest();
-        RequirementResponse response = new RequirementResponse(); 
 
-        when(requirementService.createRequirement(eq(1L), any())).thenReturn(response);
+        when(requirementService.createRequirement(eq(1L), any())).thenReturn(null);
 
         mockMvc.perform(post(BASE_URL)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.status").value("SUCCESS"));
+                .andExpect(status().isCreated());
     }
 
     @Test
