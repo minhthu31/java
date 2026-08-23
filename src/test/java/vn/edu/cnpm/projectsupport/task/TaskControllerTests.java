@@ -231,6 +231,65 @@ class TaskControllerTests {
     }
 
     @Test
+    @WithMockUser(roles = "TEAM_MEMBER")
+    void memberCannotUpdateTaskContent() throws Exception {
+        mockMvc.perform(put(BASE_URL + "/{taskId}", PROJECT_ID, TASK_ID)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validCreateBody()))
+                .andExpect(status().isForbidden());
+
+        verify(taskService, never()).updateTask(any(), any(), any());
+    }
+
+    @Test
+    @WithMockUser(roles = "TEAM_MEMBER")
+    void memberCannotReassignTask() throws Exception {
+        mockMvc.perform(patch(BASE_URL + "/{taskId}/assignee", PROJECT_ID, TASK_ID)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"assigneeUserId\":200}"))
+                .andExpect(status().isForbidden());
+
+        verify(taskService, never()).updateTaskAssignee(any(), any(), any());
+    }
+
+    @Test
+    @WithMockUser(roles = "TEAM_MEMBER")
+    void memberCannotDeleteTask() throws Exception {
+        mockMvc.perform(delete(BASE_URL + "/{taskId}", PROJECT_ID, TASK_ID).with(csrf()))
+                .andExpect(status().isForbidden());
+
+        verify(taskService, never()).deleteTask(any(), any());
+    }
+
+    @Test
+    @WithMockUser(roles = "LECTURER")
+    void lecturerCannotCreateTask() throws Exception {
+        mockMvc.perform(post(BASE_URL, PROJECT_ID)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validCreateBody()))
+                .andExpect(status().isForbidden());
+
+        verify(taskService, never()).createTask(
+                any(Long.class), any(CreateTaskRequest.class), any(String.class));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void adminCannotCreateTask() throws Exception {
+        mockMvc.perform(post(BASE_URL, PROJECT_ID)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validCreateBody()))
+                .andExpect(status().isForbidden());
+
+        verify(taskService, never()).createTask(
+                any(Long.class), any(CreateTaskRequest.class), any(String.class));
+    }
+
+    @Test
     @WithMockUser(roles = "ADMIN")
     void adminCannotListTasks() throws Exception {
         mockMvc.perform(get(BASE_URL, PROJECT_ID)).andExpect(status().isForbidden());

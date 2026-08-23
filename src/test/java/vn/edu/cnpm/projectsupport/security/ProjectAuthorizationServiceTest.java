@@ -102,10 +102,14 @@ class ProjectAuthorizationServiceTest {
     void leaderCanManageOnlyOwnedProject() {
         authenticate("leader.test", "TEAM_LEADER");
 
+        assertTrue(authorization.canViewRequirements(projectId));
         assertTrue(authorization.canManageRequirements(projectId));
+        assertTrue(authorization.canViewTasks(projectId));
+        assertTrue(authorization.canViewTask(projectId, assignedTaskId));
         assertTrue(authorization.canManageTasks(projectId));
         assertTrue(authorization.canGenerateSrs(projectId));
         assertFalse(authorization.canManageRequirements(otherProjectId));
+        assertFalse(authorization.canViewTasks(otherProjectId));
     }
 
     @Test
@@ -114,9 +118,12 @@ class ProjectAuthorizationServiceTest {
 
         assertTrue(authorization.canViewRequirements(projectId));
         assertTrue(authorization.canViewTasks(projectId));
+        assertTrue(authorization.canViewTask(projectId, assignedTaskId));
         assertTrue(authorization.canViewSrs(projectId));
         assertFalse(authorization.canManageRequirements(projectId));
         assertFalse(authorization.canManageTasks(projectId));
+        assertFalse(authorization.canViewRequirements(otherProjectId));
+        assertFalse(authorization.canViewTasks(otherProjectId));
     }
 
     @Test
@@ -127,6 +134,10 @@ class ProjectAuthorizationServiceTest {
         assertTrue(authorization.canViewTask(projectId, assignedTaskId));
         assertTrue(authorization.canUpdateTask(projectId, assignedTaskId));
         assertFalse(authorization.canViewTask(projectId, unassignedTaskId));
+        assertFalse(authorization.canUpdateTask(projectId, unassignedTaskId));
+        assertFalse(authorization.canViewTasks(otherProjectId));
+        assertTrue(authorization.isCurrentUserTeamMember(projectId));
+        assertFalse(authorization.isCurrentUserLeader(projectId));
         assertFalse(authorization.canViewRequirements(projectId));
         assertFalse(authorization.canViewSrs(projectId));
     }
@@ -138,7 +149,20 @@ class ProjectAuthorizationServiceTest {
         assertFalse(authorization.canViewRequirements(projectId));
         assertFalse(authorization.canManageRequirements(projectId));
         assertFalse(authorization.canViewTasks(projectId));
+        assertFalse(authorization.canUpdateTask(projectId, assignedTaskId));
         assertFalse(authorization.canGenerateSrs(projectId));
+    }
+
+    @Test
+    void unauthenticatedUserHasNoProjectAccess() {
+        SecurityContextHolder.clearContext();
+
+        assertFalse(authorization.canViewRequirements(projectId));
+        assertFalse(authorization.canManageRequirements(projectId));
+        assertFalse(authorization.canViewTasks(projectId));
+        assertFalse(authorization.canViewTask(projectId, assignedTaskId));
+        assertFalse(authorization.canUpdateTask(projectId, assignedTaskId));
+        assertThrows(AccessDeniedException.class, authorization::currentUserId);
     }
 
     @Test
