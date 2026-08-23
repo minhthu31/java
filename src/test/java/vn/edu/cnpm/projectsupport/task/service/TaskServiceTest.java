@@ -1,4 +1,4 @@
-package vn.edu.cnpm.projectsupport.task.service;
+package vn.edu.cnpm.projectsupport.requirement.service;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -7,11 +7,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import vn.edu.cnpm.projectsupport.task.dto.CreateTaskRequest;
-import vn.edu.cnpm.projectsupport.task.entity.Task;
-import vn.edu.cnpm.projectsupport.task.enums.SyncStatus;
-import vn.edu.cnpm.projectsupport.task.enums.TaskStatus;
-import vn.edu.cnpm.projectsupport.task.enums.TaskType;
+import vn.edu.cnpm.projectsupport.common.exception.BadRequestException;
+import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
+import vn.edu.cnpm.projectsupport.project.repository.ProjectRepository;
+import vn.edu.cnpm.projectsupport.requirement.dto.RequirementCreateRequest;
+import vn.edu.cnpm.projectsupport.requirement.dto.RequirementResponse;
+import vn.edu.cnpm.projectsupport.requirement.entity.Requirement;
+import vn.edu.cnpm.projectsupport.requirement.enums.RequirementStatus;
+import vn.edu.cnpm.projectsupport.requirement.repository.RequirementRepository;
 import vn.edu.cnpm.projectsupport.task.repository.TaskRepository;
 
 import java.util.Optional;
@@ -21,88 +24,124 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class TaskServiceTest {
+class RequirementServiceTest {
+
+    @Mock
+    private RequirementRepository requirementRepository;
+
+    @Mock
+    private ProjectRepository projectRepository;
 
     @Mock
     private TaskRepository taskRepository;
 
     @InjectMocks
-    private TaskServiceImpl taskService;
+    private RequirementServiceImpl requirementService;
 
-    private CreateTaskRequest validRequest;
+    private RequirementCreateRequest validRequest;
+    private final Long projectId = 1L;
+    private final Long requirementId = 100L;
 
     @BeforeEach
     void setUp() {
-        validRequest = new CreateTaskRequest();
-        validRequest.setTitle("Viết Unit Test cho Task Service");
-        validRequest.setDescription("Mô tả chi tiết task");
-        validRequest.setAcceptanceCriteria("Phủ > 80% code coverage");
-        validRequest.setType(TaskType.TEST);
-        validRequest.setProjectId("PROJ_01");
-        validRequest.setFeatureId("FEAT_01");
-        validRequest.setAssigneeId("MEMBER_01");
+        validRequest = new RequirementCreateRequest();
+        validRequest.setTitle("Quản lý yêu cầu Sprint 2");
+        validRequest.setDescription("Mô tả chi tiết requirement cho hệ thống");
     }
 
     @Test
-    @DisplayName("Tạo Task thành công với syncStatus mặc định là NOT_SYNCED")
-    void createTask_Success() {
-        when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    @DisplayName("Tạo Requirement thành công với trạng thái mặc định là DRAFT")
+    void createRequirement_Success_WithDefaultStatusDraft() {
+        when(projectRepository.existsById(projectId)).thenReturn(true);
+        when(requirementRepository.save(any(Requirement.class))).thenAnswer(invocation -> {
+            Requirement req = invocation.getArgument(0);
+            req.setId(requirementId);
+            return req;
+        });
 
-        Task createdTask = taskService.createTask("LEADER_01", validRequest);
+        RequirementResponse response = requirementService.createRequirement(projectId, validRequest);
 
-        assertNotNull(createdTask);
-        assertEquals("LEADER_01", createdTask.getCreatedById());
-        assertEquals(SyncStatus.NOT_SYNCED, createdTask.getSyncStatus());
-        assertEquals(TaskStatus.TODO, createdTask.getStatus());
-        verify(taskRepository, times(1)).save(any(Task.class));
+        assertNotNull(response);
+        assertEquals(requirementId, response.getId());
+        assertEquals(RequirementStatus.DRAFT, response.getStatus());
+        verify(requirementRepository, times(1)).save(any(Requirement.class));
     }
 
     @Test
-    @DisplayName("Ném lỗi khi Acceptance Criteria bị trống")
-    void createTask_ThrowsException_WhenAcceptanceCriteriaIsEmpty() {
-        validRequest.setAcceptanceCriteria("");
+    @DisplayName("Ném lỗi khi tạo Requirement với Project không tồn tại")
+    void createRequirement_ThrowsException_WhenProjectNotFound() {
+        when(projectRepository.existsById(projectId)).thenReturn(false);
 
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> taskService.createTask("LEADER_01", validRequest)
+        assertThrows(
+            ResourceNotFoundException.class,
+            () -> requirementService.createRequirement(projectId, validRequest)
         );
-
-        assertEquals("Acceptance Criteria không được để trống.", exception.getMessage());
-        verify(taskRepository, never()).save(any());
+        verify(requirementRepository, never()).save(any());
     }
 
     @Test
-    @DisplayName("Member cập nhật trạng thái Task thành công khi đúng người được giao")
-    void updateTaskStatus_Success_WhenAssignedToMember() {
-        Task mockTask = new Task();
-        mockTask.setId("TASK_01");
-        mockTask.setAssigneeId("MEMBER_01");
-        mockTask.setStatus(TaskStatus.TODO);
+    @DisplayName("Ném lỗi khi Requirement không thuộc Project được chỉ định")
+    void getRequirementById_ThrowsException_WhenRequirementNotBelongToProject() {
+        Requirement requirement = new Requirement();
+        requirement.setId(requirementId);
+        requirement.setProjectId(2L); // Khác projectId truyền vào (1L)
 
-        when(taskRepository.findById("TASK_01")).thenReturn(Optional.of(mockTask));
-        when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(requirementRepository.findById(requirementId)).thenReturn(Optional.of(requirement));
 
-        Task updatedTask = taskService.updateTaskStatusByMember("MEMBER_01", "TASK_01", TaskStatus.IN_PROGRESS);
-
-        assertEquals(TaskStatus.IN_PROGRESS, updatedTask.getStatus());
+        assertThrows(
+            BadRequestException.class,
+            () -> requirementService.getRequirementById(projectId, requirementId)
+        );
     }
 
     @Test
-    @DisplayName("Ném lỗi khi Member cố tình cập nhật Task của người khác")
-    void updateTaskStatus_ThrowsException_WhenNotAssignedMember() {
-        Task mockTask = new Task();
-        mockTask.setId("TASK_01");
-        mockTask.setAssigneeId("MEMBER_01");
-        mockTask.setStatus(TaskStatus.TODO);
+    @DisplayName("Chuyển trạng thái Requirement hợp lệ (DRAFT -> APPROVED)")
+    void updateStatus_Success_ValidTransition() {
+        Requirement requirement = new Requirement();
+        requirement.setId(requirementId);
+        requirement.setProjectId(projectId);
+        requirement.setStatus(RequirementStatus.DRAFT);
 
-        when(taskRepository.findById("TASK_01")).thenReturn(Optional.of(mockTask));
+        when(requirementRepository.findByIdAndProjectId(requirementId, projectId))
+                .thenReturn(Optional.of(requirement));
+        when(requirementRepository.save(any(Requirement.class))).thenAnswer(i -> i.getArgument(0));
+
+        RequirementResponse response = requirementService.updateStatus(projectId, requirementId, RequirementStatus.APPROVED);
+
+        assertEquals(RequirementStatus.APPROVED, response.getStatus());
+        verify(requirementRepository, times(1)).save(requirement);
+    }
+
+    @Test
+    @DisplayName("Ném lỗi khi chuyển trạng thái Requirement không hợp lệ (APPROVED -> DRAFT)")
+    void updateStatus_ThrowsException_InvalidTransition() {
+        Requirement requirement = new Requirement();
+        requirement.setId(requirementId);
+        requirement.setProjectId(projectId);
+        requirement.setStatus(RequirementStatus.APPROVED);
+
+        when(requirementRepository.findByIdAndProjectId(requirementId, projectId))
+                .thenReturn(Optional.of(requirement));
+
+        assertThrows(
+            IllegalStateException.class,
+            () -> requirementService.updateStatus(projectId, requirementId, RequirementStatus.DRAFT)
+        );
+        verify(requirementRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Không cho phép xóa Requirement khi đang có Task liên kết")
+    void deleteRequirement_ThrowsException_WhenTasksExist() {
+        when(requirementRepository.existsByIdAndProjectId(requirementId, projectId)).thenReturn(true);
+        when(taskRepository.existsByRequirementId(requirementId)).thenReturn(true);
 
         IllegalStateException exception = assertThrows(
             IllegalStateException.class,
-            () -> taskService.updateTaskStatusByMember("MEMBER_02", "TASK_01", TaskStatus.IN_PROGRESS)
+            () -> requirementService.deleteRequirement(projectId, requirementId)
         );
 
-        assertEquals("Bạn không có quyền cập nhật Task của người khác.", exception.getMessage());
-        verify(taskRepository, never()).save(any());
+        assertEquals("Không thể xóa Requirement đang có Task liên kết.", exception.getMessage());
+        verify(requirementRepository, never()).deleteById(anyLong());
     }
 }
