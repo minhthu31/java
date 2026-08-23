@@ -1,7 +1,9 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { currentUser, logout } from "./authService";
 import RequirementList from "./RequirementList";
+import SrsPreview from "./SrsPreview";
+import TaskComponent from "./TaskComponent";
 
 const getRoleTitle = (role) => {
     switch (role) {
@@ -22,6 +24,8 @@ const getRoleTitle = (role) => {
 export default function Dashboard({ title }) {
     const navigate = useNavigate();
     const user = currentUser();
+    const [activeTab, setActiveTab] = useState("requirements");
+
     useEffect(() => {
         if (!user) {
             navigate("/login");
@@ -167,51 +171,122 @@ export default function Dashboard({ title }) {
                     marginBottom: "24px",
                 }}
             >
-                <article
+                <button
+                    type="button"
+                    onClick={() => setActiveTab("requirements")}
                     style={{
                         backgroundColor: "#fff",
                         padding: "16px",
                         borderRadius: "6px",
-                        borderLeft: "4px solid #0052cc",
-                        fontWeight: 600,
-                        color: "#0052cc",
+                        border: "none",
+                        borderLeft:
+                            activeTab === "requirements"
+                                ? "4px solid #0052cc"
+                                : "4px solid transparent",
+                        fontWeight: activeTab === "requirements" ? 600 : 500,
+                        color:
+                            activeTab === "requirements"
+                                ? "#0052cc"
+                                : "#172b4d",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                        fontSize: "14px",
                     }}
                 >
                     Yêu cầu dự án
-                </article>
-                <article
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setActiveTab("tasks")}
                     style={{
                         backgroundColor: "#fff",
                         padding: "16px",
                         borderRadius: "6px",
-                        fontWeight: 500,
-                        color: "#172b4d",
+                        border: "none",
+                        borderLeft:
+                            activeTab === "tasks"
+                                ? "4px solid #0052cc"
+                                : "4px solid transparent",
+                        fontWeight: activeTab === "tasks" ? 600 : 500,
+                        color: activeTab === "tasks" ? "#0052cc" : "#172b4d",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                        fontSize: "14px",
                     }}
                 >
                     Công việc được giao
-                </article>
-                <article
+                </button>
+                {canAccessRequirement && (
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab("srs")}
+                        style={{
+                            backgroundColor: "#fff",
+                            padding: "16px",
+                            borderRadius: "6px",
+                            border: "none",
+                            borderLeft:
+                                activeTab === "srs"
+                                    ? "4px solid #0052cc"
+                                    : "4px solid transparent",
+                            fontWeight: activeTab === "srs" ? 600 : 500,
+                            color:
+                                activeTab === "srs" ? "#0052cc" : "#172b4d",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                            fontSize: "14px",
+                        }}
+                    >
+                        Xem trước SRS
+                    </button>
+                )}
+                <button
+                    type="button"
+                    onClick={() => setActiveTab("progress")}
                     style={{
                         backgroundColor: "#fff",
                         padding: "16px",
                         borderRadius: "6px",
-                        fontWeight: 500,
-                        color: "#172b4d",
+                        border: "none",
+                        borderLeft:
+                            activeTab === "progress"
+                                ? "4px solid #0052cc"
+                                : "4px solid transparent",
+                        fontWeight: activeTab === "progress" ? 600 : 500,
+                        color: activeTab === "progress" ? "#0052cc" : "#172b4d",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                        fontSize: "14px",
                     }}
                 >
                     Tiến độ nhóm
-                </article>
-                <article
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setActiveTab("github")}
                     style={{
                         backgroundColor: "#fff",
                         padding: "16px",
                         borderRadius: "6px",
-                        fontWeight: 500,
-                        color: "#172b4d",
+                        border: "none",
+                        borderLeft:
+                            activeTab === "github"
+                                ? "4px solid #0052cc"
+                                : "4px solid transparent",
+                        fontWeight: activeTab === "github" ? 600 : 500,
+                        color: activeTab === "github" ? "#0052cc" : "#172b4d",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                        fontSize: "14px",
                     }}
                 >
                     Hoạt động GitHub
-                </article>
+                </button>
             </section>
 
             <section
@@ -222,66 +297,147 @@ export default function Dashboard({ title }) {
                     overflow: "hidden",
                 }}
             >
-                {!canAccessRequirement ? (
+                {activeTab === "requirements" && (
+                    <>
+                        {!canAccessRequirement ? (
+                            <div
+                                style={{
+                                    padding: "40px 24px",
+                                    textAlign: "center",
+                                    color: "#6b778c",
+                                }}
+                                data-testid="unauthorized-message"
+                            >
+                                <h3
+                                    style={{
+                                        color: "#de350b",
+                                        marginBottom: "8px",
+                                    }}
+                                >
+                                    Không có quyền truy cập
+                                </h3>
+                                <p style={{ margin: 0, fontSize: "14px" }}>
+                                    Theo quy định phân quyền (CNPM-52), vai trò{" "}
+                                    <strong>
+                                        {userRole || "Chưa phân quyền"}
+                                    </strong>{" "}
+                                    không được phép truy cập dữ liệu
+                                    Requirement.
+                                </p>
+                            </div>
+                        ) : !selectedProjectId ? (
+                            <div
+                                style={{
+                                    padding: "40px 24px",
+                                    textAlign: "center",
+                                    color: "#6b778c",
+                                }}
+                                data-testid="no-project-message"
+                            >
+                                <h3
+                                    style={{
+                                        color: "#172b4d",
+                                        marginBottom: "8px",
+                                    }}
+                                >
+                                    Chưa chọn dự án
+                                </h3>
+                                <p style={{ margin: 0, fontSize: "14px" }}>
+                                    Vui lòng chọn một project trước khi xem danh
+                                    sách Requirement.
+                                </p>
+                            </div>
+                        ) : (
+                            <RequirementList
+                                projectId={selectedProjectId}
+                                currentUserRole={userRole}
+                            />
+                        )}
+                    </>
+                )}
+
+                {activeTab === "tasks" && (
+                    <div style={{ padding: "20px" }}>
+                        {!selectedProjectId ? (
+                            <div
+                                data-testid="no-project-message"
+                                style={{
+                                    padding: "40px 24px",
+                                    textAlign: "center",
+                                    color: "#6b778c",
+                                }}
+                            >
+                                <h3
+                                    style={{
+                                        color: "#172b4d",
+                                        marginBottom: "8px",
+                                    }}
+                                >
+                                    Chưa chọn dự án
+                                </h3>
+                                <p style={{ margin: 0, fontSize: "14px" }}>
+                                    Vui lòng chọn một project trước khi xem danh
+                                    sách Task.
+                                </p>
+                            </div>
+                        ) : (
+                            <TaskComponent projectId={selectedProjectId} />
+                        )}
+                    </div>
+                )}
+
+                {activeTab === "srs" && (
+                    <>
+                        {!selectedProjectId ? (
+                            <div
+                                data-testid="no-project-message"
+                                style={{
+                                    padding: "40px 24px",
+                                    textAlign: "center",
+                                    color: "#6b778c",
+                                }}
+                            >
+                                Chưa chọn dự án để xem trước SRS.
+                            </div>
+                        ) : (
+                            <SrsPreview
+                                projectId={selectedProjectId}
+                                currentUserRole={userRole}
+                            />
+                        )}
+                    </>
+                )}
+
+                {activeTab === "progress" && (
                     <div
                         style={{
                             padding: "40px 24px",
                             textAlign: "center",
                             color: "#6b778c",
                         }}
-                        data-testid="unauthorized-message"
                     >
-                        <h3
-                            style={{
-                                color: "#de350b",
-                                marginBottom: "8px",
-                            }}
-                        >
-                            Không có quyền truy cập
-                        </h3>
-                        <p
-                            style={{
-                                margin: 0,
-                                fontSize: "14px",
-                            }}
-                        >
-                            Theo quy định phân quyền (CNPM-52), vai trò{" "}
-                            <strong>{userRole || "Chưa phân quyền"}</strong>{" "}
-                            không được phép truy cập dữ liệu Requirement.
+                        <h3>Theo dõi tiến độ nhóm</h3>
+                        <p style={{ margin: 0, fontSize: "14px" }}>
+                            Báo cáo tiến độ và phân bổ công việc của các thành
+                            viên.
                         </p>
                     </div>
-                ) : !selectedProjectId ? (
+                )}
+
+                {activeTab === "github" && (
                     <div
                         style={{
                             padding: "40px 24px",
                             textAlign: "center",
                             color: "#6b778c",
                         }}
-                        data-testid="no-project-message"
                     >
-                        <h3
-                            style={{
-                                color: "#172b4d",
-                                marginBottom: "8px",
-                            }}
-                        >
-                            Chưa chọn dự án
-                        </h3>
-                        <p
-                            style={{
-                                margin: 0,
-                                fontSize: "14px",
-                            }}
-                        >
-                            Vui lòng chọn một project trước khi xem danh sách
-                            Requirement.
+                        <h3>Hoạt động GitHub</h3>
+                        <p style={{ margin: 0, fontSize: "14px" }}>
+                            Theo dõi lịch sử commits, pull requests và đóng góp
+                            mã nguồn.
                         </p>
                     </div>
-                ) : (
-                    <RequirementList
-                        projectId={selectedProjectId}
-                        currentUserRole={userRole}
-                    />
                 )}
             </section>
         </main>

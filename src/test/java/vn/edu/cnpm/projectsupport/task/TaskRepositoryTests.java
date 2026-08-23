@@ -91,9 +91,9 @@ class TaskRepositoryTests {
         taskRepository.saveAndFlush(task);
 
         assertThat(taskRepository.findByProjectId(9501L)).hasSize(1);
-        assertThat(taskRepository.findByAssigneeUserId(assigneeId)).hasSize(1);
-        assertThat(taskRepository.findByStatus(TaskStatus.TO_DO)).hasSize(1);
-        assertThat(taskRepository.findByIssueType(TaskIssueType.TASK)).hasSize(1);
+        assertThat(taskRepository.findByAssigneeUserId(assigneeId)).contains(task);
+        assertThat(taskRepository.findByStatus(TaskStatus.TO_DO)).contains(task);
+        assertThat(taskRepository.findByIssueType(TaskIssueType.TASK)).contains(task);
     }
 
     private Task task(String title) {

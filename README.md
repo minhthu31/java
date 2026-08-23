@@ -116,6 +116,8 @@ Flyway là nguồn chuẩn của schema. Không dùng `spring.jpa.hibernate.ddl-
 
 - [CNPM-52 - API Contract](docs/sprint-2-api-contract.md)
 - [Sprint 2 Kickoff](docs/sprint-2-kickoff.md)
+- [CNPM-72 - Báo cáo tích hợp Sprint 2](docs/sprint-reports/CNPM-72-sprint-2-integration-report.md)
+- [CNPM-73 - Tổng kết Sprint 2 và Sprint 3 Backlog](docs/sprint-reports/CNPM-73-sprint-2-review-and-sprint-3-backlog.md)
 
 ## Quy trình Git
 

@@ -9,6 +9,8 @@ public class LoginResponse {
     private String email;
     private String fullName;
     private String role;
+    private Long id;
+    private Long projectId;
 
     public LoginResponse() {
     }
@@ -20,7 +22,9 @@ public class LoginResponse {
             String username,
             String email,
             String fullName,
-            String role) {
+            String role,
+            Long id,
+            Long projectId) {
         this.accessToken = accessToken;
         this.tokenType = tokenType;
         this.expiresIn = expiresIn;
@@ -28,6 +32,8 @@ public class LoginResponse {
         this.email = email;
         this.fullName = fullName;
         this.role = role;
+        this.id = id;
+        this.projectId = projectId;
     }
 
     public String getAccessToken() { return accessToken; }
@@ -59,4 +65,6 @@ public class LoginResponse {
     }
 
     public String getRole() { return role; }
+    public Long getId() { return id; }
+    public Long getProjectId() { return projectId; }
 }
