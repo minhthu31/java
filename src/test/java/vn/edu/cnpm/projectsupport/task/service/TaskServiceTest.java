@@ -11,18 +11,21 @@ import vn.edu.cnpm.projectsupport.activitylog.service.ActivityLogService;
 import vn.edu.cnpm.projectsupport.common.exception.BadRequestException;
 import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
 import vn.edu.cnpm.projectsupport.project.service.ProjectMemberService;
-import vn.edu.cnpm.projectsupport.task.dto.CreateTaskRequest;
-import vn.edu.cnpm.projectsupport.task.entity.Task;
-import vn.edu.cnpm.projectsupport.task.enums.SyncStatus;
-import vn.edu.cnpm.projectsupport.task.enums.TaskStatus;
-import vn.edu.cnpm.projectsupport.task.enums.TaskType;
-import vn.edu.cnpm.projectsupport.task.repository.TaskRepository;
+
+// Import Task và các enum/DTO trực tiếp từ package task
+import vn.edu.cnpm.projectsupport.task.CreateTaskRequest;
+import vn.edu.cnpm.projectsupport.task.Task;
+import vn.edu.cnpm.projectsupport.task.SyncStatus;
+import vn.edu.cnpm.projectsupport.task.TaskStatus;
+import vn.edu.cnpm.projectsupport.task.TaskType;
+import vn.edu.cnpm.projectsupport.task.TaskRepository;
 
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
