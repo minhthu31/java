@@ -15,6 +15,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -29,8 +30,7 @@ class RequirementServiceTest {
     @Mock
     private TaskRepository taskRepository;
 
-    @InjectMocks
-    private RequirementServiceImpl requirementService;
+    private RequirementService requirementService;
 
     private RequirementCreateRequest validRequest;
     private final Long projectId = 1L;
@@ -38,6 +38,9 @@ class RequirementServiceTest {
 
     @BeforeEach
     void setUp() {
+        // Tự khởi tạo Service với các Mock repository để tránh lỗi Interface/Impl
+        requirementService = new RequirementService(requirementRepository, projectRepository, taskRepository);
+
         validRequest = new RequirementCreateRequest();
         validRequest.setTitle("Quản lý yêu cầu Sprint 2");
         validRequest.setDescription("Mô tả chi tiết requirement cho hệ thống");
