@@ -25,6 +25,7 @@ import vn.edu.cnpm.projectsupport.task.service.TaskService;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -80,14 +81,14 @@ class TaskControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
-        verify(taskService, never()).createTask(any(), any(), any());
+        verify(taskService, never()).createTask(eq(PROJECT_ID), any(CreateTaskRequest.class), any());
     }
 
     @Test
     @DisplayName("201 Created - TEAM_LEADER tạo Task thành công")
     @WithMockUser(username = "leader1", roles = "TEAM_LEADER")
     void leaderCreatesTask_Success() throws Exception {
-        when(taskService.createTask(eq(PROJECT_ID), any(CreateTaskRequest.class), any()))
+        when(taskService.createTask(eq(PROJECT_ID), any(CreateTaskRequest.class), nullable(String.class)))
                 .thenReturn(taskResponse);
 
         mockMvc.perform(post(BASE_URL, PROJECT_ID)
