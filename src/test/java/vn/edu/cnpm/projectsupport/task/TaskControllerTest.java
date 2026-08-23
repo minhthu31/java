@@ -8,18 +8,21 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import vn.edu.cnpm.projectsupport.common.api.PageResponse;
 import vn.edu.cnpm.projectsupport.common.exception.GlobalExceptionHandler;
 import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
-
-// Thêm các dòng import DTO này (nếu project để trong thư mục dto):
-import vn.edu.cnpm.projectsupport.task.dto.TaskCreateRequest;
-import vn.edu.cnpm.projectsupport.task.dto.TaskUpdateRequest;
+import vn.edu.cnpm.projectsupport.task.dto.CreateTaskRequest;
+import vn.edu.cnpm.projectsupport.task.dto.TaskFilterRequest;
 import vn.edu.cnpm.projectsupport.task.dto.TaskResponse;
+import vn.edu.cnpm.projectsupport.task.dto.TaskStatusUpdateRequest;
+import vn.edu.cnpm.projectsupport.task.dto.UpdateTaskRequest;
+import vn.edu.cnpm.projectsupport.task.service.TaskService;
+
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -66,7 +69,7 @@ class TaskControllerTest {
     @DisplayName("400 Bad Request - Validation thất bại khi thiếu thông tin bắt buộc")
     @WithMockUser(username = "leader1", roles = "TEAM_LEADER")
     void shouldReturn400_WhenInvalidTaskRequest() throws Exception {
-        TaskCreateRequest invalidRequest = new TaskCreateRequest();
+        CreateTaskRequest invalidRequest = new CreateTaskRequest();
         invalidRequest.setTitle("");
 
         mockMvc.perform(post(BASE_URL, PROJECT_ID)
@@ -80,31 +83,44 @@ class TaskControllerTest {
     }
 
     @Test
-    @DisplayName("200 OK - TEAM_MEMBER cập nhật Task được giao")
-    @WithMockUser(username = "member1", roles = "TEAM_MEMBER")
-    void memberCanUpdateAssignedTask() throws Exception {
-        TaskUpdateRequest updateRequest = new TaskUpdateRequest();
-        updateRequest.setStatus("IN_PROGRESS");
+    @DisplayName("201 Created - TEAM_LEADER tạo Task thành công")
+    @WithMockUser(username = "leader1", roles = "TEAM_LEADER")
+    void leaderCreatesTask_Success() throws Exception {
+        CreateTaskRequest request = new CreateTaskRequest();
+        request.setTitle("Implement Authentication Module");
 
-        when(taskService.updateTask(eq(PROJECT_ID), eq(TASK_ID), any(TaskUpdateRequest.class), eq("member1")))
+        when(taskService.createTask(eq(PROJECT_ID), any(CreateTaskRequest.class), any()))
                 .thenReturn(taskResponse);
 
-        mockMvc.perform(put(BASE_URL + "/{taskId}", PROJECT_ID, TASK_ID)
+        mockMvc.perform(post(BASE_URL, PROJECT_ID)
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(updateRequest)))
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.id").value(TASK_ID));
+    }
+
+    @Test
+    @DisplayName("200 OK - TEAM_MEMBER cập nhật trạng thái Task")
+    @WithMockUser(username = "member1", roles = "TEAM_MEMBER")
+    void memberCanUpdateTaskStatus() throws Exception {
+        TaskStatusUpdateRequest statusRequest = new TaskStatusUpdateRequest();
+
+        when(taskService.updateTaskStatus(eq(PROJECT_ID), eq(TASK_ID), any(TaskStatusUpdateRequest.class)))
+                .thenReturn(taskResponse);
+
+        mockMvc.perform(patch(BASE_URL + "/{taskId}/status", PROJECT_ID, TASK_ID)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(statusRequest)))
                 .andExpect(status().isOk());
     }
 
     @Test
-    @DisplayName("403 Forbidden - TEAM_MEMBER không được sửa Task của người khác")
-    @WithMockUser(username = "member2", roles = "TEAM_MEMBER")
-    void memberCannotUpdateOtherMemberTask() throws Exception {
-        TaskUpdateRequest updateRequest = new TaskUpdateRequest();
-        updateRequest.setStatus("DONE");
-
-        when(taskService.updateTask(eq(PROJECT_ID), eq(TASK_ID), any(TaskUpdateRequest.class), eq("member2")))
-                .thenThrow(new AccessDeniedException("Forbidden: Not Assignee"));
+    @DisplayName("403 Forbidden - TEAM_MEMBER không có quyền cập nhật toàn bộ Task (chỉ TEAM_LEADER)")
+    @WithMockUser(username = "member1", roles = "TEAM_MEMBER")
+    void memberCannotUpdateTask() throws Exception {
+        UpdateTaskRequest updateRequest = new UpdateTaskRequest();
 
         mockMvc.perform(put(BASE_URL + "/{taskId}", PROJECT_ID, TASK_ID)
                         .with(csrf())
@@ -114,7 +130,7 @@ class TaskControllerTest {
     }
 
     @Test
-    @DisplayName("403 Forbidden - ADMIN không được thực hiện cập nhật Task học thuật")
+    @DisplayName("403 Forbidden - ADMIN không thao tác các tài nguyên học thuật")
     @WithMockUser(username = "admin", roles = "ADMIN")
     void adminCannotAccessTaskResource() throws Exception {
         mockMvc.perform(get(BASE_URL, PROJECT_ID))
