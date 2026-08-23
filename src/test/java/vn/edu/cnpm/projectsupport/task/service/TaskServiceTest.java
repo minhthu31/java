@@ -12,13 +12,8 @@ import vn.edu.cnpm.projectsupport.common.exception.BadRequestException;
 import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
 import vn.edu.cnpm.projectsupport.project.service.ProjectMemberService;
 
-// Import Task và các enum/DTO trực tiếp từ package task
-import vn.edu.cnpm.projectsupport.task.CreateTaskRequest;
-import vn.edu.cnpm.projectsupport.task.Task;
-import vn.edu.cnpm.projectsupport.task.SyncStatus;
-import vn.edu.cnpm.projectsupport.task.TaskStatus;
-import vn.edu.cnpm.projectsupport.task.TaskType;
-import vn.edu.cnpm.projectsupport.task.TaskRepository;
+// Import toàn bộ package task để bao quát mọi cấu trúc entity, enum, DTO
+import vn.edu.cnpm.projectsupport.task.*;
 
 import java.util.Optional;
 
