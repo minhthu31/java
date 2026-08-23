@@ -15,7 +15,6 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -31,7 +30,7 @@ class RequirementServiceTest {
     private TaskRepository taskRepository;
 
     @InjectMocks
-    private RequirementServiceImpl requirementService;
+    private RequirementService requirementService;
 
     private RequirementCreateRequest validRequest;
     private final Long projectId = 1L;
@@ -45,8 +44,8 @@ class RequirementServiceTest {
     }
 
     @Test
-    @DisplayName("Tạo Requirement thành công với trạng thái mặc định là DRAFT")
-    void createRequirement_Success_WithDefaultStatusDraft() {
+    @DisplayName("Tạo Requirement thành công với trạng thái mặc định")
+    void createRequirement_Success() {
         when(projectRepository.existsById(projectId)).thenReturn(true);
         when(requirementRepository.save(any(Requirement.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
