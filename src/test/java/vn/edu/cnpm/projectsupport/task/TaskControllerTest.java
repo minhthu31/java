@@ -9,23 +9,18 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.http.MediaType;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import vn.edu.cnpm.projectsupport.common.api.PageResponse;
 import vn.edu.cnpm.projectsupport.common.exception.GlobalExceptionHandler;
 import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
 import vn.edu.cnpm.projectsupport.security.JwtTokenProvider;
 import vn.edu.cnpm.projectsupport.task.dto.CreateTaskRequest;
-import vn.edu.cnpm.projectsupport.task.dto.TaskFilterRequest;
 import vn.edu.cnpm.projectsupport.task.dto.TaskResponse;
 import vn.edu.cnpm.projectsupport.task.dto.TaskStatusUpdateRequest;
 import vn.edu.cnpm.projectsupport.task.dto.UpdateTaskRequest;
 import vn.edu.cnpm.projectsupport.task.service.TaskService;
-
-import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -46,8 +41,7 @@ class TaskControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @MockitoBean
     private TaskService taskService;
