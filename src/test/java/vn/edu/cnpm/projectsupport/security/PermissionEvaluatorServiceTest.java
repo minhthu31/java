@@ -19,33 +19,36 @@ class PermissionEvaluatorServiceTest {
     @Test
     @DisplayName("Permission Check - LECTURER chỉ được truy cập Project được phân công")
     void testLecturerProjectScope() {
-        assertTrue(permissionEvaluator.isLecturerAssignedToProject("lecturer1", 101L));
-        assertFalse(permissionEvaluator.isLecturerAssignedToProject("lecturer1", 999L));
+        assertTrue(permissionEvaluator.isLecturerAssignedToProject("LECTURER_01", 101L));
+        assertFalse(permissionEvaluator.isLecturerAssignedToProject("LECTURER_01", 999L));
+        assertFalse(permissionEvaluator.isLecturerAssignedToProject("LECTURER_OTHER", 101L));
     }
 
     @Test
     @DisplayName("Permission Check - TEAM_LEADER chỉ quản lý dữ liệu thuộc nhóm mình")
     void testTeamLeaderGroupScope() {
-        assertTrue(permissionEvaluator.isLeaderOfGroup("leader1", 50L));
-        assertFalse(permissionEvaluator.isLeaderOfGroup("leader1", 99L));
+        assertTrue(permissionEvaluator.isLeaderOfGroup("LEADER_01", 50L));
+        assertFalse(permissionEvaluator.isLeaderOfGroup("LEADER_01", 99L));
+        assertFalse(permissionEvaluator.isLeaderOfGroup("LEADER_OTHER", 50L));
     }
 
     @Test
     @DisplayName("Permission Check - TEAM_MEMBER chỉ xem và cập nhật Task nếu là Assignee")
     void testTaskAssigneePermission() {
-        assertTrue(permissionEvaluator.isTaskAssignee("member1", "member1"));
-        assertFalse(permissionEvaluator.isTaskAssignee("member1", "member2"));
+        assertTrue(permissionEvaluator.isTaskAssignee("MEMBER_01", "MEMBER_01"));
+        assertFalse(permissionEvaluator.isTaskAssignee("MEMBER_01", "MEMBER_02"));
     }
 
     @Test
     @DisplayName("Permission Check - TEAM_MEMBER không được sửa Task của người khác")
     void testMemberCannotModifyOtherTask() {
-        assertFalse(permissionEvaluator.isTaskAssignee("member1", "member2"));
+        assertFalse(permissionEvaluator.isTaskAssignee("MEMBER_01", "MEMBER_02"));
     }
 
     @Test
-    @DisplayName("Permission Check - ADMIN không thực hiện thao tác trên tài nguyên học thuật theo matrix")
+    @DisplayName("Permission Check - ADMIN không thực hiện thao tác trên tài nguyên học thuật")
     void testAdminAcademicResourceRestriction() {
         assertFalse(permissionEvaluator.canAdminModifyAcademicResource("ADMIN"));
+        assertFalse(permissionEvaluator.canAdminModifyAcademicResource("ROLE_ADMIN"));
     }
 }
