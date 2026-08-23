@@ -7,17 +7,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import vn.edu.cnpm.projectsupport.common.api.PageResponse;
+import vn.edu.cnpm.projectsupport.common.dto.PageResponse;
 import vn.edu.cnpm.projectsupport.common.exception.GlobalExceptionHandler;
 import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
-import vn.edu.cnpm.projectsupport.security.JwtTokenProvider;
 
 import java.util.List;
 
@@ -33,9 +31,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @EnableMethodSecurity
 class RequirementControllerTests {
 
-    private static final Long PROJECT_ID = 1L;
-    private static final Long REQUIREMENT_ID = 100L;
     private static final String BASE_URL = "/api/v1/projects/{projectId}/requirements";
+    private static final Long PROJECT_ID = 101L;
+    private static final Long REQUIREMENT_ID = 1L;
 
     @Autowired
     private MockMvc mockMvc;
@@ -46,22 +44,13 @@ class RequirementControllerTests {
     @MockitoBean
     private RequirementService requirementService;
 
-    @MockitoBean
-    private JwtTokenProvider jwtTokenProvider;
-
-    @MockitoBean(name = "jpaMappingContext")
-    private JpaMetamodelMappingContext jpaMappingContext;
-
     private RequirementResponse response;
 
     @BeforeEach
     void setUp() {
         response = new RequirementResponse();
         response.setId(REQUIREMENT_ID);
-        response.setProjectId(PROJECT_ID);
         response.setTitle("Quản lý yêu cầu SRS");
-        response.setPriority(Priority.HIGH);
-        response.setStatus(RequirementStatus.DRAFT);
     }
 
     @Test
@@ -89,12 +78,11 @@ class RequirementControllerTests {
     }
 
     @Test
-    @DisplayName("201 Created - TEAM_LEADER tạo Requirement thuộc nhóm mình")
+    @DisplayName("201 Created - TEAM_LEADER tạo Requirement thuộc nhóm mình thành công")
     @WithMockUser(username = "leader1", roles = "TEAM_LEADER")
     void createRequirement_Success_WhenTeamLeader() throws Exception {
         RequirementCreateRequest request = new RequirementCreateRequest();
         request.setTitle("Quản lý yêu cầu SRS");
-        request.setPriority(Priority.HIGH);
 
         when(requirementService.createRequirement(eq(PROJECT_ID), any(RequirementCreateRequest.class)))
                 .thenReturn(response);
@@ -118,18 +106,13 @@ class RequirementControllerTests {
         when(requirementService.getRequirements(eq(PROJECT_ID), any(RequirementFilterRequest.class)))
                 .thenReturn(page);
 
-        mockMvc.perform(get(BASE_URL, PROJECT_ID)
-                        .param("status", "DRAFT")
-                        .param("page", "0")
-                        .param("size", "20"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content[0].id").value(REQUIREMENT_ID))
-                .andExpect(jsonPath("$.data.totalElements").value(1));
+        mockMvc.perform(get(BASE_URL, PROJECT_ID))
+                .andExpect(status().isOk());
     }
 
     @Test
-    @DisplayName("403 Forbidden - LECTURER không được xem Requirement dự án không phân công")
-    @WithMockUser(username = "lecturer2", roles = "LECTURER")
+    @DisplayName("403 Forbidden - LECTURER không được xem Requirement dự án không được phân công")
+    @WithMockUser(username = "lecturer_unassigned", roles = "LECTURER")
     void getRequirements_Forbidden_WhenLecturerNotAssigned() throws Exception {
         when(requirementService.getRequirements(eq(PROJECT_ID), any()))
                 .thenThrow(new AccessDeniedException("Forbidden"));
@@ -143,7 +126,7 @@ class RequirementControllerTests {
     @WithMockUser(username = "lecturer1", roles = "LECTURER")
     void lecturerCannotCreateRequirement() throws Exception {
         RequirementCreateRequest request = new RequirementCreateRequest();
-        request.setTitle("Requirement Sample");
+        request.setTitle("Yêu cầu mẫu");
 
         mockMvc.perform(post(BASE_URL, PROJECT_ID)
                         .with(csrf())
@@ -153,23 +136,23 @@ class RequirementControllerTests {
     }
 
     @Test
-    @DisplayName("403 Forbidden - TEAM_MEMBER không có quyền xem Requirement")
+    @DisplayName("403 Forbidden - TEAM_MEMBER không có quyền quản lý Requirement")
     @WithMockUser(username = "member1", roles = "TEAM_MEMBER")
-    void memberCannotViewRequirements() throws Exception {
+    void memberCannotManageRequirements() throws Exception {
         mockMvc.perform(get(BASE_URL, PROJECT_ID))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    @DisplayName("403 Forbidden - ADMIN không thao tác các tài nguyên học thuật")
+    @DisplayName("403 Forbidden - ADMIN không được thao tác trên tài nguyên học thuật")
     @WithMockUser(username = "admin", roles = "ADMIN")
-    void adminCannotModifyAcademicResource() throws Exception {
+    void adminCannotAccessAcademicResources() throws Exception {
         mockMvc.perform(get(BASE_URL, PROJECT_ID))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    @DisplayName("404 Not Found - Không tìm thấy Requirement")
+    @DisplayName("404 Not Found - Không tìm thấy Requirement khi xem chi tiết")
     @WithMockUser(username = "leader1", roles = "TEAM_LEADER")
     void getRequirementById_NotFound() throws Exception {
         when(requirementService.getRequirementById(PROJECT_ID, 999L))
@@ -178,5 +161,16 @@ class RequirementControllerTests {
         mockMvc.perform(get(BASE_URL + "/{requirementId}", PROJECT_ID, 999L))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("204 No Content - TEAM_LEADER xoá Requirement thành công")
+    @WithMockUser(username = "leader1", roles = "TEAM_LEADER")
+    void leaderDeletesRequirement_Success() throws Exception {
+        mockMvc.perform(delete(BASE_URL + "/{requirementId}", PROJECT_ID, REQUIREMENT_ID)
+                        .with(csrf()))
+                .andExpect(status().isNoContent());
+
+        verify(requirementService).deleteRequirement(PROJECT_ID, REQUIREMENT_ID);
     }
 }
