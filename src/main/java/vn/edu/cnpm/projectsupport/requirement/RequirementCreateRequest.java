@@ -20,15 +20,8 @@ public class RequirementCreateRequest {
     private String alternativeFlow;
     private String exceptionFlow;
     private String postcondition;
-
     private Priority priority;
     private RequirementStatus status;
-
-    @JsonIgnore
-    @AssertTrue(message = "Creation status must be null or DRAFT")
-    public boolean isValidCreationStatus() {
-        return status == null || status == RequirementStatus.DRAFT;
-    }
 
     public RequirementCreateRequest() {
     }
@@ -40,9 +33,10 @@ public class RequirementCreateRequest {
         this.status = status;
     }
 
-    public RequirementCreateRequest(String title, String actor, String description, String precondition,
-                                  String mainFlow, String alternativeFlow, String exceptionFlow,
-                                  String postcondition, Priority priority, RequirementStatus status) {
+    public RequirementCreateRequest(
+            String title, String actor, String description, String precondition,
+            String mainFlow, String alternativeFlow, String exceptionFlow,
+            String postcondition, Priority priority, RequirementStatus status) {
         this.title = title;
         this.actor = actor;
         this.description = description;
@@ -55,83 +49,30 @@ public class RequirementCreateRequest {
         this.status = status;
     }
 
-    public String getTitle() {
-        return title;
+    @JsonIgnore
+    @AssertTrue(message = "Creation status must be null or DRAFT")
+    public boolean isValidCreationStatus() {
+        return status == null || status == RequirementStatus.DRAFT;
     }
 
-    public void setTitle(String title) {
-        this.title = title;
-    }
-
-    public String getActor() {
-        return actor;
-    }
-
-    public void setActor(String actor) {
-        this.actor = actor;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public String getPrecondition() {
-        return precondition;
-    }
-
-    public void setPrecondition(String precondition) {
-        this.precondition = precondition;
-    }
-
-    public String getMainFlow() {
-        return mainFlow;
-    }
-
-    public void setMainFlow(String mainFlow) {
-        this.mainFlow = mainFlow;
-    }
-
-    public String getAlternativeFlow() {
-        return alternativeFlow;
-    }
-
-    public void setAlternativeFlow(String alternativeFlow) {
-        this.alternativeFlow = alternativeFlow;
-    }
-
-    public String getExceptionFlow() {
-        return exceptionFlow;
-    }
-
-    public void setExceptionFlow(String exceptionFlow) {
-        this.exceptionFlow = exceptionFlow;
-    }
-
-    public String getPostcondition() {
-        return postcondition;
-    }
-
-    public void setPostcondition(String postcondition) {
-        this.postcondition = postcondition;
-    }
-
-    public Priority getPriority() {
-        return priority;
-    }
-
-    public void setPriority(Priority priority) {
-        this.priority = priority;
-    }
-
-    public RequirementStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(RequirementStatus status) {
-        this.status = status;
-    }
+    public String getTitle() { return title; }
+    public void setTitle(String title) { this.title = title; }
+    public String getActor() { return actor; }
+    public void setActor(String actor) { this.actor = actor; }
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+    public String getPrecondition() { return precondition; }
+    public void setPrecondition(String precondition) { this.precondition = precondition; }
+    public String getMainFlow() { return mainFlow; }
+    public void setMainFlow(String mainFlow) { this.mainFlow = mainFlow; }
+    public String getAlternativeFlow() { return alternativeFlow; }
+    public void setAlternativeFlow(String alternativeFlow) { this.alternativeFlow = alternativeFlow; }
+    public String getExceptionFlow() { return exceptionFlow; }
+    public void setExceptionFlow(String exceptionFlow) { this.exceptionFlow = exceptionFlow; }
+    public String getPostcondition() { return postcondition; }
+    public void setPostcondition(String postcondition) { this.postcondition = postcondition; }
+    public Priority getPriority() { return priority; }
+    public void setPriority(Priority priority) { this.priority = priority; }
+    public RequirementStatus getStatus() { return status; }
+    public void setStatus(RequirementStatus status) { this.status = status; }
 }
