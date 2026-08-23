@@ -7,7 +7,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
+import vn.edu.cnpm.projectsupport.project.repository.ProjectRepository;
+import vn.edu.cnpm.projectsupport.security.ProjectAuthorizationService;
 import vn.edu.cnpm.projectsupport.task.domain.*;
 import vn.edu.cnpm.projectsupport.task.dto.CreateTaskRequest;
 import vn.edu.cnpm.projectsupport.task.dto.TaskResponse;
@@ -21,10 +25,17 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class TaskServiceTest {
 
     @Mock
     private TaskRepository taskRepository;
+
+    @Mock
+    private ProjectRepository projectRepository;
+
+    @Mock
+    private ProjectAuthorizationService projectAuthorization;
 
     @InjectMocks
     private TaskServiceImpl taskService;
@@ -38,6 +49,10 @@ class TaskServiceTest {
 
     @BeforeEach
     void setUp() {
+        when(projectAuthorization.currentUserId()).thenReturn(leaderId);
+        when(projectRepository.existsById(projectId)).thenReturn(true);
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(mock(vn.edu.cnpm.projectsupport.project.domain.Project.class)));
+
         validRequest = new CreateTaskRequest();
         validRequest.setTitle("Viết Unit Test cho Task Service");
         validRequest.setDescription("Mô tả chi tiết task");
