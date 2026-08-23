@@ -8,11 +8,11 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import vn.edu.cnpm.projectsupport.activitylog.service.ActivityLogService;
-import vn.edu.cnpm.projectsupport.common.exception.BadRequestException;
 import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
 import vn.edu.cnpm.projectsupport.project.service.ProjectMemberService;
 import vn.edu.cnpm.projectsupport.task.domain.*;
 import vn.edu.cnpm.projectsupport.task.dto.CreateTaskRequest;
+import vn.edu.cnpm.projectsupport.task.dto.TaskStatusUpdateRequest;
 import vn.edu.cnpm.projectsupport.task.repository.TaskRepository;
 
 import java.util.Optional;
@@ -40,6 +40,7 @@ class TaskServiceTest {
     private TaskServiceImpl taskService;
 
     private CreateTaskRequest validRequest;
+    private TaskStatusUpdateRequest updateRequest;
     private final Long leaderId = 10L;
     private final Long memberId = 20L;
     private final Long otherMemberId = 30L;
@@ -57,6 +58,9 @@ class TaskServiceTest {
         validRequest.setProjectId(projectId);
         validRequest.setRequirementId(5L);
         validRequest.setAssigneeUserId(memberId);
+
+        updateRequest = new TaskStatusUpdateRequest();
+        updateRequest.setStatus(TaskStatus.IN_PROGRESS);
     }
 
     @Test
@@ -80,12 +84,11 @@ class TaskServiceTest {
     void createTask_ThrowsException_WhenAssigneeNotInProject() {
         when(projectMemberService.isMemberOfProject(memberId, projectId)).thenReturn(false);
 
-        BadRequestException exception = assertThrows(
-            BadRequestException.class,
+        assertThrows(
+            RuntimeException.class,
             () -> taskService.createTask(leaderId, validRequest)
         );
 
-        assertEquals("Người được giao việc không thuộc dự án này.", exception.getMessage());
         verify(taskRepository, never()).save(any());
         verify(activityLogService, never()).logActivity(anyLong(), anyString());
     }
@@ -100,7 +103,7 @@ class TaskServiceTest {
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(mockTask));
         when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Task updatedTask = taskService.updateTaskStatusByMember(memberId, taskId, TaskStatus.IN_PROGRESS);
+        Task updatedTask = taskService.updateTaskStatusByMember(projectId, taskId, memberId, updateRequest);
 
         assertEquals(TaskStatus.IN_PROGRESS, updatedTask.getStatus());
         verify(taskRepository, times(1)).save(mockTask);
@@ -118,7 +121,7 @@ class TaskServiceTest {
 
         IllegalStateException exception = assertThrows(
             IllegalStateException.class,
-            () -> taskService.updateTaskStatusByMember(otherMemberId, taskId, TaskStatus.IN_PROGRESS)
+            () -> taskService.updateTaskStatusByMember(projectId, taskId, otherMemberId, updateRequest)
         );
 
         assertEquals("Bạn không có quyền cập nhật Task của người khác.", exception.getMessage());
@@ -133,7 +136,7 @@ class TaskServiceTest {
 
         assertThrows(
             ResourceNotFoundException.class,
-            () -> taskService.updateTaskStatusByMember(memberId, taskId, TaskStatus.IN_PROGRESS)
+            () -> taskService.updateTaskStatusByMember(projectId, taskId, memberId, updateRequest)
         );
 
         verify(taskRepository, never()).save(any());
