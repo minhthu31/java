@@ -1,25 +1,41 @@
 package vn.edu.cnpm.projectsupport.requirement;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
+import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
+import vn.edu.cnpm.projectsupport.common.api.PageResponse;
+import vn.edu.cnpm.projectsupport.common.exception.GlobalExceptionHandler;
+import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
+import vn.edu.cnpm.projectsupport.security.JwtTokenProvider;
+
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(RequirementController.class)
+@Import(GlobalExceptionHandler.class)
+@EnableMethodSecurity
 class RequirementControllerTests {
+
+    private static final Long PROJECT_ID = 1L;
+    private static final Long REQUIREMENT_ID = 100L;
+    private static final String BASE_URL = "/api/v1/projects/{projectId}/requirements";
 
     @Autowired
     private MockMvc mockMvc;
@@ -30,26 +46,46 @@ class RequirementControllerTests {
     @MockBean
     private RequirementService requirementService;
 
-    private final String BASE_URL = "/api/v1/projects/1/requirements";
+    @MockBean
+    private JwtTokenProvider jwtTokenProvider;
+
+    @MockBean(name = "jpaMappingContext")
+    private JpaMetamodelMappingContext jpaMappingContext;
+
+    private RequirementResponse response;
+
+    @BeforeEach
+    void setUp() {
+        response = new RequirementResponse();
+        response.setId(REQUIREMENT_ID);
+        response.setProjectId(PROJECT_ID);
+        response.setTitle("Quản lý yêu cầu SRS");
+        response.setPriority(Priority.HIGH);
+        response.setStatus(RequirementStatus.DRAFT);
+    }
 
     @Test
     @DisplayName("401 Unauthorized - Khi chưa đăng nhập vào hệ thống")
     void shouldReturn401_WhenUnauthenticated() throws Exception {
-        mockMvc.perform(get(BASE_URL))
+        mockMvc.perform(get(BASE_URL, PROJECT_ID))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
     @DisplayName("400 Bad Request - Validation thất bại khi thiếu thông tin bắt buộc")
-    @WithMockUser(roles = "TEAM_LEADER")
+    @WithMockUser(username = "leader1", roles = "TEAM_LEADER")
     void shouldReturn400_WhenInvalidRequest() throws Exception {
         RequirementCreateRequest invalidRequest = new RequirementCreateRequest();
+        invalidRequest.setTitle(""); // Rỗng bắt buộc validate
 
-        mockMvc.perform(post(BASE_URL)
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(invalidRequest)))
-                .andExpect(status().isBadRequest());
+        mockMvc.perform(post(BASE_URL, PROJECT_ID)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidRequest)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+        verify(requirementService, never()).createRequirement(any(), any());
     }
 
     @Test
@@ -57,51 +93,90 @@ class RequirementControllerTests {
     @WithMockUser(username = "leader1", roles = "TEAM_LEADER")
     void createRequirement_Success_WhenTeamLeader() throws Exception {
         RequirementCreateRequest request = new RequirementCreateRequest();
-        request.setTitle("Functional Requirement 1");
+        request.setTitle("Quản lý yêu cầu SRS");
+        request.setPriority(Priority.HIGH);
 
-        RequirementResponse response = new RequirementResponse();
-        when(requirementService.createRequirement(eq(1L), any())).thenReturn(response);
+        when(requirementService.createRequirement(eq(PROJECT_ID), any(RequirementCreateRequest.class)))
+                .thenReturn(response);
 
-        mockMvc.perform(post(BASE_URL)
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated());
+        mockMvc.perform(post(BASE_URL, PROJECT_ID)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.id").value(REQUIREMENT_ID))
+                .andExpect(jsonPath("$.data.title").value("Quản lý yêu cầu SRS"));
     }
 
     @Test
     @DisplayName("200 OK - LECTURER xem Requirement dự án được phân công")
     @WithMockUser(username = "lecturer1", roles = "LECTURER")
     void getRequirements_Success_WhenLecturerAssigned() throws Exception {
-        mockMvc.perform(get(BASE_URL))
-                .andExpect(status().isOk());
+        PageResponse<RequirementResponse> page = new PageResponse<>(
+                List.of(response), 0, 20, 1, 1, true, true);
+
+        when(requirementService.getRequirements(eq(PROJECT_ID), any(RequirementFilterRequest.class)))
+                .thenReturn(page);
+
+        mockMvc.perform(get(BASE_URL, PROJECT_ID)
+                        .param("status", "DRAFT")
+                        .param("page", "0")
+                        .param("size", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].id").value(REQUIREMENT_ID))
+                .andExpect(jsonPath("$.data.totalElements").value(1));
     }
 
     @Test
     @DisplayName("403 Forbidden - LECTURER không được xem Requirement dự án không phân công")
     @WithMockUser(username = "lecturer2", roles = "LECTURER")
     void getRequirements_Forbidden_WhenLecturerNotAssigned() throws Exception {
-        when(requirementService.getRequirements(eq(1L)))
+        when(requirementService.getRequirements(eq(PROJECT_ID), any()))
                 .thenThrow(new AccessDeniedException("Forbidden"));
 
-        mockMvc.perform(get(BASE_URL))
+        mockMvc.perform(get(BASE_URL, PROJECT_ID))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("403 Forbidden - LECTURER không có quyền tạo Requirement")
+    @WithMockUser(username = "lecturer1", roles = "LECTURER")
+    void lecturerCannotCreateRequirement() throws Exception {
+        RequirementCreateRequest request = new RequirementCreateRequest();
+        request.setTitle("Requirement Sample");
+
+        mockMvc.perform(post(BASE_URL, PROJECT_ID)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("403 Forbidden - TEAM_MEMBER không có quyền xem Requirement")
+    @WithMockUser(username = "member1", roles = "TEAM_MEMBER")
+    void memberCannotViewRequirements() throws Exception {
+        mockMvc.perform(get(BASE_URL, PROJECT_ID))
                 .andExpect(status().isForbidden());
     }
 
     @Test
     @DisplayName("403 Forbidden - ADMIN không thao tác các tài nguyên học thuật")
-    @WithMockUser(roles = "ADMIN")
-    void createRequirement_Forbidden_WhenAdmin() throws Exception {
-        RequirementCreateRequest request = new RequirementCreateRequest();
-        request.setTitle("Admin Test");
-
-        when(requirementService.createRequirement(eq(1L), any()))
-                .thenThrow(new AccessDeniedException("Admin cannot modify academic resources"));
-
-        mockMvc.perform(post(BASE_URL)
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+    @WithMockUser(username = "admin", roles = "ADMIN")
+    void adminCannotModifyAcademicResource() throws Exception {
+        mockMvc.perform(get(BASE_URL, PROJECT_ID))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("404 Not Found - Không tìm thấy Requirement")
+    @WithMockUser(username = "leader1", roles = "TEAM_LEADER")
+    void getRequirementById_NotFound() throws Exception {
+        when(requirementService.getRequirementById(PROJECT_ID, 999L))
+                .thenThrow(new ResourceNotFoundException("Requirement not found"));
+
+        mockMvc.perform(get(BASE_URL + "/{requirementId}", PROJECT_ID, 999L))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
     }
 }
