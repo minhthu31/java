@@ -23,6 +23,8 @@ public class TaskResponse {
     private Long featureId;
     private Long sprintId;
     private Long assigneeUserId;
+    private TaskAssigneeResponse assignee;
+    private String jiraIssueKey;
     private Instant deadline;
     private Instant createdAt;
     private Instant updatedAt;
@@ -64,7 +66,29 @@ public class TaskResponse {
     public Long getFeatureId() { return featureId; }
     public Long getSprintId() { return sprintId; }
     public Long getAssigneeUserId() { return assigneeUserId; }
+    public TaskAssigneeResponse getAssignee() { return assignee; }
+    public String getJiraIssueKey() { return jiraIssueKey; }
     public Instant getDeadline() { return deadline; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
+
+    public void setId(Long id) { this.id = id; }
+    public void setProjectId(Long projectId) { this.projectId = projectId; }
+    public void setTitle(String title) { this.title = title; }
+    public void setDescription(String description) { this.description = description; }
+    public void setAcceptanceCriteria(String acceptanceCriteria) { this.acceptanceCriteria = acceptanceCriteria; }
+    public void setStatus(TaskStatus status) { this.status = status; }
+    public void setIssueType(TaskIssueType issueType) { this.issueType = issueType; }
+    public void setPriority(TaskPriority priority) { this.priority = priority; }
+    public void setClassification(TaskClassification classification) { this.classification = classification; }
+    public void setSyncStatus(SyncStatus syncStatus) { this.syncStatus = syncStatus; }
+    public void setRequirementId(Long requirementId) { this.requirementId = requirementId; }
+    public void setFeatureId(Long featureId) { this.featureId = featureId; }
+    public void setSprintId(Long sprintId) { this.sprintId = sprintId; }
+    public void setAssigneeUserId(Long assigneeUserId) { this.assigneeUserId = assigneeUserId; }
+    public void setAssignee(TaskAssigneeResponse assignee) { this.assignee = assignee; }
+    public void setJiraIssueKey(String jiraIssueKey) { this.jiraIssueKey = jiraIssueKey; }
+    public void setDeadline(Instant deadline) { this.deadline = deadline; }
+    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+    public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
 }

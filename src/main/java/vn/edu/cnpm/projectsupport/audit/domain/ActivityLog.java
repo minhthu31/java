@@ -7,6 +7,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -75,6 +76,40 @@ public class ActivityLog {
                 ? Map.of("status", newStatus)
                 : Map.of("status", newStatus, "reason", reason);
         return log;
+    }
+
+    public static ActivityLog taskUpdated(Long groupId, Long taskId, Long actorUserId, String title) {
+        ActivityLog log = base(groupId, taskId, actorUserId, "UPDATE");
+        log.newValue = Map.of("title", title);
+        return log;
+    }
+
+    public static ActivityLog taskAssigneeChanged(
+            Long groupId,
+            Long taskId,
+            Long actorUserId,
+            Long oldAssigneeUserId,
+            Long newAssigneeUserId) {
+        ActivityLog log = base(groupId, taskId, actorUserId, "ASSIGNEE_CHANGED");
+        log.oldValue = nullableValue("assigneeUserId", oldAssigneeUserId);
+        log.newValue = nullableValue("assigneeUserId", newAssigneeUserId);
+        return log;
+    }
+
+    public static ActivityLog taskDeleted(
+            Long groupId,
+            Long taskId,
+            Long actorUserId,
+            String oldStatus) {
+        ActivityLog log = base(groupId, taskId, actorUserId, "DELETE");
+        log.oldValue = Map.of("status", oldStatus);
+        return log;
+    }
+
+    private static Map<String, Object> nullableValue(String key, Object value) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put(key, value);
+        return result;
     }
 
     private static ActivityLog base(Long groupId, Long taskId, Long actorUserId, String action) {

@@ -9,11 +9,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import vn.edu.cnpm.projectsupport.audit.domain.ActivityLog;
 import vn.edu.cnpm.projectsupport.audit.repository.ActivityLogRepository;
+import vn.edu.cnpm.projectsupport.common.exception.AssigneeOutsideGroupException;
 import vn.edu.cnpm.projectsupport.common.exception.ForbiddenGroupScopeException;
 import vn.edu.cnpm.projectsupport.common.exception.InvalidStatusTransitionException;
+import vn.edu.cnpm.projectsupport.common.exception.ResourceInUseException;
 import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
 import vn.edu.cnpm.projectsupport.feature.repository.FeatureRepository;
 import vn.edu.cnpm.projectsupport.feature.domain.Feature;
+import vn.edu.cnpm.projectsupport.identity.repository.UserRepository;
 import vn.edu.cnpm.projectsupport.project.domain.Project;
 import vn.edu.cnpm.projectsupport.project.repository.ProjectRepository;
 import vn.edu.cnpm.projectsupport.requirement.RequirementRepository;
@@ -38,6 +41,7 @@ class TaskServiceTest {
     @Mock private RequirementRepository requirementRepository;
     @Mock private FeatureRepository featureRepository;
     @Mock private SprintRepository sprintRepository;
+    @Mock private UserRepository userRepository;
     @Mock private ProjectAuthorizationService projectAuthorization;
 
     private TaskServiceImpl taskService;
@@ -54,6 +58,7 @@ class TaskServiceTest {
                 requirementRepository,
                 featureRepository,
                 sprintRepository,
+                userRepository,
                 projectAuthorization);
         createReq = new CreateTaskRequest();
         createReq.setTitle("Phát triển API Task");
@@ -121,6 +126,80 @@ class TaskServiceTest {
 
         TaskResponse res = taskService.createTask(1L, 100L, createReq);
         assertEquals(TaskClassification.OTHER, res.getClassification());
+    }
+
+    @Test
+    @DisplayName("Idempotency-Key trả về Task đã tạo thay vì tạo trùng")
+    void createTask_IdempotencyKeyReturnsExistingTask() {
+        Task existing = createMockTask(1L, 1L, null, TaskStatus.TO_DO);
+        when(projectAuthorization.currentUserId()).thenReturn(100L);
+        when(taskRepository.findByIdempotencyKey("cnpm-61-create")).thenReturn(Optional.of(existing));
+
+        TaskResponse response = taskService.createTask(1L, createReq, " cnpm-61-create ");
+
+        assertEquals("Title", response.getTitle());
+        verify(taskRepository, never()).save(any(Task.class));
+    }
+
+    @Test
+    @DisplayName("Team Leader cập nhật nội dung Task và ghi Activity Log")
+    void updateTask_Success() {
+        Task existing = createMockTask(1L, 1L, null, TaskStatus.TO_DO);
+        UpdateTaskRequest request = new UpdateTaskRequest();
+        request.setTitle("Task API đã cập nhật");
+        request.setAcceptanceCriteria("Có đủ bảy endpoint");
+        request.setIssueType(TaskIssueType.TASK);
+        request.setPriority(TaskPriority.HIGH);
+        request.setAssigneeUserId(200L);
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(projectRepository.countActiveMember(1L, 200L)).thenReturn(1L);
+        when(taskRepository.save(existing)).thenReturn(existing);
+        when(projectAuthorization.currentUserId()).thenReturn(100L);
+
+        TaskResponse response = taskService.updateTask(1L, 1L, request);
+
+        assertEquals("Task API đã cập nhật", response.getTitle());
+        assertEquals(TaskPriority.HIGH, response.getPriority());
+        assertEquals(200L, response.getAssigneeUserId());
+        verify(activityLogRepository).save(any(ActivityLog.class));
+    }
+
+    @Test
+    @DisplayName("Từ chối gán Task cho người không thuộc group")
+    void updateAssignee_RejectsUserOutsideGroup() {
+        Task existing = createMockTask(1L, 1L, null, TaskStatus.TO_DO);
+        TaskAssigneeUpdateRequest request = new TaskAssigneeUpdateRequest();
+        request.setAssigneeUserId(999L);
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(projectRepository.countActiveMember(1L, 999L)).thenReturn(0L);
+
+        assertThrows(
+                AssigneeOutsideGroupException.class,
+                () -> taskService.updateTaskAssignee(1L, 1L, request));
+    }
+
+    @Test
+    @DisplayName("Không xóa Task đã liên kết commit hoặc PR")
+    void deleteTask_RejectsExternallyReferencedTask() {
+        Task existing = createMockTask(1L, 1L, null, TaskStatus.TO_DO);
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(taskRepository.countCommitLinksByTaskId(1L)).thenReturn(1L);
+
+        assertThrows(ResourceInUseException.class, () -> taskService.deleteTask(1L, 1L));
+        verify(taskRepository, never()).delete(any(Task.class));
+    }
+
+    @Test
+    @DisplayName("Xóa Task TO_DO chưa đồng bộ và chưa có liên kết")
+    void deleteTask_DeletesEligibleTaskAndLogsActivity() {
+        Task existing = createMockTask(1L, 1L, null, TaskStatus.TO_DO);
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(projectAuthorization.currentUserId()).thenReturn(100L);
+
+        taskService.deleteTask(1L, 1L);
+
+        verify(activityLogRepository).save(any(ActivityLog.class));
+        verify(taskRepository).delete(existing);
     }
 
     // --- TEST UPDATE STATUS & TRANSITIONS ---

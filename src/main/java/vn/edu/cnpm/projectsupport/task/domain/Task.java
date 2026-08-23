@@ -163,6 +163,22 @@ public class Task extends BaseEntity {
         this.description = description;
     }
 
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    public void setAcceptanceCriteria(String acceptanceCriteria) {
+        this.acceptanceCriteria = acceptanceCriteria;
+    }
+
+    public void setIssueType(TaskIssueType issueType) {
+        this.issueType = issueType;
+    }
+
+    public void setPriority(TaskPriority priority) {
+        this.priority = priority;
+    }
+
     public void setClassification(TaskClassification classification) {
         this.classification = classification;
     }
