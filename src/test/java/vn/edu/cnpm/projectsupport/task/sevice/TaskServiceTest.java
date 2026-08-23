@@ -26,6 +26,7 @@ import vn.edu.cnpm.projectsupport.task.domain.*;
 import vn.edu.cnpm.projectsupport.task.dto.*;
 import vn.edu.cnpm.projectsupport.task.repository.TaskRepository;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -142,6 +143,30 @@ class TaskServiceTest {
     }
 
     @Test
+    @DisplayName("Từ chối Idempotency-Key đã được dùng ở Project khác")
+    void createTask_IdempotencyKeyRejectsDifferentProject() {
+        Task existing = createMockTask(1L, 2L, null, TaskStatus.TO_DO);
+        when(projectAuthorization.currentUserId()).thenReturn(100L);
+        when(taskRepository.findByIdempotencyKey("shared-key")).thenReturn(Optional.of(existing));
+
+        assertThrows(ResourceInUseException.class,
+                () -> taskService.createTask(1L, createReq, "shared-key"));
+
+        verify(taskRepository, never()).save(any(Task.class));
+    }
+
+    @Test
+    @DisplayName("Từ chối tạo SUBTASK khi chưa có parentTaskId")
+    void createTask_RejectsUnsupportedSubtask() {
+        createReq.setIssueType(TaskIssueType.SUBTASK);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> taskService.createTask(1L, 100L, createReq));
+
+        verify(taskRepository, never()).save(any(Task.class));
+    }
+
+    @Test
     @DisplayName("Team Leader cập nhật nội dung Task và ghi Activity Log")
     void updateTask_Success() {
         Task existing = createMockTask(1L, 1L, null, TaskStatus.TO_DO);
@@ -179,6 +204,41 @@ class TaskServiceTest {
     }
 
     @Test
+    @DisplayName("Gán Task cho thành viên ACTIVE và ghi Activity Log")
+    void updateAssignee_AssignsActiveMemberAndLogsActivity() {
+        Task existing = createMockTask(1L, 1L, 100L, TaskStatus.TO_DO);
+        TaskAssigneeUpdateRequest request = new TaskAssigneeUpdateRequest();
+        request.setAssigneeUserId(200L);
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(projectRepository.countActiveMember(1L, 200L)).thenReturn(1L);
+        when(projectAuthorization.currentUserId()).thenReturn(100L);
+        when(taskRepository.save(existing)).thenReturn(existing);
+
+        TaskResponse response = taskService.updateTaskAssignee(1L, 1L, request);
+
+        assertEquals(200L, response.getAssigneeUserId());
+        verify(activityLogRepository).save(any(ActivityLog.class));
+        verify(taskRepository).save(existing);
+    }
+
+    @Test
+    @DisplayName("Team Member chỉ nhận danh sách Task được giao cho mình")
+    void getTasksByProject_MemberOnlyReceivesAssignedTasks() {
+        Task assignedTask = createMockTask(1L, 1L, 100L, TaskStatus.TO_DO);
+        when(projectAuthorization.isCurrentUserTeamMember(1L)).thenReturn(true);
+        when(projectAuthorization.currentUserId()).thenReturn(100L);
+        when(taskRepository.findByProjectIdAndAssigneeUserId(1L, 100L))
+                .thenReturn(List.of(assignedTask));
+
+        List<TaskResponse> responses = taskService.getTasksByProject(1L);
+
+        assertEquals(1, responses.size());
+        assertEquals(100L, responses.get(0).getAssigneeUserId());
+        verify(taskRepository).findByProjectIdAndAssigneeUserId(1L, 100L);
+        verify(taskRepository, never()).findByProjectId(1L);
+    }
+
+    @Test
     @DisplayName("Không xóa Task đã liên kết commit hoặc PR")
     void deleteTask_RejectsExternallyReferencedTask() {
         Task existing = createMockTask(1L, 1L, null, TaskStatus.TO_DO);
@@ -200,6 +260,18 @@ class TaskServiceTest {
 
         verify(activityLogRepository).save(any(ActivityLog.class));
         verify(taskRepository).delete(existing);
+    }
+
+    @Test
+    @DisplayName("Không xóa Task đã bắt đầu xử lý")
+    void deleteTask_RejectsTaskThatIsNotToDo() {
+        Task existing = createMockTask(1L, 1L, null, TaskStatus.IN_PROGRESS);
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(existing));
+
+        assertThrows(ResourceInUseException.class, () -> taskService.deleteTask(1L, 1L));
+
+        verify(taskRepository, never()).countJiraIssuesByTaskId(1L);
+        verify(taskRepository, never()).delete(any(Task.class));
     }
 
     // --- TEST UPDATE STATUS & TRANSITIONS ---
@@ -291,6 +363,37 @@ class TaskServiceTest {
 
         assertThrows(InvalidStatusTransitionException.class,
             () -> taskService.updateTaskStatusByMember(1L, 100L, 1L, updateReq));
+    }
+
+    @Test
+    @DisplayName("Team Leader được hủy Task với lý do")
+    void updateStatus_LeaderCanCancelTaskWithReason() {
+        Task mockTask = createMockTask(1L, 1L, null, TaskStatus.IN_PROGRESS);
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(mockTask));
+        when(taskRepository.save(mockTask)).thenReturn(mockTask);
+        when(projectAuthorization.currentUserId()).thenReturn(100L);
+        when(projectAuthorization.isCurrentUserLeader(1L)).thenReturn(true);
+        updateReq.setStatus(TaskStatus.CANCELLED);
+        updateReq.setReason("Không còn nằm trong phạm vi Sprint");
+
+        TaskResponse response = taskService.updateTaskStatus(1L, 1L, updateReq);
+
+        assertEquals(TaskStatus.CANCELLED, response.getStatus());
+        verify(activityLogRepository).save(any(ActivityLog.class));
+    }
+
+    @Test
+    @DisplayName("Thành viên không còn ACTIVE không được cập nhật Task")
+    void updateStatus_RejectsInactiveAssignedMember() {
+        Task mockTask = createMockTask(1L, 1L, 100L, TaskStatus.TO_DO);
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(mockTask));
+        when(projectRepository.countActiveMember(1L, 100L)).thenReturn(0L);
+        updateReq.setStatus(TaskStatus.IN_PROGRESS);
+
+        assertThrows(ForbiddenGroupScopeException.class,
+                () -> taskService.updateTaskStatusByMember(1L, 100L, 1L, updateReq));
+
+        verify(taskRepository, never()).save(any(Task.class));
     }
 
     private Task createMockTask(Long taskId, Long projectId, Long assigneeId, TaskStatus status) {

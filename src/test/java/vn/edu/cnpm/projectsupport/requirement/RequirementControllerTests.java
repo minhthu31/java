@@ -198,6 +198,40 @@ class RequirementControllerTests {
     }
 
     @Test
+    @WithMockUser(roles = "TEAM_MEMBER")
+    void memberCannotUpdateRequirement() throws Exception {
+        mockMvc.perform(put(BASE_URL + "/{requirementId}", PROJECT_ID, REQUIREMENT_ID)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Updated requirement\",\"priority\":\"HIGH\"}"))
+                .andExpect(status().isForbidden());
+
+        verify(requirementService, never()).updateRequirement(any(), any(), any());
+    }
+
+    @Test
+    @WithMockUser(roles = "LECTURER")
+    void lecturerCannotDeleteRequirement() throws Exception {
+        mockMvc.perform(delete(BASE_URL + "/{requirementId}", PROJECT_ID, REQUIREMENT_ID)
+                        .with(csrf()))
+                .andExpect(status().isForbidden());
+
+        verify(requirementService, never()).deleteRequirement(any(), any());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void adminCannotCreateRequirement() throws Exception {
+        mockMvc.perform(post(BASE_URL, PROJECT_ID)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Admin requirement\",\"priority\":\"HIGH\"}"))
+                .andExpect(status().isForbidden());
+
+        verify(requirementService, never()).createRequirement(any(), any());
+    }
+
+    @Test
     @WithMockUser(roles = "TEAM_LEADER")
     void invalidDeleteIsMappedToNotFound() throws Exception {
         doThrow(new ResourceNotFoundException("Requirement not found"))
