@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import vn.edu.cnpm.projectsupport.common.exception.GlobalExceptionHandler;
 import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
 import vn.edu.cnpm.projectsupport.security.JwtTokenProvider;
+import vn.edu.cnpm.projectsupport.security.SecurityConfig;
 import vn.edu.cnpm.projectsupport.task.dto.CreateTaskRequest;
 import vn.edu.cnpm.projectsupport.task.dto.TaskResponse;
 import vn.edu.cnpm.projectsupport.task.dto.TaskStatusUpdateRequest;
@@ -30,7 +31,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(TaskController.class)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, SecurityConfig.class})
 @EnableMethodSecurity
 class TaskControllerTest {
 
@@ -58,7 +59,7 @@ class TaskControllerTest {
     void setUp() {
         taskResponse = new TaskResponse();
         taskResponse.setId(TASK_ID);
-        taskResponse.setTitle("Implement Authentication Module");
+        taskResponse.setTitle("Implement Module");
     }
 
     @Test
@@ -72,33 +73,27 @@ class TaskControllerTest {
     @DisplayName("400 Bad Request - Validation thất bại khi thiếu thông tin bắt buộc")
     @WithMockUser(username = "leader1", roles = "TEAM_LEADER")
     void shouldReturn400_WhenInvalidTaskRequest() throws Exception {
-        CreateTaskRequest invalidRequest = new CreateTaskRequest();
-        invalidRequest.setTitle("");
-
         mockMvc.perform(post(BASE_URL, PROJECT_ID)
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(invalidRequest)))
+                        .content("{\"title\":\"\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
-        verify(taskService, never()).createTask(any(), any());
+        verify(taskService, never()).createTask(any(), any(), any());
     }
 
     @Test
     @DisplayName("201 Created - TEAM_LEADER tạo Task thành công")
     @WithMockUser(username = "leader1", roles = "TEAM_LEADER")
     void leaderCreatesTask_Success() throws Exception {
-        CreateTaskRequest request = new CreateTaskRequest();
-        request.setTitle("Implement Authentication Module");
-
         when(taskService.createTask(eq(PROJECT_ID), any(CreateTaskRequest.class), any()))
                 .thenReturn(taskResponse);
 
         mockMvc.perform(post(BASE_URL, PROJECT_ID)
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                        .content("{\"title\":\"Valid Task Title\",\"description\":\"Task Details\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.id").value(TASK_ID));
     }
@@ -107,15 +102,13 @@ class TaskControllerTest {
     @DisplayName("200 OK - TEAM_MEMBER cập nhật trạng thái Task")
     @WithMockUser(username = "member1", roles = "TEAM_MEMBER")
     void memberCanUpdateTaskStatus() throws Exception {
-        TaskStatusUpdateRequest statusRequest = new TaskStatusUpdateRequest();
-
         when(taskService.updateTaskStatus(eq(PROJECT_ID), eq(TASK_ID), any(TaskStatusUpdateRequest.class)))
                 .thenReturn(taskResponse);
 
         mockMvc.perform(patch(BASE_URL + "/{taskId}/status", PROJECT_ID, TASK_ID)
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(statusRequest)))
+                        .content("{\"status\":\"IN_PROGRESS\"}"))
                 .andExpect(status().isOk());
     }
 
@@ -123,12 +116,10 @@ class TaskControllerTest {
     @DisplayName("403 Forbidden - TEAM_MEMBER không có quyền cập nhật toàn bộ Task (chỉ TEAM_LEADER)")
     @WithMockUser(username = "member1", roles = "TEAM_MEMBER")
     void memberCannotUpdateTask() throws Exception {
-        UpdateTaskRequest updateRequest = new UpdateTaskRequest();
-
         mockMvc.perform(put(BASE_URL + "/{taskId}", PROJECT_ID, TASK_ID)
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(updateRequest)))
+                        .content("{\"title\":\"Updated Title\",\"description\":\"Updated Description\"}"))
                 .andExpect(status().isForbidden());
     }
 
