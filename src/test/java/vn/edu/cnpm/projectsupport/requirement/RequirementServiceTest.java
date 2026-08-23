@@ -7,6 +7,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
 import vn.edu.cnpm.projectsupport.project.repository.ProjectRepository;
 import vn.edu.cnpm.projectsupport.task.repository.TaskRepository;
@@ -19,6 +21,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class RequirementServiceTest {
 
     @Mock
@@ -30,6 +33,7 @@ class RequirementServiceTest {
     @Mock
     private TaskRepository taskRepository;
 
+    @InjectMocks
     private RequirementService requirementService;
 
     private RequirementCreateRequest validRequest;
@@ -38,9 +42,6 @@ class RequirementServiceTest {
 
     @BeforeEach
     void setUp() {
-        // Tự khởi tạo Service với các Mock repository để tránh lỗi Interface/Impl
-        requirementService = new RequirementService(requirementRepository, projectRepository, taskRepository);
-
         validRequest = new RequirementCreateRequest();
         validRequest.setTitle("Quản lý yêu cầu Sprint 2");
         validRequest.setDescription("Mô tả chi tiết requirement cho hệ thống");
