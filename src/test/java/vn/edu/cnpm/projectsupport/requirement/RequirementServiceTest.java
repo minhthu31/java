@@ -30,7 +30,7 @@ class RequirementServiceTest {
     private TaskRepository taskRepository;
 
     @InjectMocks
-    private RequirementService requirementService;
+    private RequirementServiceImpl requirementService;
 
     private RequirementCreateRequest validRequest;
     private final Long projectId = 1L;
