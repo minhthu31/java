@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import "@testing-library/jest-dom";
 import Dashboard from "./Dashboard";
@@ -15,13 +15,23 @@ jest.mock("react-router-dom", () => ({
     useNavigate: () => mockNavigate,
 }));
 
+const routerFutureFlags = {
+    v7_startTransition: true,
+    v7_relativeSplatPath: true,
+};
+
 describe("CNPM-63: Test tích hợp Dashboard", () => {
     beforeEach(() => {
         jest.clearAllMocks();
         localStorage.clear();
+        RequirementService.getRequirements.mockResolvedValue({
+            content: [],
+            totalPages: 1,
+            totalElements: 0,
+        });
     });
 
-    test("1. Sử dụng đúng currentUser và bảo toàn giao diện Sprint 1", () => {
+    test("1. Sử dụng đúng currentUser và bảo toàn giao diện Sprint 1", async () => {
         authService.currentUser.mockReturnValue({
             username: "leader.test",
             fullName: "Test Leader",
@@ -29,43 +39,50 @@ describe("CNPM-63: Test tích hợp Dashboard", () => {
             projectId: 1,
         });
 
-        render(
-            <MemoryRouter>
-                <Dashboard title="Trưởng nhóm" />
-            </MemoryRouter>,
-        );
+        await act(async () => {
+            render(
+                <MemoryRouter future={routerFutureFlags}>
+                    <Dashboard title="Trưởng nhóm" />
+                </MemoryRouter>,
+            );
+        });
 
         expect(screen.getByText(/Xin chào, Test Leader/i)).toBeInTheDocument();
         expect(screen.getByText(/leader\.test/i)).toBeInTheDocument();
         expect(screen.getByText("Yêu cầu dự án")).toBeInTheDocument();
         expect(screen.getByText("Công việc được giao")).toBeInTheDocument();
+        expect(screen.getByText("Xem trước SRS")).toBeInTheDocument();
         expect(screen.getByText("Tiến độ nhóm")).toBeInTheDocument();
         expect(screen.getByText("Hoạt động GitHub")).toBeInTheDocument();
     });
 
-    test("2. Không có user -> chuyển về login/unauthorized", () => {
+    test("2. Không có user -> chuyển về login/unauthorized", async () => {
         authService.currentUser.mockReturnValue(null);
 
-        render(
-            <MemoryRouter>
-                <Dashboard />
-            </MemoryRouter>,
-        );
+        await act(async () => {
+            render(
+                <MemoryRouter future={routerFutureFlags}>
+                    <Dashboard />
+                </MemoryRouter>,
+            );
+        });
 
         expect(mockNavigate).toHaveBeenCalledWith("/login");
     });
 
-    test("3. Không có project -> không gọi API và hiển thị yêu cầu chọn dự án", () => {
+    test("3. Không có project -> không gọi API và hiển thị yêu cầu chọn dự án", async () => {
         authService.currentUser.mockReturnValue({
             username: "leader.test",
             role: "TEAM_LEADER",
         });
 
-        render(
-            <MemoryRouter>
-                <Dashboard />
-            </MemoryRouter>,
-        );
+        await act(async () => {
+            render(
+                <MemoryRouter future={routerFutureFlags}>
+                    <Dashboard />
+                </MemoryRouter>,
+            );
+        });
 
         expect(screen.getByTestId("no-project-message")).toBeInTheDocument();
         expect(RequirementService.getRequirements).not.toHaveBeenCalled();
@@ -83,11 +100,13 @@ describe("CNPM-63: Test tích hợp Dashboard", () => {
             totalElements: 0,
         });
 
-        render(
-            <MemoryRouter>
-                <Dashboard />
-            </MemoryRouter>,
-        );
+        await act(async () => {
+            render(
+                <MemoryRouter future={routerFutureFlags}>
+                    <Dashboard />
+                </MemoryRouter>,
+            );
+        });
 
         expect(
             await screen.findByText("+ Tạo Requirement"),
@@ -106,11 +125,13 @@ describe("CNPM-63: Test tích hợp Dashboard", () => {
             totalElements: 0,
         });
 
-        render(
-            <MemoryRouter>
-                <Dashboard />
-            </MemoryRouter>,
-        );
+        await act(async () => {
+            render(
+                <MemoryRouter future={routerFutureFlags}>
+                    <Dashboard />
+                </MemoryRouter>,
+            );
+        });
 
         expect(await screen.findByText("Requirements")).toBeInTheDocument();
         expect(screen.queryByText("+ Tạo Requirement")).not.toBeInTheDocument();
@@ -118,18 +139,20 @@ describe("CNPM-63: Test tích hợp Dashboard", () => {
 
     test.each(["ADMIN", "STUDENT", "TEAM_MEMBER"])(
         "6. %s không gọi API Requirement theo CNPM-52",
-        (role) => {
+        async (role) => {
             authService.currentUser.mockReturnValue({
                 username: "user.test",
                 role: role,
                 projectId: 1,
             });
 
-            render(
-                <MemoryRouter>
-                    <Dashboard />
-                </MemoryRouter>,
-            );
+            await act(async () => {
+                render(
+                    <MemoryRouter future={routerFutureFlags}>
+                        <Dashboard />
+                    </MemoryRouter>,
+                );
+            });
 
             expect(
                 screen.getByTestId("unauthorized-message"),
@@ -138,21 +161,48 @@ describe("CNPM-63: Test tích hợp Dashboard", () => {
         },
     );
 
-    test("7. Đăng xuất gọi đúng authService.logout() và navigate về /login", () => {
+    test("7. Đăng xuất gọi đúng authService.logout() và navigate về /login", async () => {
         authService.currentUser.mockReturnValue({
             username: "leader.test",
             role: "TEAM_LEADER",
             projectId: 1,
         });
 
-        render(
-            <MemoryRouter>
-                <Dashboard />
-            </MemoryRouter>,
-        );
+        await act(async () => {
+            render(
+                <MemoryRouter future={routerFutureFlags}>
+                    <Dashboard />
+                </MemoryRouter>,
+            );
+        });
 
-        fireEvent.click(screen.getByText("Đăng xuất"));
+        await act(async () => {
+            fireEvent.click(screen.getByText("Đăng xuất"));
+        });
+
         expect(authService.logout).toHaveBeenCalled();
         expect(mockNavigate).toHaveBeenCalledWith("/login");
+    });
+
+    test("8. Team Leader mở được SRS Preview từ Dashboard", async () => {
+        authService.currentUser.mockReturnValue({
+            id: 3,
+            username: "leader.test",
+            role: "TEAM_LEADER",
+            projectId: 1,
+        });
+
+        await act(async () => {
+            render(
+                <MemoryRouter future={routerFutureFlags}>
+                    <Dashboard />
+                </MemoryRouter>,
+            );
+        });
+
+        fireEvent.click(screen.getByText("Xem trước SRS"));
+        expect(
+            await screen.findByRole("heading", { name: "SRS Preview" }),
+        ).toBeInTheDocument();
     });
 });

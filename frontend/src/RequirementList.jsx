@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { RequirementService } from "./RequirementService";
+import RequirementForm from "./RequirementForm";
 
 const PAGE_SIZE = 20;
 const STATUS_OPTIONS = ["", "DRAFT", "APPROVED", "SYNCED", "ARCHIVED"];
@@ -19,6 +20,8 @@ const RequirementList = ({ projectId, currentUserRole }) => {
     const [status, setStatus] = useState("");
     const [priority, setPriority] = useState("");
     const [jiraIssueKey, setJiraIssueKey] = useState("");
+    const [editingRequirementId, setEditingRequirementId] = useState(null);
+    const [showForm, setShowForm] = useState(false);
     const canManage = currentUserRole === "TEAM_LEADER";
     const canView =
         currentUserRole === "TEAM_LEADER" || currentUserRole === "LECTURER";
@@ -141,6 +144,24 @@ const RequirementList = ({ projectId, currentUserRole }) => {
         );
     }
 
+    if (canManage && showForm) {
+        return (
+            <RequirementForm
+                projectId={projectId}
+                requirementId={editingRequirementId}
+                onSuccess={() => {
+                    setShowForm(false);
+                    setEditingRequirementId(null);
+                    fetchRequirements();
+                }}
+                onCancel={() => {
+                    setShowForm(false);
+                    setEditingRequirementId(null);
+                }}
+            />
+        );
+    }
+
     return (
         <div style={{ padding: "24px", maxWidth: "1400px", margin: "0 auto" }}>
             <div
@@ -174,11 +195,10 @@ const RequirementList = ({ projectId, currentUserRole }) => {
                 {canManage && (
                     <button
                         type="button"
-                        onClick={() =>
-                            alert(
-                                "Chức năng tạo Requirement sẽ được tích hợp ở CNPM-64.",
-                            )
-                        }
+                        onClick={() => {
+                            setEditingRequirementId(null);
+                            setShowForm(true);
+                        }}
                         style={{
                             padding: "10px 16px",
                             backgroundColor: "#0052cc",
@@ -561,11 +581,12 @@ const RequirementList = ({ projectId, currentUserRole }) => {
                                             >
                                                 <button
                                                     type="button"
-                                                    onClick={() =>
-                                                        alert(
-                                                            "Chức năng sửa Requirement sẽ được tích hợp ở CNPM-64.",
-                                                        )
-                                                    }
+                                                    onClick={() => {
+                                                        setEditingRequirementId(
+                                                            req.id,
+                                                        );
+                                                        setShowForm(true);
+                                                    }}
                                                     style={{
                                                         padding: "5px 10px",
                                                         backgroundColor: "#fff",

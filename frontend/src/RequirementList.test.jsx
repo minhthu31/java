@@ -5,6 +5,21 @@ import RequirementList from "./RequirementList";
 import { RequirementService } from "./RequirementService";
 
 jest.mock("./RequirementService");
+jest.mock("./RequirementForm", () => {
+    const ReactModule = jest.requireActual("react");
+    return function MockRequirementForm({ requirementId, onCancel }) {
+        return ReactModule.createElement(
+            "div",
+            { "data-testid": "requirement-form" },
+            requirementId ? `Edit Requirement ${requirementId}` : "Create Requirement",
+            ReactModule.createElement(
+                "button",
+                { type: "button", onClick: onCancel },
+                "Cancel form",
+            ),
+        );
+    };
+});
 
 describe("CNPM-63: RequirementList Tests", () => {
     const mockPageData = {
@@ -49,6 +64,18 @@ describe("CNPM-63: RequirementList Tests", () => {
 
         expect(screen.getByText("+ Tạo Requirement")).toBeInTheDocument();
         expect(await screen.findByText("Sửa")).toBeInTheDocument();
+    });
+
+    test("2a. Nút tạo và sửa mở RequirementForm thật trong luồng tích hợp", async () => {
+        RequirementService.getRequirements.mockResolvedValue(mockPageData);
+        render(<RequirementList projectId={1} currentUserRole="TEAM_LEADER" />);
+
+        fireEvent.click(await screen.findByText("+ Tạo Requirement"));
+        expect(screen.getByText("Create Requirement")).toBeInTheDocument();
+
+        fireEvent.click(screen.getByText("Cancel form"));
+        fireEvent.click(await screen.findByText("Sửa"));
+        expect(screen.getByText("Edit Requirement 1")).toBeInTheDocument();
     });
 
     test("3. Lecturer chỉ xem, không thấy nút tạo/sửa", async () => {
