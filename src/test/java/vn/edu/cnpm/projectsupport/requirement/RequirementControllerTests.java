@@ -18,6 +18,7 @@ import vn.edu.cnpm.projectsupport.common.api.PageResponse;
 import vn.edu.cnpm.projectsupport.common.exception.GlobalExceptionHandler;
 import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
 import vn.edu.cnpm.projectsupport.security.JwtTokenProvider;
+import vn.edu.cnpm.projectsupport.security.SecurityConfig;
 
 import java.util.List;
 
@@ -29,7 +30,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(RequirementController.class)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, SecurityConfig.class})
 @EnableMethodSecurity
 class RequirementControllerTests {
 
@@ -71,13 +72,10 @@ class RequirementControllerTests {
     @DisplayName("400 Bad Request - Validation thất bại khi thiếu thông tin bắt buộc")
     @WithMockUser(username = "leader1", roles = "TEAM_LEADER")
     void shouldReturn400_WhenInvalidRequest() throws Exception {
-        RequirementCreateRequest invalidRequest = new RequirementCreateRequest();
-        invalidRequest.setTitle("");
-
         mockMvc.perform(post(BASE_URL, PROJECT_ID)
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(invalidRequest)))
+                        .content("{\"title\":\"\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
@@ -88,16 +86,13 @@ class RequirementControllerTests {
     @DisplayName("201 Created - TEAM_LEADER tạo Requirement thuộc nhóm mình thành công")
     @WithMockUser(username = "leader1", roles = "TEAM_LEADER")
     void createRequirement_Success_WhenTeamLeader() throws Exception {
-        RequirementCreateRequest request = new RequirementCreateRequest();
-        request.setTitle("Quản lý yêu cầu SRS");
-
-        when(requirementService.createRequirement(eq(PROJECT_ID), any(RequirementCreateRequest.class)))
+        when(requirementService.createRequirement(eq(PROJECT_ID), any()))
                 .thenReturn(response);
 
         mockMvc.perform(post(BASE_URL, PROJECT_ID)
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                        .content("{\"title\":\"Quản lý yêu cầu SRS\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.id").value(REQUIREMENT_ID))
                 .andExpect(jsonPath("$.data.title").value("Quản lý yêu cầu SRS"));
@@ -110,7 +105,7 @@ class RequirementControllerTests {
         PageResponse<RequirementResponse> page = new PageResponse<>(
                 List.of(response), 0, 20, 1, 1, true, true);
 
-        when(requirementService.getRequirements(eq(PROJECT_ID), any(RequirementFilterRequest.class)))
+        when(requirementService.getRequirements(eq(PROJECT_ID), any()))
                 .thenReturn(page);
 
         mockMvc.perform(get(BASE_URL, PROJECT_ID))
@@ -132,13 +127,10 @@ class RequirementControllerTests {
     @DisplayName("403 Forbidden - LECTURER không có quyền tạo Requirement")
     @WithMockUser(username = "lecturer1", roles = "LECTURER")
     void lecturerCannotCreateRequirement() throws Exception {
-        RequirementCreateRequest request = new RequirementCreateRequest();
-        request.setTitle("Requirement Sample");
-
         mockMvc.perform(post(BASE_URL, PROJECT_ID)
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                        .content("{\"title\":\"Requirement Sample\"}"))
                 .andExpect(status().isForbidden());
     }
 
