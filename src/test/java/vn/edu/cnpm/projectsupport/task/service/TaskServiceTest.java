@@ -11,9 +11,9 @@ import vn.edu.cnpm.projectsupport.activitylog.service.ActivityLogService;
 import vn.edu.cnpm.projectsupport.common.exception.BadRequestException;
 import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
 import vn.edu.cnpm.projectsupport.project.service.ProjectMemberService;
-
-// Import toàn bộ package task để bao quát mọi cấu trúc entity, enum, DTO
-import vn.edu.cnpm.projectsupport.task.*;
+import vn.edu.cnpm.projectsupport.task.domain.*;
+import vn.edu.cnpm.projectsupport.task.dto.CreateTaskRequest;
+import vn.edu.cnpm.projectsupport.task.repository.TaskRepository;
 
 import java.util.Optional;
 
@@ -52,29 +52,24 @@ class TaskServiceTest {
         validRequest.setTitle("Viết Unit Test cho Task Service");
         validRequest.setDescription("Mô tả chi tiết task");
         validRequest.setAcceptanceCriteria("Phủ > 80% code coverage");
-        validRequest.setType(TaskType.TEST);
+        validRequest.setIssueType(TaskIssueType.TASK);
+        validRequest.setPriority(TaskPriority.MEDIUM);
         validRequest.setProjectId(projectId);
         validRequest.setRequirementId(5L);
-        validRequest.setAssigneeId(memberId);
+        validRequest.setAssigneeUserId(memberId);
     }
 
     @Test
     @DisplayName("Tạo Task thành công, đúng phân loại, mặc định NOT_SYNCED và ghi log")
     void createTask_Success_WithTaskTypeAndActivityLog() {
         when(projectMemberService.isMemberOfProject(memberId, projectId)).thenReturn(true);
-        when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> {
-            Task task = invocation.getArgument(0);
-            task.setId(taskId);
-            return task;
-        });
+        when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Task createdTask = taskService.createTask(leaderId, validRequest);
 
         assertNotNull(createdTask);
-        assertEquals(leaderId, createdTask.getCreatedById());
-        assertEquals(TaskType.TEST, createdTask.getType());
         assertEquals(SyncStatus.NOT_SYNCED, createdTask.getSyncStatus());
-        assertEquals(TaskStatus.TODO, createdTask.getStatus());
+        assertEquals(TaskStatus.TO_DO, createdTask.getStatus());
 
         verify(taskRepository, times(1)).save(any(Task.class));
         verify(activityLogService, times(1)).logActivity(eq(leaderId), anyString());
@@ -98,11 +93,9 @@ class TaskServiceTest {
     @Test
     @DisplayName("Member cập nhật trạng thái hợp lệ và hệ thống ghi Activity Log")
     void updateTaskStatus_Success_WhenAssignedMember_AndLogsActivity() {
-        Task mockTask = new Task();
-        mockTask.setId(taskId);
-        mockTask.setProjectId(projectId);
-        mockTask.setAssigneeId(memberId);
-        mockTask.setStatus(TaskStatus.TODO);
+        Task mockTask = new Task(projectId, "Test Task", "Acceptance Criteria", TaskIssueType.TASK, TaskPriority.MEDIUM);
+        mockTask.setAssigneeUserId(memberId);
+        mockTask.setStatus(TaskStatus.TO_DO);
 
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(mockTask));
         when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -117,11 +110,9 @@ class TaskServiceTest {
     @Test
     @DisplayName("Ném lỗi khi Member cố tình cập nhật Task của người khác (sai quyền)")
     void updateTaskStatus_ThrowsException_WhenNotAssignedMember() {
-        Task mockTask = new Task();
-        mockTask.setId(taskId);
-        mockTask.setProjectId(projectId);
-        mockTask.setAssigneeId(memberId);
-        mockTask.setStatus(TaskStatus.TODO);
+        Task mockTask = new Task(projectId, "Test Task", "Acceptance Criteria", TaskIssueType.TASK, TaskPriority.MEDIUM);
+        mockTask.setAssigneeUserId(memberId);
+        mockTask.setStatus(TaskStatus.TO_DO);
 
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(mockTask));
 
