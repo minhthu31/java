@@ -23,9 +23,10 @@ class PermissionEvaluatorServiceTest {
     }
 
     @Test
-    @DisplayName("Permission Check - TEAM_LEADER quản lý dữ liệu thuộc nhóm mình")
+    @DisplayName("Permission Check - TEAM_LEADER chỉ quản lý dữ liệu thuộc nhóm mình")
     void testTeamLeaderGroupScope() {
         assertTrue(permissionEvaluator.isLeaderOfGroup("LEADER_01", 50L));
+        assertFalse(permissionEvaluator.isLeaderOfGroup("LEADER_01", 99L));
     }
 
     @Test
