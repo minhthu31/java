@@ -5,7 +5,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
@@ -13,7 +13,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import vn.edu.cnpm.projectsupport.common.dto.PageResponse;
+import vn.edu.cnpm.projectsupport.common.api.PageResponse;
 import vn.edu.cnpm.projectsupport.common.exception.GlobalExceptionHandler;
 import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
 
@@ -112,7 +112,7 @@ class RequirementControllerTests {
 
     @Test
     @DisplayName("403 Forbidden - LECTURER không được xem Requirement dự án không được phân công")
-    @WithMockUser(username = "lecturer_unassigned", roles = "LECTURER")
+    @WithMockUser(username = "lecturer2", roles = "LECTURER")
     void getRequirements_Forbidden_WhenLecturerNotAssigned() throws Exception {
         when(requirementService.getRequirements(eq(PROJECT_ID), any()))
                 .thenThrow(new AccessDeniedException("Forbidden"));
@@ -126,7 +126,7 @@ class RequirementControllerTests {
     @WithMockUser(username = "lecturer1", roles = "LECTURER")
     void lecturerCannotCreateRequirement() throws Exception {
         RequirementCreateRequest request = new RequirementCreateRequest();
-        request.setTitle("Yêu cầu mẫu");
+        request.setTitle("Requirement Sample");
 
         mockMvc.perform(post(BASE_URL, PROJECT_ID)
                         .with(csrf())
@@ -144,7 +144,7 @@ class RequirementControllerTests {
     }
 
     @Test
-    @DisplayName("403 Forbidden - ADMIN không được thao tác trên tài nguyên học thuật")
+    @DisplayName("403 Forbidden - ADMIN không thao tác các tài nguyên học thuật")
     @WithMockUser(username = "admin", roles = "ADMIN")
     void adminCannotAccessAcademicResources() throws Exception {
         mockMvc.perform(get(BASE_URL, PROJECT_ID))
