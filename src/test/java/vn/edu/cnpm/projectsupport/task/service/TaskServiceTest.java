@@ -77,8 +77,8 @@ class TaskServiceTest {
         when(mockProject.getGroupId()).thenReturn(999L);
 
         when(projectRepository.findById(projectId)).thenReturn(Optional.of(mockProject));
-        when(projectRepository.countActiveLeader(projectId, leaderId)).thenReturn(1);
-        when(projectRepository.countActiveMember(projectId, memberId)).thenReturn(1);
+        when(projectRepository.countActiveLeader(projectId, leaderId)).thenReturn(1L);
+        when(projectRepository.countActiveMember(projectId, memberId)).thenReturn(1L);
         when(projectAuthorization.currentUserId()).thenReturn(leaderId);
         when(userRepository.findById(any())).thenReturn(Optional.empty());
         when(taskRepository.findJiraIssueKeyByTaskId(any())).thenReturn(Optional.empty());
