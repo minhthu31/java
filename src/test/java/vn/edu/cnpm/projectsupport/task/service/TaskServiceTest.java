@@ -27,7 +27,7 @@ class TaskServiceTest {
     private TaskRepository taskRepository;
 
     @InjectMocks
-    private TaskService taskService;
+    private TaskServiceImpl taskService;
 
     private CreateTaskRequest validRequest;
     private TaskStatusUpdateRequest updateRequest;
