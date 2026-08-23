@@ -16,6 +16,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import vn.edu.cnpm.projectsupport.common.exception.GlobalExceptionHandler;
 import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
 
+// Thêm các dòng import DTO này (nếu project để trong thư mục dto):
+import vn.edu.cnpm.projectsupport.task.dto.TaskCreateRequest;
+import vn.edu.cnpm.projectsupport.task.dto.TaskUpdateRequest;
+import vn.edu.cnpm.projectsupport.task.dto.TaskResponse;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -48,7 +53,6 @@ class TaskControllerTest {
         taskResponse = new TaskResponse();
         taskResponse.setId(TASK_ID);
         taskResponse.setTitle("Implement Authentication Module");
-        taskResponse.setAssigneeUsername("member1");
     }
 
     @Test
@@ -76,7 +80,7 @@ class TaskControllerTest {
     }
 
     @Test
-    @DisplayName("200 OK - TEAM_MEMBER xem và cập nhật Task được giao (Assignee)")
+    @DisplayName("200 OK - TEAM_MEMBER cập nhật Task được giao")
     @WithMockUser(username = "member1", roles = "TEAM_MEMBER")
     void memberCanUpdateAssignedTask() throws Exception {
         TaskUpdateRequest updateRequest = new TaskUpdateRequest();
