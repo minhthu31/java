@@ -76,6 +76,7 @@ public class JiraRestClient implements JiraClient {
         } catch (RuntimeException exception) {
             throw new JiraClientException("Không thể gọi Jira", exception);
     }
+    }
 
     private JsonNode handleResponse(JiraHttpResponse response) {
         int status = response.statusCode();
