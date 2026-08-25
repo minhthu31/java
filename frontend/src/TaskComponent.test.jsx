@@ -68,7 +68,7 @@ const mockComprehensiveTasks = {
             status: "BLOCKED",
             assignee: { id: 11, username: "dev2", displayName: "Dev Two" },
             deadline: null,
-            syncStatus: "FAILED",
+            syncStatus: "SYNC_FAILED",
             jiraIssueKey: null,
             acceptanceCriteria: "Tiêu chí nghiệm thu 4",
             description: "",
