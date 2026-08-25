@@ -1,7 +1,7 @@
 package vn.edu.cnpm.projectsupport.integration.jira;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.time.Duration;
@@ -51,32 +51,56 @@ public class JiraRestClient implements JiraClient {
     }
 
     private JsonNode get(String path) {
-        String baseUrl = normalizeBaseUrl(properties.getBaseUrl());
-        String token = secretService.decrypt(properties.getEncryptedToken());
-        String credentials = properties.authenticationIdentifier() + ":" + token;
-        String basicAuth = Base64.getEncoder().encodeToString(credentials.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    String baseUrl = normalizeBaseUrl(properties.getBaseUrl());
+    String token = secretService.decrypt(properties.getEncryptedToken());
 
-        Map<String, String> headers = new HashMap<>();
-        headers.put("Authorization", "Basic " + basicAuth);
-        headers.put("Accept", "application/json");
+    String credentials = properties.authenticationIdentifier() + ":" + token;
 
-        // Do not log token, credentials, headers, or response body.
-        try {
-            JiraHttpResponse response = transport.get(
-                    baseUrl + path, headers, safeTimeout(properties.getTimeout()));
-            return handleResponse(response);
-        } catch (JiraClientException | JiraAuthenticationException | JiraAuthorizationException
-                 | JiraProjectNotFoundException | JiraRateLimitException exception) {
-            throw exception;
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            throw new JiraConnectionException("Không thể kết nối Jira", exception);
-        } catch (IOException exception) {
-            throw new JiraConnectionException("Không thể kết nối Jira", exception);
-        } catch (RuntimeException exception) {
-            throw new JiraClientException("Không thể gọi Jira", exception);
+    String basicAuth = Base64.getEncoder().encodeToString(
+            credentials.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+    Map<String, String> headers = new HashMap<>();
+    headers.put("Authorization", "Basic " + basicAuth);
+    headers.put("Accept", "application/json");
+
+    // Do not log token, credentials, headers, or response body.
+    try {
+        JiraHttpResponse response = transport.get(
+                baseUrl + path,
+                headers,
+                safeTimeout(properties.getTimeout()));
+
+        return handleResponse(response);
+
+    } catch (JiraClientException
+             | JiraAuthenticationException
+             | JiraAuthorizationException
+             | JiraProjectNotFoundException
+             | JiraRateLimitException exception) {
+
+        throw exception;
+
+    } catch (InterruptedException exception) {
+
+        Thread.currentThread().interrupt();
+
+        throw new JiraConnectionException(
+                "Không thể kết nối Jira",
+                exception);
+
+    } catch (IOException exception) {
+
+        throw new JiraConnectionException(
+                "Không thể kết nối Jira",
+                exception);
+
+    } catch (RuntimeException exception) {
+
+        throw new JiraClientException(
+                "Không thể gọi Jira",
+                exception);
     }
-    }
+}
 
     private JsonNode handleResponse(JiraHttpResponse response) {
         int status = response.statusCode();
@@ -90,7 +114,7 @@ public class JiraRestClient implements JiraClient {
         if (status < 200 || status >= 300) throw new JiraClientException("Jira request thất bại");
         try {
             return objectMapper.readTree(response.body() == null ? "{}" : response.body());
-        } catch (IOException exception) {
+        } catch (Exception exception) {
             throw new JiraClientException("Jira trả về dữ liệu không hợp lệ", exception);
         }
     }

@@ -6,10 +6,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Map;
@@ -89,7 +90,8 @@ class JiraRestClientTest {
         assertEquals("PROJ", result.projectKey());
         assertEquals("Project Support", result.projectName());
 
-        verify(secretService).decrypt("encrypted-token");
+       verify(secretService, times(2))
+        .decrypt("encrypted-token");
     }
 
     @Test
@@ -179,7 +181,7 @@ class JiraRestClientTest {
                 () -> client.getProject("PROJ")
         );
 
-        assertEquals(Duration.ofSeconds(30), exception.retryAfter());
+        assertEquals(Duration.ofSeconds(30), exception.getRetryAfter());
     }
 
     @Test
@@ -270,16 +272,16 @@ class JiraRestClientTest {
     }
 
     @Test
-    void shouldRejectInvalidProjectKey() {
+void shouldRejectInvalidProjectKey() throws Exception {
 
-        assertThrows(
-                JiraClientException.class,
-                () -> client.getProject("invalid project key")
-        );
+    assertThrows(
+            JiraClientException.class,
+            () -> client.getProject("invalid project key")
+    );
 
-        verify(transport, never())
-                .get(any(), any(), any());
-    }
+    verify(transport, never())
+            .get(any(), any(), any());
+     }
 
     @Test
     void shouldUseDefaultTimeoutWhenTimeoutIsInvalid()
@@ -316,36 +318,35 @@ class JiraRestClientTest {
     }
 
     @Test
-    void shouldLimitTimeoutToTwoMinutes()
-            throws Exception {
+void shouldLimitTimeoutToTwoMinutes() throws Exception {
 
-        properties.setTimeout(Duration.ofMinutes(10));
+    properties.setTimeout(Duration.ofMinutes(10));
 
-        when(secretService.decrypt("encrypted-token"))
-                .thenReturn("jira-secret-token");
+    when(secretService.decrypt("encrypted-token"))
+            .thenReturn("jira-secret-token");
 
-        when(transport.get(
-                eq("https://example.atlassian.net/rest/api/3/project/PROJ"),
-                any(),
-                eq(Duration.ofMinutes(2))))
-                .thenReturn(new JiraHttpResponse(
-                        200,
-                        """
-                        {
-                            "id": "10001",
-                            "key": "PROJ",
-                            "name": "Project Support",
-                            "self": "https://example.atlassian.net/rest/api/3/project/PROJ"
-                        }
-                        """,
-                        Map.of()));
+    when(transport.get(
+            eq("https://example.atlassian.net/rest/api/3/project/PROJ"),
+            any(),
+            eq(Duration.ofMinutes(2))))
+            .thenReturn(new JiraHttpResponse(
+                    200,
+                    """
+                    {
+                        "id": "10001",
+                        "key": "PROJ",
+                        "name": "Project Support",
+                        "self": "https://example.atlassian.net/rest/api/3/project/PROJ"
+                    }
+                    """,
+                    Map.of()));
 
-        client.getProject("PROJ");
+    client.getProject("PROJ");
 
-        verify(transport).get(
-                eq("https://example.atlassian.net/rest/api/3/project/PROJ"),
-                any(),
-                eq(Duration.ofMinutes(2))
+    verify(transport).get(
+            eq("https://example.atlassian.net/rest/api/3/project/PROJ"),
+            any(),
+            eq(Duration.ofMinutes(2))
         );
     }
 }
