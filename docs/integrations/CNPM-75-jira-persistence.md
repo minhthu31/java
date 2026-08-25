@@ -94,8 +94,9 @@ schema do Flyway tạo. Bộ test kiểm tra:
 - lọc/sắp xếp SyncLog theo project, status và correlation ID;
 - dữ liệu project khác không lọt vào kết quả.
 
-Kết quả chạy toàn bộ backend test: **119/119 test đạt**, không có failure hoặc
-error. Riêng `JiraPersistenceRepositoryTests` có **8/8 test đạt**.
+Sau khi tích hợp CNPM-74, kết quả chạy toàn bộ backend test là **125/125 test
+đạt**, không có failure hoặc error. Riêng `JiraPersistenceRepositoryTests` có
+**8/8 test đạt**.
 
 ## 6. Acceptance checklist
 
