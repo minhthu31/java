@@ -134,10 +134,14 @@ NEW_FEATURE, FEATURE_RELATED, AUTO_TEST, AUTO_LOG, OTHER
 ### 3.6 SyncStatus
 
 ```text
-NOT_SYNCED, PENDING, SYNCING, SYNCED, FAILED
+NOT_SYNCED, SYNCING, SYNCED, SYNC_FAILED
 ```
 
 Client chỉ đọc `syncStatus`. Chỉ sync service được cập nhật giá trị này.
+
+Từ CNPM-74, đây là bộ enum duy nhất dùng cho Sprint 3. Dữ liệu cũ `PENDING`
+được chuyển thành `SYNCING`; dữ liệu cũ `FAILED` được chuyển thành
+`SYNC_FAILED` qua migration V5.
 
 ### 3.7 SrsGenerationStatus
 
@@ -448,4 +452,3 @@ Quy tắc bắt buộc:
 - [x] Validation, status transition và error code được mô tả.
 - [x] Quy tắc thay đổi contract giữa các branch được mô tả.
 - [x] Không chứa secret hoặc thông tin đăng nhập thật.
-

@@ -119,6 +119,11 @@ Flyway là nguồn chuẩn của schema. Không dùng `spring.jpa.hibernate.ddl-
 - [CNPM-72 - Báo cáo tích hợp Sprint 2](docs/sprint-reports/CNPM-72-sprint-2-integration-report.md)
 - [CNPM-73 - Tổng kết Sprint 2 và Sprint 3 Backlog](docs/sprint-reports/CNPM-73-sprint-2-review-and-sprint-3-backlog.md)
 
+## Sprint 3
+
+- [CNPM-74 - Jira field mapping và API contract](docs/integrations/CNPM-74-jira-field-mapping-and-api-contract.md)
+- [CNPM-74 - OpenAPI Jira Integration v1](docs/api/jira-integration-v1.openapi.yaml)
+
 ## Quy trình Git
 
 - Branch: `<type>/<JIRA-KEY>-<short-description>`

@@ -1,0 +1,518 @@
+openapi: 3.0.3
+info:
+  title: CNPM Jira Integration API
+  version: 1.0.0
+  description: >-
+    Contract chốt bởi CNPM-74 cho cấu hình Jira Cloud, kiểm tra kết nối,
+    đồng bộ Task, retry và đọc Jira Issue. Base path dùng chung với Task API
+    CNPM-60/CNPM-61.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: Jira Integration
+
+paths:
+  /projects/{projectId}/integrations/jira/config:
+    get:
+      tags: [Jira Integration]
+      operationId: getJiraConnection
+      summary: Đọc cấu hình Jira đã che thông tin bí mật
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Cấu hình hiện tại; không bao giờ trả API token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JiraConnectionApiResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Jira Integration]
+      operationId: configureJiraConnection
+      summary: Tạo hoặc thay thế cấu hình Jira của project
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JiraConnectionRequest'
+      responses:
+        '200':
+          description: Cấu hình đã được lưu; secret chỉ được trả dưới dạng configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JiraConnectionApiResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /projects/{projectId}/integrations/jira/test-connection:
+    post:
+      tags: [Jira Integration]
+      operationId: testJiraConnection
+      summary: Kiểm tra credential, user hiện tại và Jira project
+      description: >-
+        Backend gọi GET /rest/api/3/myself và xác minh Jira project đã cấu hình.
+        Credential sai hoặc thiếu quyền là kết quả connected=false; lỗi mạng phía
+        nhà cung cấp trả 502.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Kết quả kiểm tra kết nối
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JiraConnectionTestApiResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '502':
+          $ref: '#/components/responses/JiraUnavailable'
+
+  /projects/{projectId}/integrations/jira/tasks/{taskId}/sync:
+    post:
+      tags: [Jira Integration]
+      operationId: syncTaskToJira
+      summary: Tạo hoặc cập nhật Jira Issue từ Task local
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/TaskId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Yêu cầu đồng bộ được nhận hoặc trả lại kết quả cùng idempotency key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JiraTaskSyncApiResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /projects/{projectId}/integrations/jira/tasks/{taskId}/retry:
+    post:
+      tags: [Jira Integration]
+      operationId: retryTaskJiraSync
+      summary: Thử lại một lần đồng bộ đã thất bại
+      description: Chỉ chấp nhận khi Task đang ở SYNC_FAILED và lỗi được đánh dấu retryable.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/TaskId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Retry được nhận hoặc trả lại kết quả cùng idempotency key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JiraTaskSyncApiResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /projects/{projectId}/integrations/jira/issues/{jiraIssueKey}:
+    get:
+      tags: [Jira Integration]
+      operationId: getJiraIssue
+      summary: Đọc snapshot chuẩn hóa của một Jira Issue
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/JiraIssueKey'
+      responses:
+        '200':
+          description: Jira Issue trong phạm vi project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JiraIssueApiResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '502':
+          $ref: '#/components/responses/JiraUnavailable'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    TaskId:
+      name: taskId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    JiraIssueKey:
+      name: jiraIssueKey
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[A-Z][A-Z0-9_]*-[1-9][0-9]*$'
+        example: CNPM-74
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: >-
+        Khóa duy nhất cho cùng project, task, operation và request fingerprint;
+        dài 8-100 ký tự. Gửi lại cùng khóa phải nhận cùng kết quả, không tạo Jira Issue mới.
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 100
+
+  schemas:
+    JiraAuthType:
+      type: string
+      enum: [API_TOKEN]
+    SyncStatus:
+      type: string
+      enum: [NOT_SYNCED, SYNCING, SYNCED, SYNC_FAILED]
+
+    JiraConnectionRequest:
+      type: object
+      additionalProperties: false
+      required: [siteUrl, projectKey, email, apiToken, authType]
+      properties:
+        siteUrl:
+          type: string
+          format: uri
+          pattern: '^https://[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?/?$'
+          maxLength: 500
+          example: https://example.atlassian.net
+        projectKey:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_]{1,29}$'
+          example: CNPM
+        email:
+          type: string
+          format: email
+          maxLength: 320
+        apiToken:
+          type: string
+          format: password
+          writeOnly: true
+          maxLength: 2048
+        authType:
+          $ref: '#/components/schemas/JiraAuthType'
+
+    JiraConnection:
+      type: object
+      required: [projectId, siteUrl, projectKey, authType, configured]
+      properties:
+        projectId:
+          type: integer
+          format: int64
+        siteUrl:
+          type: string
+          format: uri
+          pattern: '^https://[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?/?$'
+        jiraProjectId:
+          type: string
+          nullable: true
+        projectKey:
+          type: string
+        authType:
+          $ref: '#/components/schemas/JiraAuthType'
+        configured:
+          type: boolean
+        lastTestedAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastTestSucceeded:
+          type: boolean
+          nullable: true
+
+    JiraConnectionTest:
+      type: object
+      required: [projectId, connected, projectKey, testedAt]
+      properties:
+        projectId:
+          type: integer
+          format: int64
+        connected:
+          type: boolean
+        accountId:
+          type: string
+          nullable: true
+        displayName:
+          type: string
+          nullable: true
+        jiraProjectId:
+          type: string
+          nullable: true
+        projectKey:
+          type: string
+        testedAt:
+          type: string
+          format: date-time
+        errorCode:
+          type: string
+          nullable: true
+        message:
+          type: string
+          nullable: true
+
+    JiraTaskSync:
+      type: object
+      required: [taskId, syncStatus, attempt, retryable]
+      properties:
+        taskId:
+          type: integer
+          format: int64
+        syncStatus:
+          $ref: '#/components/schemas/SyncStatus'
+        jiraIssueId:
+          type: string
+          nullable: true
+        jiraIssueKey:
+          type: string
+          nullable: true
+        jiraIssueUrl:
+          type: string
+          format: uri
+          nullable: true
+        attempt:
+          type: integer
+          minimum: 1
+        retryable:
+          type: boolean
+        syncedAt:
+          type: string
+          format: date-time
+          nullable: true
+        errorCode:
+          type: string
+          nullable: true
+        message:
+          type: string
+          nullable: true
+
+    JiraIssue:
+      type: object
+      required:
+        - projectId
+        - jiraIssueId
+        - jiraIssueKey
+        - jiraIssueUrl
+        - summary
+        - issueType
+      properties:
+        projectId:
+          type: integer
+          format: int64
+        localTaskId:
+          type: integer
+          format: int64
+          nullable: true
+        jiraIssueId:
+          type: string
+        jiraIssueKey:
+          type: string
+        jiraIssueUrl:
+          type: string
+          format: uri
+        summary:
+          type: string
+        description:
+          type: string
+          nullable: true
+          description: Bản plain text chuẩn hóa từ ADF; không trả raw HTML.
+        issueType:
+          type: string
+        priority:
+          type: string
+          nullable: true
+        jiraStatusId:
+          type: string
+          nullable: true
+        jiraStatusName:
+          type: string
+          nullable: true
+        jiraStatusCategory:
+          type: string
+          nullable: true
+          description: Giá trị Jira statusCategory.key như new, indeterminate hoặc done.
+        assigneeAccountId:
+          type: string
+          nullable: true
+        assigneeDisplayName:
+          type: string
+          nullable: true
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+        jiraSprintId:
+          type: integer
+          format: int64
+          nullable: true
+        sprintName:
+          type: string
+          nullable: true
+        parentIssueKey:
+          type: string
+          nullable: true
+        remoteUpdatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastSyncedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ApiError:
+      type: object
+      required: [code, message, correlationId, timestamp]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        correlationId:
+          type: string
+        fieldErrors:
+          type: object
+          additionalProperties:
+            type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    JiraConnectionApiResponse:
+      type: object
+      required: [data, timestamp]
+      properties:
+        data:
+          $ref: '#/components/schemas/JiraConnection'
+        timestamp:
+          type: string
+          format: date-time
+    JiraConnectionTestApiResponse:
+      type: object
+      required: [data, timestamp]
+      properties:
+        data:
+          $ref: '#/components/schemas/JiraConnectionTest'
+        timestamp:
+          type: string
+          format: date-time
+    JiraTaskSyncApiResponse:
+      type: object
+      required: [data, timestamp]
+      properties:
+        data:
+          $ref: '#/components/schemas/JiraTaskSync'
+        timestamp:
+          type: string
+          format: date-time
+    JiraIssueApiResponse:
+      type: object
+      required: [data, timestamp]
+      properties:
+        data:
+          $ref: '#/components/schemas/JiraIssue'
+        timestamp:
+          type: string
+          format: date-time
+
+  responses:
+    BadRequest:
+      description: Request hoặc header không hợp lệ
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Unauthorized:
+      description: Chưa đăng nhập vào hệ thống local
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Forbidden:
+      description: Không có quyền trong project
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    NotFound:
+      description: Project, Task, cấu hình hoặc Jira Issue không tồn tại trong phạm vi
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Conflict:
+      description: Idempotency key khác fingerprint hoặc Task đang được đồng bộ
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Unprocessable:
+      description: Thiếu Jira field mapping, assignee, sprint hoặc epic hợp lệ
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    JiraUnavailable:
+      description: Jira Cloud timeout, rate limited hoặc không sẵn sàng
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
