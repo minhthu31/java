@@ -4,6 +4,7 @@ import { currentUser, logout } from "./authService";
 import RequirementList from "./RequirementList";
 import SrsPreview from "./SrsPreview";
 import TaskComponent from "./TaskComponent";
+import JiraConfigComponent from "./JiraConfigComponent";
 
 const getRoleTitle = (role) => {
     switch (role) {
@@ -196,6 +197,7 @@ export default function Dashboard({ title }) {
                 >
                     Yêu cầu dự án
                 </button>
+
                 <button
                     type="button"
                     onClick={() => setActiveTab("tasks")}
@@ -218,6 +220,7 @@ export default function Dashboard({ title }) {
                 >
                     Công việc được giao
                 </button>
+
                 {canAccessRequirement && (
                     <button
                         type="button"
@@ -232,8 +235,7 @@ export default function Dashboard({ title }) {
                                     ? "4px solid #0052cc"
                                     : "4px solid transparent",
                             fontWeight: activeTab === "srs" ? 600 : 500,
-                            color:
-                                activeTab === "srs" ? "#0052cc" : "#172b4d",
+                            color: activeTab === "srs" ? "#0052cc" : "#172b4d",
                             cursor: "pointer",
                             textAlign: "left",
                             boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
@@ -243,6 +245,7 @@ export default function Dashboard({ title }) {
                         Xem trước SRS
                     </button>
                 )}
+
                 <button
                     type="button"
                     onClick={() => setActiveTab("progress")}
@@ -265,6 +268,7 @@ export default function Dashboard({ title }) {
                 >
                     Tiến độ nhóm
                 </button>
+
                 <button
                     type="button"
                     onClick={() => setActiveTab("github")}
@@ -287,6 +291,35 @@ export default function Dashboard({ title }) {
                 >
                     Hoạt động GitHub
                 </button>
+
+                {userRole === "ADMIN" && (
+                    <button
+                        type="button"
+                        data-testid="jira-config-tab"
+                        onClick={() => setActiveTab("jira-config")}
+                        style={{
+                            backgroundColor: "#fff",
+                            padding: "16px",
+                            borderRadius: "6px",
+                            border: "none",
+                            borderLeft:
+                                activeTab === "jira-config"
+                                    ? "4px solid #0052cc"
+                                    : "4px solid transparent",
+                            fontWeight: activeTab === "jira-config" ? 600 : 500,
+                            color:
+                                activeTab === "jira-config"
+                                    ? "#0052cc"
+                                    : "#172b4d",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                            fontSize: "14px",
+                        }}
+                    >
+                        Cấu hình Jira
+                    </button>
+                )}
             </section>
 
             <section
@@ -297,6 +330,8 @@ export default function Dashboard({ title }) {
                     overflow: "hidden",
                 }}
             >
+                {activeTab === "jira-config" && <JiraConfigComponent />}
+
                 {activeTab === "requirements" && (
                     <>
                         {!canAccessRequirement ? (
