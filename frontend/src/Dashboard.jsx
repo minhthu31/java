@@ -71,6 +71,8 @@ export default function Dashboard({ title }) {
     const canAccessRequirement =
         userRole === "TEAM_LEADER" || userRole === "LECTURER";
 
+    const canAccessJira = userRole === "ADMIN" || userRole === "TEAM_LEADER";
+
     return (
         <main
             className="dashboard"
@@ -292,7 +294,7 @@ export default function Dashboard({ title }) {
                     Hoạt động GitHub
                 </button>
 
-                {userRole === "ADMIN" && (
+                {canAccessJira && (
                     <button
                         type="button"
                         data-testid="jira-config-tab"
@@ -330,7 +332,35 @@ export default function Dashboard({ title }) {
                     overflow: "hidden",
                 }}
             >
-                {activeTab === "jira-config" && <JiraConfigComponent />}
+                {activeTab === "jira-config" &&
+                    (!selectedProjectId ? (
+                        <div
+                            data-testid="no-project-message"
+                            style={{
+                                padding: "40px 24px",
+                                textAlign: "center",
+                                color: "#6b778c",
+                            }}
+                        >
+                            <h3
+                                style={{
+                                    color: "#172b4d",
+                                    marginBottom: "8px",
+                                }}
+                            >
+                                Chưa chọn dự án
+                            </h3>
+                            <p style={{ margin: 0, fontSize: "14px" }}>
+                                Vui lòng chọn một project trước khi cấu hình
+                                tích hợp Jira.
+                            </p>
+                        </div>
+                    ) : (
+                        <JiraConfigComponent
+                            projectId={selectedProjectId}
+                            role={userRole}
+                        />
+                    ))}
 
                 {activeTab === "requirements" && (
                     <>
