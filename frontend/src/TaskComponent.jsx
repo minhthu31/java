@@ -429,24 +429,7 @@ export default function TaskComponent({ projectId }) {
                         SYNCING
                     </span>
                 );
-            case "PENDING":
-                return (
-                    <span
-                        data-testid="sync-badge"
-                        style={{
-                            padding: "3px 8px",
-                            fontSize: "11px",
-                            fontWeight: "bold",
-                            borderRadius: "4px",
-                            background: "#e0e7ff",
-                            color: "#4338ca",
-                            border: "1px solid #c7d2fe",
-                        }}
-                    >
-                        PENDING
-                    </span>
-                );
-            case "FAILED":
+            case "SYNC_FAILED":
                 return (
                     <span
                         data-testid="sync-badge"
@@ -460,7 +443,7 @@ export default function TaskComponent({ projectId }) {
                             border: "1px solid #fca5a5",
                         }}
                     >
-                        FAILED
+                        SYNC_FAILED
                     </span>
                 );
             default:
