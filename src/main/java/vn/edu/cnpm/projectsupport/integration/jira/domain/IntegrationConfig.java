@@ -31,12 +31,16 @@ public class IntegrationConfig extends BaseEntity {
     @Column(name = "account_identifier", length = 255)
     private String accountIdentifier;
 
-    @Column(name = "encrypted_secret", nullable = false, columnDefinition = "TEXT")
+    @Column(
+            name = "encrypted_secret",
+            nullable = false,
+            columnDefinition = "TEXT")
     private String encryptedSecret;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
-    private IntegrationConfigStatus status = IntegrationConfigStatus.NOT_CHECKED;
+    private IntegrationConfigStatus status =
+            IntegrationConfigStatus.NOT_CHECKED;
 
     @Column(name = "last_checked_at")
     private Instant lastCheckedAt;
@@ -51,6 +55,7 @@ public class IntegrationConfig extends BaseEntity {
             Long projectId,
             IntegrationProvider provider,
             String encryptedSecret) {
+
         this.projectId = projectId;
         this.provider = provider;
         this.encryptedSecret = encryptedSecret;
@@ -101,15 +106,21 @@ public class IntegrationConfig extends BaseEntity {
         this.encryptedSecret = encryptedSecret;
     }
 
-    public void setStatus(IntegrationConfigStatus status) {
+    public void setStatus(
+            IntegrationConfigStatus status) {
+
         this.status = status;
     }
 
-    public void setLastCheckedAt(Instant lastCheckedAt) {
+    public void setLastCheckedAt(
+            Instant lastCheckedAt) {
+
         this.lastCheckedAt = lastCheckedAt;
     }
 
-    public void setLastErrorCode(String lastErrorCode) {
+    public void setLastErrorCode(
+            String lastErrorCode) {
+
         this.lastErrorCode = lastErrorCode;
     }
 }
