@@ -15,6 +15,21 @@ public class Project extends BaseEntity {
     @Column(name = "name", nullable = false, length = 200)
     private String name;
 
+<<<<<<< HEAD
+=======
+    @Column(name = "jira_site_url", length = 500)
+    private String jiraSiteUrl;
+
+    @Column(name = "jira_project_id", length = 100)
+    private String jiraProjectId;
+
+    @Column(name = "jira_project_key", length = 30)
+    private String jiraProjectKey;
+
+    @Column(name = "jira_last_synced_at")
+    private java.time.Instant jiraLastSyncedAt;
+
+>>>>>>> 6f00c2c (CNPM-81 implement Jira project issue backlog sprint sync)
     @Column(name = "status", nullable = false, length = 20)
     private String status = "ACTIVE";
 
@@ -37,4 +52,33 @@ public class Project extends BaseEntity {
     public String getStatus() {
         return status;
     }
+<<<<<<< HEAD
+=======
+
+    public String getJiraSiteUrl() { 
+        return jiraSiteUrl; 
+    }
+    public String getJiraProjectId() { 
+        return jiraProjectId; 
+    }
+    public String getJiraProjectKey() { 
+        return jiraProjectKey; 
+    }
+    public java.time.Instant getJiraLastSyncedAt() { 
+        return jiraLastSyncedAt; 
+    }
+
+    public void setJiraSiteUrl(String jiraSiteUrl) { 
+        this.jiraSiteUrl = jiraSiteUrl; 
+    }
+    public void setJiraProjectId(String jiraProjectId) { 
+        this.jiraProjectId = jiraProjectId; 
+    }
+    public void setJiraProjectKey(String jiraProjectKey) { 
+        this.jiraProjectKey = jiraProjectKey; 
+    }
+    public void setJiraLastSyncedAt(java.time.Instant jiraLastSyncedAt) { 
+        this.jiraLastSyncedAt = jiraLastSyncedAt; 
+    }
+>>>>>>> 6f00c2c (CNPM-81 implement Jira project issue backlog sprint sync)
 }

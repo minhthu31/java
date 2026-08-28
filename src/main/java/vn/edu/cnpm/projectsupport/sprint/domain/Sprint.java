@@ -24,12 +24,24 @@ public class Sprint extends BaseEntity {
     @Column(name = "state", nullable = false, length = 30)
     private String state;
 
+<<<<<<< HEAD
+=======
+    @Column(name = "goal", length = 1000)
+    private String goal;
+
+>>>>>>> 6f00c2c (CNPM-81 implement Jira project issue backlog sprint sync)
     @Column(name = "start_date")
     private Instant startDate;
 
     @Column(name = "end_date")
     private Instant endDate;
 
+<<<<<<< HEAD
+=======
+    @Column(name = "last_synced_at")
+    private Instant lastSyncedAt;
+
+>>>>>>> 6f00c2c (CNPM-81 implement Jira project issue backlog sprint sync)
     protected Sprint() {
     }
 
@@ -39,6 +51,7 @@ public class Sprint extends BaseEntity {
         this.state = state;
     }
 
+<<<<<<< HEAD
     public Long getProjectId() { return projectId; }
     public Long getJiraSprintId() { return jiraSprintId; }
     public String getName() { return name; }
@@ -49,4 +62,52 @@ public class Sprint extends BaseEntity {
     public void setJiraSprintId(Long jiraSprintId) { this.jiraSprintId = jiraSprintId; }
     public void setStartDate(Instant startDate) { this.startDate = startDate; }
     public void setEndDate(Instant endDate) { this.endDate = endDate; }
+=======
+    public Long getProjectId() { 
+        return projectId; 
+    }
+    public Long getJiraSprintId() { 
+        return jiraSprintId; 
+    }
+    public String getName() { 
+        return name; 
+    }
+    public String getState() { 
+        return state; 
+    }
+    public String getGoal() { 
+        return goal; 
+    }
+    public Instant getStartDate() { 
+        return startDate; 
+    }
+    public Instant getEndDate() { 
+        return endDate; 
+    }
+    public Instant getLastSyncedAt() { 
+        return lastSyncedAt; 
+    }
+
+    public void setJiraSprintId(Long jiraSprintId) { 
+        this.jiraSprintId = jiraSprintId; 
+    }
+    public void setName(String name) { 
+        this.name = name; 
+    }
+    public void setState(String state) { 
+        this.state = state; 
+    }
+    public void setGoal(String goal) { 
+        this.goal = goal; 
+    }
+    public void setStartDate(Instant startDate) { 
+        this.startDate = startDate; 
+    }
+    public void setEndDate(Instant endDate) { 
+        this.endDate = endDate; 
+    }
+    public void setLastSyncedAt(Instant lastSyncedAt) { 
+        this.lastSyncedAt = lastSyncedAt; 
+    }
+>>>>>>> 6f00c2c (CNPM-81 implement Jira project issue backlog sprint sync)
 }

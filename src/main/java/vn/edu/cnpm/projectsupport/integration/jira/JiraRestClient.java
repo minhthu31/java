@@ -12,6 +12,21 @@ import java.time.Duration;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
+<<<<<<< HEAD
+=======
+import java.util.ArrayList;
+import java.util.List;
+
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraIssueDto;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraIssueFieldsDto;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraPageDto;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraPriorityDto;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraProjectDto;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraSprintDto;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraSprintPageDto;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraStatusDto;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraUserDto;
+>>>>>>> 6f00c2c (CNPM-81 implement Jira project issue backlog sprint sync)
 import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Service;
@@ -25,6 +40,7 @@ import vn.edu.cnpm.projectsupport.security.IntegrationSecretService;
 @Service
 public class JiraRestClient implements JiraClient {
 
+<<<<<<< HEAD
     private static final Pattern PROJECT_KEY_PATTERN =
             Pattern.compile("[A-Z][A-Z0-9_]{1,29}");
 
@@ -33,18 +49,27 @@ public class JiraRestClient implements JiraClient {
 
     private static final Duration MAX_TIMEOUT =
             Duration.ofMinutes(2);
+=======
+    private static final Pattern PROJECT_KEY_PATTERN = Pattern.compile("[A-Z][A-Z0-9_]{1,29}");
+    private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration MAX_TIMEOUT = Duration.ofMinutes(2);
+>>>>>>> 6f00c2c (CNPM-81 implement Jira project issue backlog sprint sync)
 
     private final IntegrationConfigRepository integrationConfigRepository;
     private final IntegrationSecretService secretService;
     private final JiraHttpTransport transport;
     private final ObjectMapper objectMapper;
 
+<<<<<<< HEAD
     public JiraRestClient(
             IntegrationConfigRepository integrationConfigRepository,
             IntegrationSecretService secretService,
             JiraHttpTransport transport,
             ObjectMapper objectMapper) {
 
+=======
+    public JiraRestClient(IntegrationConfigRepository integrationConfigRepository, IntegrationSecretService secretService, JiraHttpTransport transport, ObjectMapper objectMapper) {
+>>>>>>> 6f00c2c (CNPM-81 implement Jira project issue backlog sprint sync)
         this.integrationConfigRepository = integrationConfigRepository;
         this.secretService = secretService;
         this.transport = transport;
@@ -52,6 +77,7 @@ public class JiraRestClient implements JiraClient {
     }
 
     @Override
+<<<<<<< HEAD
     public JiraConnectionResult testConnection(
             Long projectId,
             String projectKey) {
@@ -223,6 +249,181 @@ public class JiraRestClient implements JiraClient {
                             headers,
                             safeTimeout());
 
+=======
+    public JiraConnectionResult testConnection(Long projectId, String projectKey) {
+        IntegrationConfig config = getIntegrationConfig(projectId);
+        validateProjectKey(projectKey);
+
+        get(config, "/rest/api/3/myself");
+        JiraProject project = getProject(projectId, projectKey);
+
+        get(config, "/rest/api/3/issue/createmeta?projectKeys=" + projectKey + "&expand=projects.issuetypes.fields");
+        return new JiraConnectionResult(true, project.id(), project.key(), project.name());
+    }
+
+    @Override
+    public JiraPageDto<JiraIssueDto> getIssues(Long projectId, String projectKey, int startAt, int maxResults) {
+        validatePage(startAt, maxResults);
+        validateProjectKey(projectKey);
+        IntegrationConfig config = getIntegrationConfig(projectId);
+        JsonNode node = get(config, "/rest/api/3/search?jql=project%3D" + projectKey + "&startAt=" + startAt + "&maxResults=" + maxResults);
+        return toIssuePage(node);
+    }
+
+    @Override
+    public JiraPageDto<JiraIssueDto> getBacklog(Long projectId, String projectKey, int startAt, int maxResults) {
+        validatePage(startAt, maxResults);
+        validateProjectKey(projectKey);
+        IntegrationConfig config = getIntegrationConfig(projectId);
+        long boardId = findBoardId(config, projectKey);
+        JsonNode node = get(config, "/rest/agile/1.0/board/" + boardId + "/backlog?startAt=" + startAt + "&maxResults=" + maxResults);
+        return toIssuePage(node);
+    }
+
+    @Override
+    public JiraSprintPageDto getSprints(Long projectId, String projectKey, int startAt, int maxResults) {
+        validatePage(startAt, maxResults);
+        validateProjectKey(projectKey);
+        IntegrationConfig config = getIntegrationConfig(projectId);
+        long boardId = findBoardId(config, projectKey);
+        JsonNode node = get(config, "/rest/agile/1.0/board/" + boardId + "/sprint?startAt=" + startAt + "&maxResults=" + maxResults);
+        return toSprintPage(node);
+    }
+
+    @Override
+    public JiraProject getProject(Long projectId, String projectKey) {
+        validateProjectKey(projectKey);
+        IntegrationConfig config = getIntegrationConfig(projectId);
+        JsonNode node = get(config, "/rest/api/3/project/" + projectKey);
+
+        return new JiraProject(text(node, "id"), text(node, "key"), text(node, "name"), text(node, "self"));
+    }
+
+    private void validatePage(int startAt, int maxResults) {
+        if (startAt < 0 || maxResults <= 0 || maxResults > 100) {
+            throw new JiraClientException("Pagination không hợp lệ");
+        }
+    }
+
+    private long findBoardId(IntegrationConfig config, String projectKey) {
+        JsonNode node = get(config, "/rest/agile/1.0/board?projectKeyOrId=" + projectKey + "&startAt=0&maxResults=50");
+        JsonNode values = node.get("values");
+        if (values == null || !values.isArray() || values.isEmpty()) {
+            throw new JiraClientException("Jira project chưa có Scrum/Kanban board");
+        }
+        JsonNode id = values.get(0).get("id");
+        if (id == null || id.isNull()) {
+            throw new JiraClientException("Jira board không có id hợp lệ");
+        }
+        return id.asLong();
+    }
+
+    private JiraPageDto<JiraIssueDto> toIssuePage(JsonNode node) {
+        int startAt = number(node, "startAt", 0);
+        int maxResults = number(node, "maxResults", 0);
+        int total = number(node, "total", startAt);
+        Boolean isLast = node.has("isLast") && !node.get("isLast").isNull() ? node.get("isLast").asBoolean() : null;
+        List<JiraIssueDto> issues = new ArrayList<>();
+        JsonNode array = node.get("issues");
+        if (array != null && array.isArray()) {
+            for (JsonNode item : array) {
+                issues.add(toIssueDto(item));
+            }
+        }
+        return new JiraPageDto<>(startAt, maxResults, total, isLast, issues);
+    }
+
+    private JiraIssueDto toIssueDto(JsonNode node) {
+        JsonNode fields = node.get("fields");
+        String id = text(node, "id");
+        String key = text(node, "key");
+        String summary = text(fields, "summary");
+        JiraStatusDto status = null;
+        JsonNode statusNode = fields == null ? null : fields.get("status");
+        if (statusNode != null && !statusNode.isNull()) {
+            status = new JiraStatusDto(text(statusNode, "id"), text(statusNode, "name"));
+        }
+        JiraPriorityDto priority = null;
+        JsonNode priorityNode = fields == null ? null : fields.get("priority");
+        if (priorityNode != null && !priorityNode.isNull()) {
+            priority = new JiraPriorityDto(text(priorityNode, "id"), text(priorityNode, "name"));
+        }
+        JiraUserDto assignee = null;
+        JsonNode assigneeNode = fields == null ? null : fields.get("assignee");
+        if (assigneeNode != null && !assigneeNode.isNull()) {
+            assignee = new JiraUserDto(text(assigneeNode, "accountId"), text(assigneeNode, "displayName"),
+                    text(assigneeNode, "emailAddress"), assigneeNode.path("active").asBoolean(false));
+        }
+        JiraProjectDto project = null;
+        JsonNode projectNode = fields == null ? null : fields.get("project");
+        if (projectNode != null && !projectNode.isNull()) {
+            project = new JiraProjectDto(text(projectNode, "id"), text(projectNode, "key"), text(projectNode, "name"));
+        }
+        return new JiraIssueDto(id, key, new JiraIssueFieldsDto(summary, null, status, priority, assignee, project, null, null, null),
+                text(node, "updated"));
+    }
+
+    private JiraSprintPageDto toSprintPage(JsonNode node) {
+        int startAt = number(node, "startAt", 0);
+        int maxResults = number(node, "maxResults", 0);
+        int total = number(node, "total", startAt);
+        Boolean isLast = node.has("isLast") ? node.get("isLast").asBoolean() : null;
+        List<JiraSprintDto> values = new ArrayList<>();
+        JsonNode array = node.get("values");
+        if (array != null && array.isArray()) {
+            for (JsonNode item : array) {
+                values.add(new JiraSprintDto(text(item, "id"), text(item, "name"), text(item, "state"),
+                        text(item, "goal"), text(item, "startDate"), text(item, "endDate")));
+            }
+        }
+        return new JiraSprintPageDto(startAt, maxResults, total, isLast, values);
+    }
+
+    private int number(JsonNode node, String field, int fallback) {
+        JsonNode value = node.get(field);
+        return value == null || value.isNull() ? fallback : value.asInt();
+    }
+
+    private IntegrationConfig getIntegrationConfig(Long projectId) {
+        if (projectId == null || projectId <= 0) {
+            throw new JiraClientException("Project ID không hợp lệ");
+        }
+        return integrationConfigRepository.findByProjectIdAndProvider(projectId, IntegrationProvider.JIRA).orElseThrow(() ->
+                        new JiraClientException("Jira integration chưa được cấu hình cho project"));
+    }
+
+    private JsonNode get(IntegrationConfig config, String path) {
+        String baseUrl = normalizeBaseUrl(config.getBaseUrl());
+        validateResolvedHost(baseUrl);
+
+        String encryptedSecret = config.getEncryptedSecret();
+
+        if (encryptedSecret == null || encryptedSecret.isBlank()) {
+            throw new JiraClientException("Jira secret chưa được cấu hình");
+        }
+
+        String token = secretService.decrypt(encryptedSecret);
+
+        if (token == null || token.isBlank()) {
+            throw new JiraClientException("Jira secret chưa được cấu hình");
+        }
+
+        String accountIdentifier = config.getAccountIdentifier();
+
+        if (accountIdentifier == null || accountIdentifier.isBlank()) {
+            throw new JiraClientException("Jira account identifier chưa được cấu hình");
+        }
+
+        String credentials = accountIdentifier + ":" + token;
+        String basicAuth = Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
+        Map<String, String> headers = new HashMap<>();
+
+        headers.put("Authorization", "Basic " + basicAuth);
+        headers.put("Accept", "application/json");
+
+        try {
+            JiraHttpResponse response = transport.get(baseUrl + path, headers, safeTimeout());
+>>>>>>> 6f00c2c (CNPM-81 implement Jira project issue backlog sprint sync)
             return handleResponse(response);
 
         } catch (JiraApiException exception) {
@@ -231,6 +432,7 @@ public class JiraRestClient implements JiraClient {
 
         } catch (InterruptedException exception) {
 
+<<<<<<< HEAD
             /*
              * Khôi phục trạng thái interrupted của thread.
              */
@@ -284,10 +486,42 @@ public class JiraRestClient implements JiraClient {
 
         if (status == 429) {
 
+=======
+            Thread.currentThread().interrupt();
+
+            throw new JiraConnectionException("Không thể kết nối Jira", exception);
+
+        } catch (IOException exception) {
+
+            throw new JiraConnectionException("Không thể kết nối Jira", exception);
+
+        } catch (RuntimeException exception) {
+            throw new JiraClientException("Không thể gọi Jira", exception);
+        }
+    }
+
+    private JsonNode handleResponse(JiraHttpResponse response) {
+        int status = response.statusCode();
+
+        if (status == 401) {
+            throw new JiraAuthenticationException("Jira authentication thất bại");
+        }
+
+        if (status == 403) {
+            throw new JiraAuthorizationException("Tài khoản không có quyền truy cập Jira resource");
+        }
+
+        if (status == 404) {
+            throw new JiraProjectNotFoundException("Jira project/resource không tồn tại");
+        }
+
+        if (status == 429) {
+>>>>>>> 6f00c2c (CNPM-81 implement Jira project issue backlog sprint sync)
             return throwRateLimit(response);
         }
 
         if (status >= 500) {
+<<<<<<< HEAD
 
             throw new JiraConnectionException(
                     "Jira đang không khả dụng");
@@ -521,11 +755,113 @@ public class JiraRestClient implements JiraClient {
 
                     throw new JiraClientException(
                             "Jira host trỏ tới địa chỉ mạng không được phép");
+=======
+            throw new JiraConnectionException("Jira đang không khả dụng");
+        }
+
+        if (status < 200 || status >= 300) {
+            throw new JiraClientException("Jira request thất bại");
+        }
+
+        try {
+            return objectMapper.readTree(response.body() == null ? "{}" : response.body());
+
+        } catch (Exception exception) {
+            throw new JiraClientException("Jira trả về dữ liệu không hợp lệ", exception);
+        }
+    }
+
+    private JsonNode throwRateLimit(JiraHttpResponse response) {
+        String retryAfter = response.headers().get("retry-after");
+        Duration retry = Duration.ZERO;
+
+        if (retryAfter != null) {
+            try {
+                long seconds = Long.parseLong(retryAfter.trim());
+                if (seconds >= 0) {
+                    retry = Duration.ofSeconds(seconds);
+                }
+
+            } catch (NumberFormatException ignored) {
+            }
+        }
+
+        throw new JiraRateLimitException("Jira rate limit exceeded", retry);
+    }
+
+    private String normalizeBaseUrl(String raw) {
+        if (raw == null || raw.isBlank()) {
+            throw new JiraClientException("Jira base URL chưa được cấu hình");
+        }
+
+        String normalized = raw.trim();
+
+        try {
+            URI uri = URI.create(normalized);
+            String scheme = uri.getScheme();
+
+            if (!"https".equalsIgnoreCase(scheme)) {
+                throw new JiraClientException("Jira base URL phải sử dụng HTTPS");
+            }
+
+            int port = uri.getPort();
+
+            if (port != -1 && port != 443) {
+                throw new JiraClientException("Jira base URL phải sử dụng port HTTPS mặc định 443");
+            }
+
+            if (uri.getHost() == null || uri.getHost().isBlank()) {
+                throw new JiraClientException("Jira base URL không hợp lệ");
+            }
+
+            if (uri.getUserInfo() != null) {
+                throw new JiraClientException("Jira base URL không được chứa user information");
+            }
+
+            if (uri.getQuery() != null || uri.getFragment() != null) {
+                throw new JiraClientException("Jira base URL không được chứa query hoặc fragment");
+            }
+
+            String path = uri.getPath();
+
+            if (path != null && !path.isBlank() && !"/".equals(path)) {
+                throw new JiraClientException("Jira base URL phải là HTTPS origin");
+            }
+            return normalized.replaceAll("/+$", "");
+
+        } catch (JiraClientException exception) {
+            throw exception;
+        } catch (IllegalArgumentException exception) {
+            throw new JiraClientException("Jira base URL không hợp lệ", exception);
+        }
+    }
+
+    private void validateResolvedHost(String baseUrl) {
+
+        try {
+            URI uri = URI.create(baseUrl);
+            String host = uri.getHost();
+
+            if (host == null || host.isBlank()) {
+                throw new JiraClientException("Jira host không hợp lệ");
+            }
+
+            InetAddress[] addresses = InetAddress.getAllByName(host);
+
+            if (addresses.length == 0) {
+                throw new JiraClientException("Không thể resolve Jira host");
+            }
+
+            for (InetAddress address : addresses) {
+                if (isUnsafeAddress(address)) {
+                    throw new JiraClientException("Jira host trỏ tới địa chỉ mạng không được phép");
+>>>>>>> 6f00c2c (CNPM-81 implement Jira project issue backlog sprint sync)
                 }
             }
 
         } catch (UnknownHostException exception) {
 
+<<<<<<< HEAD
             throw new JiraClientException(
                     "Không thể resolve Jira host",
                     exception);
@@ -594,5 +930,36 @@ public class JiraRestClient implements JiraClient {
         return value == null || value.isNull()
                 ? null
                 : value.asText();
+=======
+            throw new JiraClientException("Không thể resolve Jira host", exception);
+
+        } catch (IllegalArgumentException exception) {
+            throw new JiraClientException("Jira host không hợp lệ", exception);
+        }
+    }
+
+    private boolean isUnsafeAddress(InetAddress address) {
+
+        return address.isAnyLocalAddress() || address.isLoopbackAddress() || address.isLinkLocalAddress() || address.isSiteLocalAddress() || address.isMulticastAddress();
+    }
+
+    private Duration safeTimeout() {
+        return DEFAULT_TIMEOUT.compareTo(MAX_TIMEOUT) > 0 ? MAX_TIMEOUT : DEFAULT_TIMEOUT;
+    }
+
+    private void validateProjectKey(String projectKey) {
+        if (projectKey == null || !PROJECT_KEY_PATTERN.matcher(projectKey.trim()).matches()) {
+            throw new JiraClientException("Jira Project Key không hợp lệ");
+        }
+    }
+
+    private String text(JsonNode node, String field) {
+        if (node == null) {
+            return null;
+        }
+
+        JsonNode value = node.get(field);
+        return value == null || value.isNull() ? null : value.asText();
+>>>>>>> 6f00c2c (CNPM-81 implement Jira project issue backlog sprint sync)
     }
 }
