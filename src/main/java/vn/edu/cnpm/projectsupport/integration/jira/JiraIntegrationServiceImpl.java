@@ -64,10 +64,7 @@ public class JiraIntegrationServiceImpl
                     false);
         }
 
-        /*
-         * Project key không được đọc từ IntegrationConfig
-         * theo yêu cầu review hiện tại.
-         */
+        
         return new JiraConnectionResponse(
                 config.getProjectId(),
                 config.getBaseUrl(),
@@ -109,14 +106,7 @@ public class JiraIntegrationServiceImpl
         config.setAccountIdentifier(
                 request.email());
 
-        /*
-         * Project key KHÔNG persistence theo yêu cầu review.
-         */
-
-        /*
-         * Không lưu apiToken plaintext.
-         * Chỉ lưu secret sau khi mã hóa.
-         */
+        
         String encryptedSecret =
                 integrationSecretService.encrypt(
                         request.apiToken());
@@ -141,10 +131,7 @@ public class JiraIntegrationServiceImpl
         integrationConfigRepository.save(
                 config);
 
-        /*
-         * Project key chỉ xuất hiện trong response,
-         * không persistence.
-         */
+        
         return new JiraConnectionResponse(
                 config.getProjectId(),
                 config.getBaseUrl(),
@@ -170,17 +157,7 @@ public class JiraIntegrationServiceImpl
                                 new JiraClientException(
                                         "Jira integration chưa được cấu hình cho project"));
 
-        /*
-         * Theo contract CNPM-74, method này chỉ nhận projectId.
-         *
-         * Tuy nhiên projectKey không được persistence theo
-         * yêu cầu review, nên hiện tại không có nguồn dữ liệu
-         * hợp lệ trong các dependency hiện có để truyền
-         * projectKey xuống JiraClient.
-         *
-         * Không tự thêm field hoặc migration để giải quyết
-         * vấn đề này.
-         */
+        
         throw new JiraClientException(
                 "Jira Project Key chưa có nguồn cấu hình cho test connection");
     }
