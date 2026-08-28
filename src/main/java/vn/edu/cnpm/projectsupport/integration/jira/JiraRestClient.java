@@ -12,6 +12,18 @@ import java.time.Duration;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
+
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraIssueDto;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraIssueFieldsDto;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraPageDto;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraPriorityDto;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraProjectDto;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraSprintDto;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraSprintPageDto;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraStatusDto;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraUserDto;
 import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Service;
@@ -98,6 +110,41 @@ public class JiraRestClient implements JiraClient {
     }
 
     @Override
+    public JiraPageDto<JiraIssueDto> getIssues(
+            Long projectId, String projectKey, int startAt, int maxResults) {
+        validatePage(startAt, maxResults);
+        validateProjectKey(projectKey);
+        IntegrationConfig config = getIntegrationConfig(projectId);
+        JsonNode node = get(config, "/rest/api/3/search?jql=project%3D"
+                + projectKey + "&startAt=" + startAt + "&maxResults=" + maxResults);
+        return toIssuePage(node);
+    }
+
+    @Override
+    public JiraPageDto<JiraIssueDto> getBacklog(
+            Long projectId, String projectKey, int startAt, int maxResults) {
+        validatePage(startAt, maxResults);
+        validateProjectKey(projectKey);
+        IntegrationConfig config = getIntegrationConfig(projectId);
+        long boardId = findBoardId(config, projectKey);
+        JsonNode node = get(config, "/rest/agile/1.0/board/" + boardId
+                + "/backlog?startAt=" + startAt + "&maxResults=" + maxResults);
+        return toIssuePage(node);
+    }
+
+    @Override
+    public JiraSprintPageDto getSprints(
+            Long projectId, String projectKey, int startAt, int maxResults) {
+        validatePage(startAt, maxResults);
+        validateProjectKey(projectKey);
+        IntegrationConfig config = getIntegrationConfig(projectId);
+        long boardId = findBoardId(config, projectKey);
+        JsonNode node = get(config, "/rest/agile/1.0/board/" + boardId
+                + "/sprint?startAt=" + startAt + "&maxResults=" + maxResults);
+        return toSprintPage(node);
+    }
+
+    @Override
     public JiraProject getProject(
             Long projectId,
             String projectKey) {
@@ -118,6 +165,93 @@ public class JiraRestClient implements JiraClient {
                 text(node, "key"),
                 text(node, "name"),
                 text(node, "self"));
+    }
+
+    private void validatePage(int startAt, int maxResults) {
+        if (startAt < 0 || maxResults <= 0 || maxResults > 100) {
+            throw new JiraClientException("Pagination không hợp lệ");
+        }
+    }
+
+    private long findBoardId(IntegrationConfig config, String projectKey) {
+        JsonNode node = get(config, "/rest/agile/1.0/board?projectKeyOrId="
+                + projectKey + "&startAt=0&maxResults=50");
+        JsonNode values = node.get("values");
+        if (values == null || !values.isArray() || values.isEmpty()) {
+            throw new JiraClientException("Jira project chưa có Scrum/Kanban board");
+        }
+        JsonNode id = values.get(0).get("id");
+        if (id == null || id.isNull()) {
+            throw new JiraClientException("Jira board không có id hợp lệ");
+        }
+        return id.asLong();
+    }
+
+    private JiraPageDto<JiraIssueDto> toIssuePage(JsonNode node) {
+        int startAt = number(node, "startAt", 0);
+        int maxResults = number(node, "maxResults", 0);
+        int total = number(node, "total", startAt);
+        Boolean isLast = node.has("isLast") && !node.get("isLast").isNull()
+                ? node.get("isLast").asBoolean() : null;
+        List<JiraIssueDto> issues = new ArrayList<>();
+        JsonNode array = node.get("issues");
+        if (array != null && array.isArray()) {
+            for (JsonNode item : array) {
+                issues.add(toIssueDto(item));
+            }
+        }
+        return new JiraPageDto<>(startAt, maxResults, total, isLast, issues);
+    }
+
+    private JiraIssueDto toIssueDto(JsonNode node) {
+        JsonNode fields = node.get("fields");
+        String id = text(node, "id");
+        String key = text(node, "key");
+        String summary = text(fields, "summary");
+        JiraStatusDto status = null;
+        JsonNode statusNode = fields == null ? null : fields.get("status");
+        if (statusNode != null && !statusNode.isNull()) {
+            status = new JiraStatusDto(text(statusNode, "id"), text(statusNode, "name"));
+        }
+        JiraPriorityDto priority = null;
+        JsonNode priorityNode = fields == null ? null : fields.get("priority");
+        if (priorityNode != null && !priorityNode.isNull()) {
+            priority = new JiraPriorityDto(text(priorityNode, "id"), text(priorityNode, "name"));
+        }
+        JiraUserDto assignee = null;
+        JsonNode assigneeNode = fields == null ? null : fields.get("assignee");
+        if (assigneeNode != null && !assigneeNode.isNull()) {
+            assignee = new JiraUserDto(text(assigneeNode, "accountId"), text(assigneeNode, "displayName"),
+                    text(assigneeNode, "emailAddress"), assigneeNode.path("active").asBoolean(false));
+        }
+        JiraProjectDto project = null;
+        JsonNode projectNode = fields == null ? null : fields.get("project");
+        if (projectNode != null && !projectNode.isNull()) {
+            project = new JiraProjectDto(text(projectNode, "id"), text(projectNode, "key"), text(projectNode, "name"));
+        }
+        return new JiraIssueDto(id, key, new JiraIssueFieldsDto(summary, null, status, priority, assignee, project, null, null, null),
+                text(node, "updated"));
+    }
+
+    private JiraSprintPageDto toSprintPage(JsonNode node) {
+        int startAt = number(node, "startAt", 0);
+        int maxResults = number(node, "maxResults", 0);
+        int total = number(node, "total", startAt);
+        Boolean isLast = node.has("isLast") ? node.get("isLast").asBoolean() : null;
+        List<JiraSprintDto> values = new ArrayList<>();
+        JsonNode array = node.get("values");
+        if (array != null && array.isArray()) {
+            for (JsonNode item : array) {
+                values.add(new JiraSprintDto(text(item, "id"), text(item, "name"), text(item, "state"),
+                        text(item, "goal"), text(item, "startDate"), text(item, "endDate")));
+            }
+        }
+        return new JiraSprintPageDto(startAt, maxResults, total, isLast, values);
+    }
+
+    private int number(JsonNode node, String field, int fallback) {
+        JsonNode value = node.get(field);
+        return value == null || value.isNull() ? fallback : value.asInt();
     }
 
     private IntegrationConfig getIntegrationConfig(
@@ -587,6 +721,10 @@ public class JiraRestClient implements JiraClient {
     private String text(
             JsonNode node,
             String field) {
+
+        if (node == null) {
+            return null;
+        }
 
         JsonNode value =
                 node.get(field);
