@@ -63,21 +63,21 @@ class JiraRestClientTest {
     @BeforeEach
     void setUp() {
 
-         config = new IntegrationConfig(
-            PROJECT_ID,
-            IntegrationProvider.JIRA,
-            ENCRYPTED_SECRET);
+        config = new IntegrationConfig(
+                PROJECT_ID,
+                IntegrationProvider.JIRA,
+                ENCRYPTED_SECRET);
 
-         config.setBaseUrl(BASE_URL);
+        config.setBaseUrl(BASE_URL);
 
-         config.setAccountIdentifier(
-            ACCOUNT_IDENTIFIER);
+        config.setAccountIdentifier(
+                ACCOUNT_IDENTIFIER);
 
-         client = new JiraRestClient(
-            integrationConfigRepository,
-            secretService,
-            transport,
-            new ObjectMapper());
+        client = new JiraRestClient(
+                integrationConfigRepository,
+                secretService,
+                transport,
+                new ObjectMapper());
     }
 
     /**
@@ -671,6 +671,50 @@ class JiraRestClientTest {
     }
 
     @Test
+    void shouldRejectBaseUrlWithCustomPort()
+            throws Exception {
+
+        stubIntegrationConfig();
+
+        config.setBaseUrl(
+                "https://example.atlassian.net:8080");
+
+        assertThrows(
+                JiraClientException.class,
+                () -> client.getProject(
+                        PROJECT_ID,
+                        PROJECT_KEY));
+
+        verify(transport, never())
+                .get(any(), any(), any());
+
+        verify(secretService, never())
+                .decrypt(any());
+    }
+
+    @Test
+    void shouldRejectBaseUrlWith8443Port()
+            throws Exception {
+
+        stubIntegrationConfig();
+
+        config.setBaseUrl(
+                "https://example.atlassian.net:8443");
+
+        assertThrows(
+                JiraClientException.class,
+                () -> client.getProject(
+                        PROJECT_ID,
+                        PROJECT_KEY));
+
+        verify(transport, never())
+                .get(any(), any(), any());
+
+        verify(secretService, never())
+                .decrypt(any());
+    }
+
+    @Test
     void shouldRejectBaseUrlWithPath()
             throws Exception {
 
@@ -914,14 +958,14 @@ class JiraRestClientTest {
     }
 
     @Test
-    void shouldRejectNullProjectKey()
+    void shouldRejectLowercaseProjectKey()
             throws Exception {
 
         assertThrows(
                 JiraClientException.class,
                 () -> client.getProject(
                         PROJECT_ID,
-                        null));
+                        "proj"));
 
         verify(
                 integrationConfigRepository,
@@ -942,14 +986,120 @@ class JiraRestClientTest {
     }
 
     @Test
-    void shouldRejectProjectKeyStartingWithNumber()
+    void shouldRejectProjectKeyWithHyphen()
             throws Exception {
 
         assertThrows(
                 JiraClientException.class,
                 () -> client.getProject(
                         PROJECT_ID,
-                        "1PROJ"));
+                        "PROJ-123"));
+
+        verify(
+                integrationConfigRepository,
+                never())
+                .findByProjectIdAndProvider(
+                        any(),
+                        eq(IntegrationProvider.JIRA));
+
+        verify(
+                transport,
+                never())
+                .get(any(), any(), any());
+
+        verify(
+                secretService,
+                never())
+                .decrypt(any());
+    }
+
+    @Test
+    void shouldRejectProjectKeyLongerThan30Characters()
+            throws Exception {
+
+        assertThrows(
+                JiraClientException.class,
+                () -> client.getProject(
+                        PROJECT_ID,
+                        "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345"));
+
+        verify(
+                integrationConfigRepository,
+                never())
+                .findByProjectIdAndProvider(
+                        any(),
+                        eq(IntegrationProvider.JIRA));
+
+        verify(
+                transport,
+                never())
+                .get(any(), any(), any());
+
+        verify(
+                secretService,
+                never())
+                .decrypt(any());
+    }
+
+    @Test
+    void shouldAcceptProjectKeyWithUppercaseNumbersAndUnderscore()
+            throws Exception {
+
+        stubIntegrationConfig();
+
+        when(secretService.decrypt(
+                ENCRYPTED_SECRET))
+                .thenReturn(SECRET_TOKEN);
+
+        String projectKey =
+                "PROJ_2026_123";
+
+        when(transport.get(
+                eq(BASE_URL
+                        + "/rest/api/3/project/"
+                        + projectKey),
+                any(),
+                eq(Duration.ofSeconds(10))))
+                .thenReturn(
+                        new JiraHttpResponse(
+                                200,
+                                """
+                                {
+                                    "id": "10001",
+                                    "key": "PROJ_2026_123",
+                                    "name": "Project Support",
+                                    "self": "https://example.atlassian.net/rest/api/3/project/PROJ_2026_123"
+                                }
+                                """,
+                                Map.of()));
+
+        JiraProject result =
+                client.getProject(
+                        PROJECT_ID,
+                        projectKey);
+
+        assertEquals(
+                "PROJ_2026_123",
+                result.key());
+
+        verify(transport)
+                .get(
+                        eq(BASE_URL
+                                + "/rest/api/3/project/"
+                                + projectKey),
+                        any(),
+                        eq(Duration.ofSeconds(10)));
+    }
+
+    @Test
+    void shouldRejectNullProjectKey()
+            throws Exception {
+
+        assertThrows(
+                JiraClientException.class,
+                () -> client.getProject(
+                        PROJECT_ID,
+                        null));
 
         verify(
                 integrationConfigRepository,
