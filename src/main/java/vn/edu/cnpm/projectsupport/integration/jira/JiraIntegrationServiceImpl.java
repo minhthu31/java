@@ -16,6 +16,7 @@ import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationConfig;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationConfigStatus;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.IntegrationConfigRepository;
+import vn.edu.cnpm.projectsupport.security.IntegrationSecretService;
 
 @Service
 public class JiraIntegrationServiceImpl
@@ -23,15 +24,20 @@ public class JiraIntegrationServiceImpl
 
     private final IntegrationConfigRepository integrationConfigRepository;
     private final JiraClient jiraClient;
+    private final IntegrationSecretService integrationSecretService;
 
     public JiraIntegrationServiceImpl(
             IntegrationConfigRepository integrationConfigRepository,
-            JiraClient jiraClient) {
+            JiraClient jiraClient,
+            IntegrationSecretService integrationSecretService) {
 
         this.integrationConfigRepository =
                 integrationConfigRepository;
 
         this.jiraClient = jiraClient;
+
+        this.integrationSecretService =
+                integrationSecretService;
     }
 
     @Override
@@ -55,9 +61,13 @@ public class JiraIntegrationServiceImpl
                     null,
                     false,
                     null,
-                    null);
+                    false);
         }
 
+        /*
+         * Project key không được đọc từ IntegrationConfig
+         * theo yêu cầu review hiện tại.
+         */
         return new JiraConnectionResponse(
                 config.getProjectId(),
                 config.getBaseUrl(),
@@ -87,26 +97,54 @@ public class JiraIntegrationServiceImpl
                                         IntegrationProvider.JIRA,
                                         ""));
 
+        /*
+         * Lưu site URL.
+         */
         config.setBaseUrl(
                 request.siteUrl());
+
+        /*
+         * Lưu email/account identifier.
+         */
+        config.setAccountIdentifier(
+                request.email());
+
+        /*
+         * Project key KHÔNG persistence theo yêu cầu review.
+         */
+
+        /*
+         * Không lưu apiToken plaintext.
+         * Chỉ lưu secret sau khi mã hóa.
+         */
+        String encryptedSecret =
+                integrationSecretService.encrypt(
+                        request.apiToken());
+
+        if (encryptedSecret == null
+                || encryptedSecret.isBlank()) {
+
+            throw new JiraClientException(
+                    "Không thể mã hóa Jira secret");
+        }
+
+        config.setEncryptedSecret(
+                encryptedSecret);
 
         config.setStatus(
                 IntegrationConfigStatus.NOT_CHECKED);
 
         config.setLastCheckedAt(null);
+
         config.setLastErrorCode(null);
 
+        integrationConfigRepository.save(
+                config);
+
         /*
-         * Task 76:
-         * Secret phải được xử lý an toàn.
-         *
-         * Không lưu plaintext token.
-         * Phần mã hóa secret phải được thực hiện
-         * ở tầng IntegrationSecretService trước khi save.
+         * Project key chỉ xuất hiện trong response,
+         * không persistence.
          */
-
-        integrationConfigRepository.save(config);
-
         return new JiraConnectionResponse(
                 config.getProjectId(),
                 config.getBaseUrl(),
@@ -115,14 +153,13 @@ public class JiraIntegrationServiceImpl
                 request.authType(),
                 true,
                 config.getLastCheckedAt(),
-                null);
+                false);
     }
 
     @Override
     @Transactional
     public JiraConnectionTestResponse testConnection(
-            Long projectId,
-            String projectKey) {
+            Long projectId) {
 
         IntegrationConfig config =
                 integrationConfigRepository
@@ -133,94 +170,19 @@ public class JiraIntegrationServiceImpl
                                 new JiraClientException(
                                         "Jira integration chưa được cấu hình cho project"));
 
-        if (projectKey == null
-                || projectKey.isBlank()) {
-
-            throw new JiraClientException(
-                    "Jira project key chưa được cấu hình");
-        }
-
-        Instant testedAt =
-                Instant.now();
-
-        try {
-
-            JiraConnectionResult result =
-                    jiraClient.testConnection(
-                            projectId,
-                            projectKey);
-
-            config.setStatus(
-                    IntegrationConfigStatus.CONNECTED);
-
-            config.setLastCheckedAt(
-                    testedAt);
-
-            config.setLastErrorCode(null);
-
-            integrationConfigRepository.save(config);
-
-            return new JiraConnectionTestResponse(
-                    projectId,
-                    result.connected(),
-                    config.getAccountIdentifier(),
-                    result.projectName(),
-                    null,
-                    result.projectKey(),
-                    testedAt,
-                    null,
-                    "Kết nối Jira thành công");
-
-        } catch (JiraAuthenticationException e) {
-
-            return saveConnectionFailure(
-                    config,
-                    projectId,
-                    projectKey,
-                    testedAt,
-                    "JIRA_AUTHENTICATION_FAILED",
-                    e.getMessage());
-
-        } catch (JiraAuthorizationException e) {
-
-            return saveConnectionFailure(
-                    config,
-                    projectId,
-                    projectKey,
-                    testedAt,
-                    "JIRA_AUTHORIZATION_FAILED",
-                    e.getMessage());
-
-        } catch (JiraProjectNotFoundException e) {
-
-            return saveConnectionFailure(
-                    config,
-                    projectId,
-                    projectKey,
-                    testedAt,
-                    "JIRA_PROJECT_NOT_FOUND",
-                    e.getMessage());
-
-        } catch (JiraRateLimitException e) {
-
-            return saveConnectionFailure(
-                    config,
-                    projectId,
-                    projectKey,
-                    testedAt,
-                    "JIRA_RATE_LIMITED",
-                    e.getMessage());
-
-        } catch (JiraConnectionException e) {
-
-            return saveConnectionFailure(
-                    config,
-                    projectId,
-                    projectKey,
-                    testedAt,
-                    "JIRA_CONNECTION_FAILED",
-                    e.getMessage());
-        }
+        /*
+         * Theo contract CNPM-74, method này chỉ nhận projectId.
+         *
+         * Tuy nhiên projectKey không được persistence theo
+         * yêu cầu review, nên hiện tại không có nguồn dữ liệu
+         * hợp lệ trong các dependency hiện có để truyền
+         * projectKey xuống JiraClient.
+         *
+         * Không tự thêm field hoặc migration để giải quyết
+         * vấn đề này.
+         */
+        throw new JiraClientException(
+                "Jira Project Key chưa có nguồn cấu hình cho test connection");
     }
 
     private JiraConnectionTestResponse saveConnectionFailure(
@@ -240,7 +202,8 @@ public class JiraIntegrationServiceImpl
         config.setLastErrorCode(
                 errorCode);
 
-        integrationConfigRepository.save(config);
+        integrationConfigRepository.save(
+                config);
 
         return new JiraConnectionTestResponse(
                 projectId,
@@ -283,4 +246,3 @@ public class JiraIntegrationServiceImpl
                 "getIssue chưa được triển khai");
     }
 }
-

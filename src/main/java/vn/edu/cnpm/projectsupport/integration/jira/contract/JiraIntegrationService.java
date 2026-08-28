@@ -8,9 +8,7 @@ public interface JiraIntegrationService {
             Long projectId,
             JiraConnectionRequest request);
 
-    JiraConnectionTestResponse testConnection(
-            Long projectId,
-            String projectKey);
+    JiraConnectionTestResponse testConnection(Long projectId);
 
     JiraTaskSyncResponse syncTask(
             Long projectId,

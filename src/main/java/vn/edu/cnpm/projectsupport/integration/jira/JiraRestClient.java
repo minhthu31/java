@@ -92,8 +92,10 @@ public class JiraRestClient implements JiraClient {
 
         return new JiraConnectionResult(
                 true,
+                project.id(),
                 project.key(),
                 project.name());
+
     }
 
     @Override
@@ -435,16 +437,7 @@ public class JiraRestClient implements JiraClient {
         }
     }
 
-    /**
-     * Kiểm tra DNS trước khi request.
-     *
-     * Chặn:
-     * - loopback
-     * - private
-     * - link-local
-     * - multicast
-     * - unspecified
-     */
+   
     private void validateResolvedHost(
             String baseUrl) {
 
@@ -471,10 +464,7 @@ public class JiraRestClient implements JiraClient {
                         "Không thể resolve Jira host");
             }
 
-            /*
-             * Nếu một hostname resolve ra nhiều IP,
-             * chỉ cần một IP không an toàn thì reject.
-             */
+            
             for (InetAddress address : addresses) {
 
                 if (isUnsafeAddress(address)) {
