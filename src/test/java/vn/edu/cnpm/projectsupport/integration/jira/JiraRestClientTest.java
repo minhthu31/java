@@ -956,7 +956,33 @@ class JiraRestClientTest {
                 never())
                 .decrypt(any());
     }
+    @Test
+    void shouldRejectSingleCharacterProjectKey()
+             throws Exception {
 
+        assertThrows(
+                JiraClientException.class,
+                () -> client.getProject(
+                        PROJECT_ID,
+                        "A"));
+
+        verify(
+                integrationConfigRepository,
+                never())
+                .findByProjectIdAndProvider(
+                        any(),
+                        eq(IntegrationProvider.JIRA));
+
+        verify(
+                transport,
+                never())
+                .get(any(), any(), any());
+
+        verify(
+                secretService,
+                never())
+                .decrypt(any());
+   }
     @Test
     void shouldRejectLowercaseProjectKey()
             throws Exception {

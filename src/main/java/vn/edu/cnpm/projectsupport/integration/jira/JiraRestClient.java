@@ -26,7 +26,7 @@ import vn.edu.cnpm.projectsupport.security.IntegrationSecretService;
 public class JiraRestClient implements JiraClient {
 
     private static final Pattern PROJECT_KEY_PATTERN =
-            Pattern.compile("[A-Z][A-Z0-9_]{0,29}");
+            Pattern.compile("[A-Z][A-Z0-9_]{1,29}");
 
     private static final Duration DEFAULT_TIMEOUT =
             Duration.ofSeconds(10);
