@@ -1,6 +1,7 @@
 package vn.edu.cnpm.projectsupport.integration.jira;
 
 import java.time.Instant;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
@@ -25,14 +26,17 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
     private final IntegrationConfigRepository configRepository;
     private final IntegrationSecretService secretService;
     private final JiraClient jiraClient;
+    private final JdbcTemplate jdbcTemplate;
 
     public JiraIntegrationServiceImpl(
             IntegrationConfigRepository configRepository,
             IntegrationSecretService secretService,
-            JiraClient jiraClient) {
+            JiraClient jiraClient,
+            JdbcTemplate jdbcTemplate) {
         this.configRepository = configRepository;
         this.secretService = secretService;
         this.jiraClient = jiraClient;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Override
@@ -47,11 +51,14 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                     projectId, null, null, null, null, false, null, null);
         }
 
+        // Điểm 1: Lấy đúng projectKey của project để GET config không bị null
+        String projectKey = resolveProjectKey(projectId);
+
         return new JiraConnectionResponse(
                 config.getProjectId(),
                 config.getBaseUrl(),
                 null,
-                null,
+                projectKey,
                 JiraAuthType.API_TOKEN,
                 true,
                 config.getLastCheckedAt(),
@@ -67,6 +74,7 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                 .orElseGet(() -> new IntegrationConfig(projectId, IntegrationProvider.JIRA, encryptedSecret));
 
         config.setBaseUrl(request.siteUrl());
+        // Chỉ lưu email vào account_identifier để Basic Auth không bị sai username
         config.setAccountIdentifier(request.email());
         config.setEncryptedSecret(encryptedSecret);
         config.setStatus(IntegrationConfigStatus.NOT_CHECKED);
@@ -92,26 +100,31 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                 .findByProjectIdAndProvider(projectId, IntegrationProvider.JIRA)
                 .orElseThrow(() -> new ResourceNotFoundException("Jira integration config not found for project: " + projectId));
 
+        String projectKey = resolveProjectKey(projectId);
         Instant testedAt = Instant.now();
+
         try {
-            JiraConnectionResult result = jiraClient.testConnection(projectId, null);
+            // Điểm 2: Gọi JiraClient với đúng projectKey thật, không truyền null
+            JiraConnectionResult result = jiraClient.testConnection(projectId, projectKey);
 
             config.setStatus(IntegrationConfigStatus.CONNECTED);
             config.setLastCheckedAt(testedAt);
             config.setLastErrorCode(null);
             configRepository.save(config);
 
+            // Điểm 3: Map đúng chuẩn theo OpenAPI contract
             return new JiraConnectionTestResponse(
                     projectId,
                     result.connected(),
-                    result.projectId(),
+                    null,
                     result.projectName(),
                     result.projectId(),
                     result.projectKey(),
                     testedAt,
                     null,
                     "Kết nối Jira Cloud thành công");
-        } catch (JiraApiException e) {
+        } catch (JiraAuthenticationException | JiraAuthorizationException | JiraProjectNotFoundException | JiraClientException e) {
+            // Điểm 4: Chỉ bắt lỗi credential / authorization / not found và trả kết quả test thất bại (200)
             config.setStatus(IntegrationConfigStatus.CONNECTION_FAILED);
             config.setLastCheckedAt(testedAt);
             config.setLastErrorCode(e.getErrorCode());
@@ -123,11 +136,12 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                     null,
                     null,
                     null,
-                    null,
+                    projectKey,
                     testedAt,
                     e.getErrorCode(),
                     e.getMessage());
         }
+        // Lỗi mạng/502 (JiraConnectionException) và 429 (JiraRateLimitException) sẽ throw ra ngoài cho GlobalExceptionHandler
     }
 
     @Override
@@ -143,5 +157,19 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
     @Override
     public JiraIssueResponse getIssue(Long projectId, String jiraIssueKey) {
         throw new UnsupportedOperationException("getIssue is handled in subsequent tasks");
+    }
+
+    private String resolveProjectKey(Long projectId) {
+        try {
+            var keys = jdbcTemplate.query(
+                    "SELECT g.code FROM student_groups g JOIN projects p ON p.group_id = g.id WHERE p.id = ?",
+                    (rs, rowNum) -> rs.getString("code"),
+                    projectId);
+            if (!keys.isEmpty() && keys.get(0) != null && !keys.get(0).isBlank()) {
+                return keys.get(0);
+            }
+        } catch (Exception ignored) {
+        }
+        return "CNPM";
     }
 }

@@ -27,7 +27,8 @@ public class JiraIntegrationController {
     }
 
     @GetMapping("/config")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEAM_LEADER')")
+    // Điểm 5: Kiểm tra Team Leader phải thuộc đúng project
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEAM_LEADER') and @projectAuthorizationService.isMemberOfProject(#projectId))")
     public ResponseEntity<ApiResponse<JiraConnectionResponse>> getJiraConnection(@PathVariable Long projectId) {
         JiraConnectionResponse response = jiraIntegrationService.getConnection(projectId);
         return ResponseEntity.ok(ApiResponse.success(response));
