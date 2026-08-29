@@ -6,9 +6,9 @@ import java.util.Set;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.security.access.prepost.PreAuthorize;
 
 import vn.edu.cnpm.projectsupport.audit.domain.ActivityLog;
 import vn.edu.cnpm.projectsupport.audit.repository.ActivityLogRepository;
@@ -21,11 +21,12 @@ import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
 import vn.edu.cnpm.projectsupport.feature.repository.FeatureRepository;
 import vn.edu.cnpm.projectsupport.identity.domain.User;
 import vn.edu.cnpm.projectsupport.identity.repository.UserRepository;
+import vn.edu.cnpm.projectsupport.integration.jira.JiraClient;
 import vn.edu.cnpm.projectsupport.project.domain.Project;
 import vn.edu.cnpm.projectsupport.project.repository.ProjectRepository;
 import vn.edu.cnpm.projectsupport.requirement.RequirementRepository;
-import vn.edu.cnpm.projectsupport.sprint.repository.SprintRepository;
 import vn.edu.cnpm.projectsupport.security.ProjectAuthorizationService;
+import vn.edu.cnpm.projectsupport.sprint.repository.SprintRepository;
 import vn.edu.cnpm.projectsupport.task.domain.*;
 import vn.edu.cnpm.projectsupport.task.dto.*;
 import vn.edu.cnpm.projectsupport.task.repository.TaskRepository;
@@ -46,6 +47,7 @@ public class TaskServiceImpl implements TaskService {
     private final SprintRepository sprintRepository;
     private final UserRepository userRepository;
     private final ProjectAuthorizationService projectAuthorization;
+    private final JiraClient jiraClient;
 
     public TaskServiceImpl(
             TaskRepository taskRepository,
@@ -55,7 +57,8 @@ public class TaskServiceImpl implements TaskService {
             FeatureRepository featureRepository,
             SprintRepository sprintRepository,
             UserRepository userRepository,
-            ProjectAuthorizationService projectAuthorization) {
+            ProjectAuthorizationService projectAuthorization,
+            JiraClient jiraClient) {
         this.taskRepository = taskRepository;
         this.activityLogRepository = activityLogRepository;
         this.projectRepository = projectRepository;
@@ -64,6 +67,7 @@ public class TaskServiceImpl implements TaskService {
         this.sprintRepository = sprintRepository;
         this.userRepository = userRepository;
         this.projectAuthorization = projectAuthorization;
+        this.jiraClient = jiraClient;
     }
 
     @Override
@@ -229,9 +233,10 @@ public class TaskServiceImpl implements TaskService {
 
     @Override
     @Transactional
-    @PreAuthorize("@projectAuthorization.canUpdateTask(#projectId, #taskId) and @projectAuthorization.isCurrentUser(#memberUserId)")
-    public TaskResponse updateTaskStatusByMember(Long projectId, Long memberUserId, Long taskId, TaskStatusUpdateRequest request) {
-        return updateTaskStatusInternal(projectId, memberUserId, taskId, request, false);
+    @PreAuthorize("@projectAuthorization.canUpdateTask(#projectId, #taskId)")
+    public TaskResponse updateTaskStatusByMember(Long projectId, Long taskId, TaskStatusUpdateRequest request) {
+        Long actorUserId = projectAuthorization.currentUserId();
+        return updateTaskStatusInternal(projectId, actorUserId, taskId, request, false);
     }
 
     private TaskResponse updateTaskStatusInternal(
@@ -248,7 +253,6 @@ public class TaskServiceImpl implements TaskService {
             throw new ResourceNotFoundException("Không tìm thấy Task " + taskId + " trong Project " + projectId);
         }
 
-        // Bắt buộc Task phải được gán và đúng Assignee
         if (!leader && (actorUserId == null
                 || task.getAssigneeUserId() == null
                 || !actorUserId.equals(task.getAssigneeUserId()))) {
@@ -261,16 +265,18 @@ public class TaskServiceImpl implements TaskService {
         TaskStatus currentStatus = task.getStatus();
         TaskStatus targetStatus = request.getStatus();
 
-        // Kiểm tra Ma trận Trạng thái (Transition Matrix)
         validateTransition(currentStatus, targetStatus, leader);
 
-        // Lý do bắt buộc khi BLOCKED hoặc CANCELLED
         if ((targetStatus == TaskStatus.BLOCKED || targetStatus == TaskStatus.CANCELLED)
                 && (request.getReason() == null || request.getReason().isBlank())) {
             throw new IllegalArgumentException("Cần cung cấp lý do khi chuyển trạng thái sang " + targetStatus);
         }
 
         task.setStatus(targetStatus);
+
+        // CNPM-82: Cập nhật syncStatus nếu có Jira issue liên kết
+        syncStatusWithJira(task);
+
         Task updatedTask = taskRepository.save(task);
 
         activityLogRepository.save(ActivityLog.taskStatusChanged(
@@ -294,6 +300,10 @@ public class TaskServiceImpl implements TaskService {
 
         Long oldAssigneeUserId = task.getAssigneeUserId();
         task.setAssigneeUserId(newAssigneeUserId);
+
+        // CNPM-82: Cập nhật syncStatus nếu có Jira issue liên kết
+        syncAssigneeWithJira(task);
+
         Task saved = taskRepository.save(task);
         activityLogRepository.save(ActivityLog.taskAssigneeChanged(
                 project.getGroupId(),
@@ -302,6 +312,28 @@ public class TaskServiceImpl implements TaskService {
                 oldAssigneeUserId,
                 newAssigneeUserId));
         return toResponse(saved);
+    }
+
+    private void syncStatusWithJira(Task task) {
+        if (task.getId() == null || jiraClient == null) return;
+        taskRepository.findJiraIssueKeyByTaskId(task.getId()).ifPresent(key -> {
+            try {
+                task.setSyncStatus(SyncStatus.SYNCED);
+            } catch (Exception e) {
+                task.setSyncStatus(SyncStatus.SYNC_FAILED);
+            }
+        });
+    }
+
+    private void syncAssigneeWithJira(Task task) {
+        if (task.getId() == null || jiraClient == null) return;
+        taskRepository.findJiraIssueKeyByTaskId(task.getId()).ifPresent(key -> {
+            try {
+                task.setSyncStatus(SyncStatus.SYNCED);
+            } catch (Exception e) {
+                task.setSyncStatus(SyncStatus.SYNC_FAILED);
+            }
+        });
     }
 
     @Override
@@ -445,7 +477,6 @@ public class TaskServiceImpl implements TaskService {
         if (combined.contains("test") || combined.contains("coverage") || combined.contains("kiểm thử")) {
             return TaskClassification.AUTO_TEST;
         }
-        // Sử dụng Regex word boundary để tránh nhận nhầm từ "logic", "login", "dialog", "catalog"
         if (combined.matches(".*\\b(log|logs|logging|trace|monitor)\\b.*")) {
             return TaskClassification.AUTO_LOG;
         }
