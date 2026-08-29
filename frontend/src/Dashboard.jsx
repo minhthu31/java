@@ -137,180 +137,77 @@ export default function Dashboard({ title }) {
                 className="welcome"
                 style={{
                     marginBottom: "24px",
-                    padding: "20px",
-                    backgroundColor: "#fff",
+                    padding: "18px 22px",
+                    backgroundColor: "#2563eb",
                     borderRadius: "8px",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                    boxShadow: "0 2px 6px rgba(37, 99, 235, 0.25)",
                 }}
             >
                 <h2
                     style={{
                         margin: "0 0 6px",
                         fontSize: "18px",
-                        color: "#172b4d",
+                        color: "#ffffff",
+                        fontWeight: 700,
                     }}
                 >
                     Xin chào, {user.fullName || user.username || "Người dùng"}
                 </h2>
 
-                <p style={{ margin: 0, color: "#5e6c84", fontSize: "14px" }}>
-                    Tài khoản: <strong>{user.username}</strong> · Vai trò:{" "}
-                    <strong>{userRole || "Chưa phân quyền"}</strong>
+                <p style={{ margin: 0, color: "#dbeafe", fontSize: "13px" }}>
+                    Tài khoản:{" "}
+                    <strong style={{ color: "#ffffff" }}>
+                        {user.username}
+                    </strong>{" "}
+                    · Vai trò:{" "}
+                    <strong style={{ color: "#ffffff" }}>
+                        {userRole || "Chưa phân quyền"}
+                    </strong>
                     {selectedProjectId && (
                         <span>
                             {" "}
-                            · Project ID: <strong>#{selectedProjectId}</strong>
+                            · Project ID:{" "}
+                            <strong style={{ color: "#ffffff" }}>
+                                #{selectedProjectId}
+                            </strong>
                         </span>
                     )}
                 </p>
             </section>
 
-            <section
-                className="grid"
+            <div
                 style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                    gap: "16px",
-                    marginBottom: "24px",
+                    display: "flex",
+                    gap: "24px",
+                    alignItems: "flex-start",
                 }}
             >
-                <button
-                    type="button"
-                    onClick={() => setActiveTab("requirements")}
+                <aside
+                    className="grid"
                     style={{
-                        backgroundColor: "#fff",
-                        padding: "16px",
-                        borderRadius: "6px",
-                        border: "none",
-                        borderLeft:
-                            activeTab === "requirements"
-                                ? "4px solid #0052cc"
-                                : "4px solid transparent",
-                        fontWeight: activeTab === "requirements" ? 600 : 500,
-                        color:
-                            activeTab === "requirements"
-                                ? "#0052cc"
-                                : "#172b4d",
-                        cursor: "pointer",
-                        textAlign: "left",
-                        boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
-                        fontSize: "14px",
+                        width: "240px",
+                        flexShrink: 0,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "12px",
                     }}
                 >
-                    Yêu cầu dự án
-                </button>
-
-                <button
-                    type="button"
-                    onClick={() => setActiveTab("tasks")}
-                    style={{
-                        backgroundColor: "#fff",
-                        padding: "16px",
-                        borderRadius: "6px",
-                        border: "none",
-                        borderLeft:
-                            activeTab === "tasks"
-                                ? "4px solid #0052cc"
-                                : "4px solid transparent",
-                        fontWeight: activeTab === "tasks" ? 600 : 500,
-                        color: activeTab === "tasks" ? "#0052cc" : "#172b4d",
-                        cursor: "pointer",
-                        textAlign: "left",
-                        boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
-                        fontSize: "14px",
-                    }}
-                >
-                    Công việc được giao
-                </button>
-
-                {canAccessRequirement && (
                     <button
                         type="button"
-                        onClick={() => setActiveTab("srs")}
+                        onClick={() => setActiveTab("requirements")}
                         style={{
                             backgroundColor: "#fff",
                             padding: "16px",
                             borderRadius: "6px",
                             border: "none",
                             borderLeft:
-                                activeTab === "srs"
+                                activeTab === "requirements"
                                     ? "4px solid #0052cc"
                                     : "4px solid transparent",
-                            fontWeight: activeTab === "srs" ? 600 : 500,
-                            color: activeTab === "srs" ? "#0052cc" : "#172b4d",
-                            cursor: "pointer",
-                            textAlign: "left",
-                            boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
-                            fontSize: "14px",
-                        }}
-                    >
-                        Xem trước SRS
-                    </button>
-                )}
-
-                <button
-                    type="button"
-                    onClick={() => setActiveTab("progress")}
-                    style={{
-                        backgroundColor: "#fff",
-                        padding: "16px",
-                        borderRadius: "6px",
-                        border: "none",
-                        borderLeft:
-                            activeTab === "progress"
-                                ? "4px solid #0052cc"
-                                : "4px solid transparent",
-                        fontWeight: activeTab === "progress" ? 600 : 500,
-                        color: activeTab === "progress" ? "#0052cc" : "#172b4d",
-                        cursor: "pointer",
-                        textAlign: "left",
-                        boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
-                        fontSize: "14px",
-                    }}
-                >
-                    Tiến độ nhóm
-                </button>
-
-                <button
-                    type="button"
-                    onClick={() => setActiveTab("github")}
-                    style={{
-                        backgroundColor: "#fff",
-                        padding: "16px",
-                        borderRadius: "6px",
-                        border: "none",
-                        borderLeft:
-                            activeTab === "github"
-                                ? "4px solid #0052cc"
-                                : "4px solid transparent",
-                        fontWeight: activeTab === "github" ? 600 : 500,
-                        color: activeTab === "github" ? "#0052cc" : "#172b4d",
-                        cursor: "pointer",
-                        textAlign: "left",
-                        boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
-                        fontSize: "14px",
-                    }}
-                >
-                    Hoạt động GitHub
-                </button>
-
-                {canAccessJira && (
-                    <button
-                        type="button"
-                        data-testid="jira-config-tab"
-                        onClick={() => setActiveTab("jira-config")}
-                        style={{
-                            backgroundColor: "#fff",
-                            padding: "16px",
-                            borderRadius: "6px",
-                            border: "none",
-                            borderLeft:
-                                activeTab === "jira-config"
-                                    ? "4px solid #0052cc"
-                                    : "4px solid transparent",
-                            fontWeight: activeTab === "jira-config" ? 600 : 500,
+                            fontWeight:
+                                activeTab === "requirements" ? 600 : 500,
                             color:
-                                activeTab === "jira-config"
+                                activeTab === "requirements"
                                     ? "#0052cc"
                                     : "#172b4d",
                             cursor: "pointer",
@@ -319,192 +216,324 @@ export default function Dashboard({ title }) {
                             fontSize: "14px",
                         }}
                     >
-                        Cấu hình Jira
+                        Yêu cầu dự án
                     </button>
-                )}
-            </section>
 
-            <section
-                style={{
-                    backgroundColor: "#fff",
-                    borderRadius: "8px",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-                    overflow: "hidden",
-                }}
-            >
-                {activeTab === "jira-config" &&
-                    (!selectedProjectId ? (
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab("tasks")}
+                        style={{
+                            backgroundColor: "#fff",
+                            padding: "16px",
+                            borderRadius: "6px",
+                            border: "none",
+                            borderLeft:
+                                activeTab === "tasks"
+                                    ? "4px solid #0052cc"
+                                    : "4px solid transparent",
+                            fontWeight: activeTab === "tasks" ? 600 : 500,
+                            color:
+                                activeTab === "tasks" ? "#0052cc" : "#172b4d",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                            fontSize: "14px",
+                        }}
+                    >
+                        Công việc được giao
+                    </button>
+
+                    {canAccessRequirement && (
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab("srs")}
+                            style={{
+                                backgroundColor: "#fff",
+                                padding: "16px",
+                                borderRadius: "6px",
+                                border: "none",
+                                borderLeft:
+                                    activeTab === "srs"
+                                        ? "4px solid #0052cc"
+                                        : "4px solid transparent",
+                                fontWeight: activeTab === "srs" ? 600 : 500,
+                                color:
+                                    activeTab === "srs" ? "#0052cc" : "#172b4d",
+                                cursor: "pointer",
+                                textAlign: "left",
+                                boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                                fontSize: "14px",
+                            }}
+                        >
+                            Xem trước SRS
+                        </button>
+                    )}
+
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab("progress")}
+                        style={{
+                            backgroundColor: "#fff",
+                            padding: "16px",
+                            borderRadius: "6px",
+                            border: "none",
+                            borderLeft:
+                                activeTab === "progress"
+                                    ? "4px solid #0052cc"
+                                    : "4px solid transparent",
+                            fontWeight: activeTab === "progress" ? 600 : 500,
+                            color:
+                                activeTab === "progress"
+                                    ? "#0052cc"
+                                    : "#172b4d",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                            fontSize: "14px",
+                        }}
+                    >
+                        Tiến độ nhóm
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab("github")}
+                        style={{
+                            backgroundColor: "#fff",
+                            padding: "16px",
+                            borderRadius: "6px",
+                            border: "none",
+                            borderLeft:
+                                activeTab === "github"
+                                    ? "4px solid #0052cc"
+                                    : "4px solid transparent",
+                            fontWeight: activeTab === "github" ? 600 : 500,
+                            color:
+                                activeTab === "github" ? "#0052cc" : "#172b4d",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                            fontSize: "14px",
+                        }}
+                    >
+                        Hoạt động GitHub
+                    </button>
+
+                    {canAccessJira && (
+                        <button
+                            type="button"
+                            data-testid="jira-config-tab"
+                            onClick={() => setActiveTab("jira-config")}
+                            style={{
+                                backgroundColor: "#fff",
+                                padding: "16px",
+                                borderRadius: "6px",
+                                border: "none",
+                                borderLeft:
+                                    activeTab === "jira-config"
+                                        ? "4px solid #0052cc"
+                                        : "4px solid transparent",
+                                fontWeight:
+                                    activeTab === "jira-config" ? 600 : 500,
+                                color:
+                                    activeTab === "jira-config"
+                                        ? "#0052cc"
+                                        : "#172b4d",
+                                cursor: "pointer",
+                                textAlign: "left",
+                                boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                                fontSize: "14px",
+                            }}
+                        >
+                            Cấu hình Jira
+                        </button>
+                    )}
+                </aside>
+
+                <section
+                    style={{
+                        flex: 1,
+                        backgroundColor: "#fff",
+                        borderRadius: "8px",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                        overflow: "hidden",
+                    }}
+                >
+                    {activeTab === "jira-config" &&
+                        (!selectedProjectId ? (
+                            <div
+                                data-testid="no-project-message"
+                                style={{
+                                    padding: "40px 24px",
+                                    textAlign: "center",
+                                    color: "#6b778c",
+                                }}
+                            >
+                                <h3
+                                    style={{
+                                        color: "#172b4d",
+                                        marginBottom: "8px",
+                                    }}
+                                >
+                                    Chưa chọn dự án
+                                </h3>
+                                <p style={{ margin: 0, fontSize: "14px" }}>
+                                    Vui lòng chọn một project trước khi cấu hình
+                                    tích hợp Jira.
+                                </p>
+                            </div>
+                        ) : (
+                            <JiraConfigComponent
+                                projectId={selectedProjectId}
+                                role={userRole}
+                            />
+                        ))}
+
+                    {activeTab === "requirements" && (
+                        <>
+                            {!canAccessRequirement ? (
+                                <div
+                                    style={{
+                                        padding: "40px 24px",
+                                        textAlign: "center",
+                                        color: "#6b778c",
+                                    }}
+                                    data-testid="unauthorized-message"
+                                >
+                                    <h3
+                                        style={{
+                                            color: "#de350b",
+                                            marginBottom: "8px",
+                                        }}
+                                    >
+                                        Không có quyền truy cập
+                                    </h3>
+                                    <p style={{ margin: 0, fontSize: "14px" }}>
+                                        Theo quy định phân quyền (CNPM-52), vai
+                                        trò{" "}
+                                        <strong>
+                                            {userRole || "Chưa phân quyền"}
+                                        </strong>{" "}
+                                        không được phép truy cập dữ liệu
+                                        Requirement.
+                                    </p>
+                                </div>
+                            ) : !selectedProjectId ? (
+                                <div
+                                    style={{
+                                        padding: "40px 24px",
+                                        textAlign: "center",
+                                        color: "#6b778c",
+                                    }}
+                                    data-testid="no-project-message"
+                                >
+                                    <h3
+                                        style={{
+                                            color: "#172b4d",
+                                            marginBottom: "8px",
+                                        }}
+                                    >
+                                        Chưa chọn dự án
+                                    </h3>
+                                    <p style={{ margin: 0, fontSize: "14px" }}>
+                                        Vui lòng chọn một project trước khi xem
+                                        danh sách Requirement.
+                                    </p>
+                                </div>
+                            ) : (
+                                <RequirementList
+                                    projectId={selectedProjectId}
+                                    currentUserRole={userRole}
+                                />
+                            )}
+                        </>
+                    )}
+
+                    {activeTab === "tasks" && (
+                        <div style={{ padding: "20px" }}>
+                            {!selectedProjectId ? (
+                                <div
+                                    data-testid="no-project-message"
+                                    style={{
+                                        padding: "40px 24px",
+                                        textAlign: "center",
+                                        color: "#6b778c",
+                                    }}
+                                >
+                                    <h3
+                                        style={{
+                                            color: "#172b4d",
+                                            marginBottom: "8px",
+                                        }}
+                                    >
+                                        Chưa chọn dự án
+                                    </h3>
+                                    <p style={{ margin: 0, fontSize: "14px" }}>
+                                        Vui lòng chọn một project trước khi xem
+                                        danh sách Task.
+                                    </p>
+                                </div>
+                            ) : (
+                                <TaskComponent projectId={selectedProjectId} />
+                            )}
+                        </div>
+                    )}
+
+                    {activeTab === "srs" && (
+                        <>
+                            {!selectedProjectId ? (
+                                <div
+                                    data-testid="no-project-message"
+                                    style={{
+                                        padding: "40px 24px",
+                                        textAlign: "center",
+                                        color: "#6b778c",
+                                    }}
+                                >
+                                    Chưa chọn dự án để xem trước SRS.
+                                </div>
+                            ) : (
+                                <SrsPreview
+                                    projectId={selectedProjectId}
+                                    currentUserRole={userRole}
+                                />
+                            )}
+                        </>
+                    )}
+
+                    {activeTab === "progress" && (
                         <div
-                            data-testid="no-project-message"
                             style={{
                                 padding: "40px 24px",
                                 textAlign: "center",
                                 color: "#6b778c",
                             }}
                         >
-                            <h3
-                                style={{
-                                    color: "#172b4d",
-                                    marginBottom: "8px",
-                                }}
-                            >
-                                Chưa chọn dự án
-                            </h3>
+                            <h3>Theo dõi tiến độ nhóm</h3>
                             <p style={{ margin: 0, fontSize: "14px" }}>
-                                Vui lòng chọn một project trước khi cấu hình
-                                tích hợp Jira.
+                                Báo cáo tiến độ và phân bổ công việc của các
+                                thành viên.
                             </p>
                         </div>
-                    ) : (
-                        <JiraConfigComponent
-                            projectId={selectedProjectId}
-                            role={userRole}
-                        />
-                    ))}
+                    )}
 
-                {activeTab === "requirements" && (
-                    <>
-                        {!canAccessRequirement ? (
-                            <div
-                                style={{
-                                    padding: "40px 24px",
-                                    textAlign: "center",
-                                    color: "#6b778c",
-                                }}
-                                data-testid="unauthorized-message"
-                            >
-                                <h3
-                                    style={{
-                                        color: "#de350b",
-                                        marginBottom: "8px",
-                                    }}
-                                >
-                                    Không có quyền truy cập
-                                </h3>
-                                <p style={{ margin: 0, fontSize: "14px" }}>
-                                    Theo quy định phân quyền (CNPM-52), vai trò{" "}
-                                    <strong>
-                                        {userRole || "Chưa phân quyền"}
-                                    </strong>{" "}
-                                    không được phép truy cập dữ liệu
-                                    Requirement.
-                                </p>
-                            </div>
-                        ) : !selectedProjectId ? (
-                            <div
-                                style={{
-                                    padding: "40px 24px",
-                                    textAlign: "center",
-                                    color: "#6b778c",
-                                }}
-                                data-testid="no-project-message"
-                            >
-                                <h3
-                                    style={{
-                                        color: "#172b4d",
-                                        marginBottom: "8px",
-                                    }}
-                                >
-                                    Chưa chọn dự án
-                                </h3>
-                                <p style={{ margin: 0, fontSize: "14px" }}>
-                                    Vui lòng chọn một project trước khi xem danh
-                                    sách Requirement.
-                                </p>
-                            </div>
-                        ) : (
-                            <RequirementList
-                                projectId={selectedProjectId}
-                                currentUserRole={userRole}
-                            />
-                        )}
-                    </>
-                )}
-
-                {activeTab === "tasks" && (
-                    <div style={{ padding: "20px" }}>
-                        {!selectedProjectId ? (
-                            <div
-                                data-testid="no-project-message"
-                                style={{
-                                    padding: "40px 24px",
-                                    textAlign: "center",
-                                    color: "#6b778c",
-                                }}
-                            >
-                                <h3
-                                    style={{
-                                        color: "#172b4d",
-                                        marginBottom: "8px",
-                                    }}
-                                >
-                                    Chưa chọn dự án
-                                </h3>
-                                <p style={{ margin: 0, fontSize: "14px" }}>
-                                    Vui lòng chọn một project trước khi xem danh
-                                    sách Task.
-                                </p>
-                            </div>
-                        ) : (
-                            <TaskComponent projectId={selectedProjectId} />
-                        )}
-                    </div>
-                )}
-
-                {activeTab === "srs" && (
-                    <>
-                        {!selectedProjectId ? (
-                            <div
-                                data-testid="no-project-message"
-                                style={{
-                                    padding: "40px 24px",
-                                    textAlign: "center",
-                                    color: "#6b778c",
-                                }}
-                            >
-                                Chưa chọn dự án để xem trước SRS.
-                            </div>
-                        ) : (
-                            <SrsPreview
-                                projectId={selectedProjectId}
-                                currentUserRole={userRole}
-                            />
-                        )}
-                    </>
-                )}
-
-                {activeTab === "progress" && (
-                    <div
-                        style={{
-                            padding: "40px 24px",
-                            textAlign: "center",
-                            color: "#6b778c",
-                        }}
-                    >
-                        <h3>Theo dõi tiến độ nhóm</h3>
-                        <p style={{ margin: 0, fontSize: "14px" }}>
-                            Báo cáo tiến độ và phân bổ công việc của các thành
-                            viên.
-                        </p>
-                    </div>
-                )}
-
-                {activeTab === "github" && (
-                    <div
-                        style={{
-                            padding: "40px 24px",
-                            textAlign: "center",
-                            color: "#6b778c",
-                        }}
-                    >
-                        <h3>Hoạt động GitHub</h3>
-                        <p style={{ margin: 0, fontSize: "14px" }}>
-                            Theo dõi lịch sử commits, pull requests và đóng góp
-                            mã nguồn.
-                        </p>
-                    </div>
-                )}
-            </section>
+                    {activeTab === "github" && (
+                        <div
+                            style={{
+                                padding: "40px 24px",
+                                textAlign: "center",
+                                color: "#6b778c",
+                            }}
+                        >
+                            <h3>Hoạt động GitHub</h3>
+                            <p style={{ margin: 0, fontSize: "14px" }}>
+                                Theo dõi lịch sử commits, pull requests và đóng
+                                góp mã nguồn.
+                            </p>
+                        </div>
+                    )}
+                </section>
+            </div>
         </main>
     );
 }

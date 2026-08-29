@@ -1,30 +1,32 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { JiraIntegrationService } from "./JiraIntegrationService";
 
-const JiraConfigComponent = ({ projectId, role: propRole }) => {
-    const getStoredRole = () => {
-        try {
-            const user = JSON.parse(
-                localStorage.getItem("user") ||
-                    sessionStorage.getItem("user") ||
-                    "{}",
-            );
-            return user.role;
-        } catch {
-            return null;
-        }
-    };
-
+export default function JiraConfigComponent({ projectId, role: propRole }) {
     const rawRole =
         propRole ||
         localStorage.getItem("role") ||
         localStorage.getItem("userRole") ||
-        getStoredRole();
-    const normalizedRole = rawRole
-        ? String(rawRole).replace("ROLE_", "").toUpperCase()
-        : "";
+        "";
+    const normalizedRole = String(rawRole).replace("ROLE_", "").toUpperCase();
+
     const isAdmin = normalizedRole === "ADMIN";
-    const canView = isAdmin || normalizedRole === "TEAM_LEADER";
+    const isTeamLeader = normalizedRole === "TEAM_LEADER";
+    const canView = isAdmin || isTeamLeader;
+    const canEdit = isAdmin || isTeamLeader;
+    const canTest = isAdmin;
+
+    const [loading, setLoading] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [testing, setTesting] = useState(false);
+    const [message, setMessage] = useState(null);
+    const [error, setError] = useState(null);
+
+    const [config, setConfig] = useState({
+        configured: false,
+        lastTestSucceeded: null,
+        lastTestedAt: null,
+        syncStatus: null,
+    });
 
     const [formData, setFormData] = useState({
         siteUrl: "",
@@ -33,382 +35,486 @@ const JiraConfigComponent = ({ projectId, role: propRole }) => {
         apiToken: "",
         authType: "API_TOKEN",
     });
-    const [status, setStatus] = useState("NOT_CONFIGURED");
-    const [loading, setLoading] = useState(false);
-    const [message, setMessage] = useState("");
+
+    const fetchConfig = useCallback(async () => {
+        if (!projectId || !canView) return;
+
+        setLoading(true);
+        setError(null);
+        try {
+            const data = await JiraIntegrationService.getConnection(projectId);
+
+            if (data) {
+                setConfig({
+                    configured: Boolean(data.configured),
+                    lastTestSucceeded:
+                        data.lastTestSucceeded !== undefined
+                            ? data.lastTestSucceeded
+                            : null,
+                    lastTestedAt: data.lastTestedAt || null,
+                    syncStatus: data.syncStatus || null,
+                });
+
+                setFormData((prev) => ({
+                    ...prev,
+                    siteUrl: data.siteUrl || "",
+                    email: data.email || "",
+                    projectKey: data.projectKey || "",
+                    authType: data.authType || "API_TOKEN",
+                    apiToken: "",
+                }));
+            }
+        } catch (err) {
+            if (err.response?.status === 404 || err.status === 404) {
+                setConfig({
+                    configured: false,
+                    lastTestSucceeded: null,
+                    lastTestedAt: null,
+                    syncStatus: null,
+                });
+            } else {
+                setError(
+                    err.response?.data?.message ||
+                        err.message ||
+                        "Không thể tải cấu hình Jira.",
+                );
+            }
+        } finally {
+            setLoading(false);
+        }
+    }, [projectId, canView]);
 
     useEffect(() => {
-        if (!canView || !projectId) return;
-
-        let isMounted = true;
-        const fetchConfig = async () => {
-            setLoading(true);
-            try {
-                const res =
-                    await JiraIntegrationService.getConnection(projectId);
-                const data = res?.data !== undefined ? res.data : res;
-                if (data && isMounted) {
-                    setFormData((prev) => ({
-                        ...prev,
-                        siteUrl: data.siteUrl || "",
-                        email: data.email || "",
-                        projectKey: data.projectKey || "",
-                        apiToken: data.apiToken || "",
-                        authType: data.authType || "API_TOKEN",
-                    }));
-
-                    if (
-                        data.lastTestSucceeded === true ||
-                        data.connected === true
-                    ) {
-                        setStatus("CONNECTED");
-                    } else if (
-                        data.lastTestSucceeded === false ||
-                        data.connected === false
-                    ) {
-                        setStatus("FAILED");
-                    } else {
-                        setStatus("NOT_CONFIGURED");
-                    }
-                }
-            } catch (err) {
-                if (isMounted) setStatus("NOT_CONFIGURED");
-            } finally {
-                if (isMounted) setLoading(false);
-            }
-        };
-
         fetchConfig();
-        return () => {
-            isMounted = false;
+    }, [fetchConfig]);
+
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setFormData((prev) => ({ ...prev, [name]: value }));
+    };
+
+    const handleSaveConfig = async (e) => {
+        e.preventDefault();
+        if (!canEdit || submitting) return;
+
+        setSubmitting(true);
+        setMessage(null);
+        setError(null);
+
+        const payload = {
+            siteUrl: formData.siteUrl.trim(),
+            email: formData.email.trim(),
+            projectKey: formData.projectKey.trim(),
+            authType: formData.authType,
         };
-    }, [projectId, canView]);
+
+        if (formData.apiToken) {
+            payload.apiToken = formData.apiToken;
+        }
+
+        try {
+            await JiraIntegrationService.configureConnection(
+                projectId,
+                payload,
+            );
+            setMessage("Lưu cấu hình Jira thành công.");
+            await fetchConfig();
+        } catch (err) {
+            setError(
+                err.response?.data?.message ||
+                    err.message ||
+                    "Lưu cấu hình thất bại.",
+            );
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleTestConnection = async () => {
+        if (!canTest || testing) return;
+
+        setTesting(true);
+        setMessage(null);
+        setError(null);
+
+        try {
+            await JiraIntegrationService.testConnection(projectId);
+            setMessage("Kết nối tới Jira thành công!");
+            await fetchConfig();
+        } catch (err) {
+            setError(
+                err.response?.data?.message ||
+                    err.message ||
+                    "Kiểm tra kết nối Jira thất bại.",
+            );
+        } finally {
+            setTesting(false);
+        }
+    };
+
+    const renderConnectionBadge = () => {
+        if (!config.configured) {
+            return (
+                <span
+                    data-testid="jira-status-badge"
+                    style={{
+                        padding: "4px 10px",
+                        borderRadius: "4px",
+                        fontSize: "12px",
+                        fontWeight: 700,
+                        backgroundColor: "#ebecf0",
+                        color: "#42526e",
+                    }}
+                >
+                    NOT_CONFIGURED
+                </span>
+            );
+        }
+
+        if (
+            config.lastTestSucceeded === null ||
+            config.lastTestSucceeded === undefined
+        ) {
+            return (
+                <span
+                    data-testid="jira-status-badge"
+                    style={{
+                        padding: "4px 10px",
+                        borderRadius: "4px",
+                        fontSize: "12px",
+                        fontWeight: 700,
+                        backgroundColor: "#fff0b3",
+                        color: "#172b4d",
+                    }}
+                >
+                    NOT_CHECKED
+                </span>
+            );
+        }
+
+        if (config.lastTestSucceeded === true) {
+            return (
+                <span
+                    data-testid="jira-status-badge"
+                    style={{
+                        padding: "4px 10px",
+                        borderRadius: "4px",
+                        fontSize: "12px",
+                        fontWeight: 700,
+                        backgroundColor: "#e3fcef",
+                        color: "#006644",
+                    }}
+                >
+                    CONNECTED
+                </span>
+            );
+        }
+
+        return (
+            <span
+                data-testid="jira-status-badge"
+                style={{
+                    padding: "4px 10px",
+                    borderRadius: "4px",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    backgroundColor: "#ffebe6",
+                    color: "#de350b",
+                }}
+            >
+                CONNECTION_FAILED
+            </span>
+        );
+    };
 
     if (!canView) {
         return (
             <div
                 data-testid="unauthorized-message"
-                style={{
-                    padding: "32px",
-                    textAlign: "center",
-                    color: "#de350b",
-                }}
+                style={{ padding: "24px", color: "#de350b" }}
             >
-                Bạn không có quyền truy cập cấu hình này.
+                Bạn không có quyền truy cập cấu hình Jira.
             </div>
         );
     }
-
-    if (!projectId) {
-        return (
-            <div
-                style={{
-                    padding: "32px",
-                    textAlign: "center",
-                    color: "#6b778c",
-                }}
-            >
-                Vui lòng chọn dự án để cấu hình Jira.
-            </div>
-        );
-    }
-
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData((prev) => ({ ...prev, [name]: value }));
-    };
-
-    const handleSave = async (e) => {
-        e.preventDefault();
-        if (!isAdmin) return;
-        setLoading(true);
-        setMessage("");
-        try {
-            const payload = {
-                siteUrl: formData.siteUrl,
-                email: formData.email,
-                projectKey: formData.projectKey,
-                apiToken: formData.apiToken,
-                authType: "API_TOKEN",
-            };
-            await JiraIntegrationService.configureConnection(
-                projectId,
-                payload,
-            );
-            setMessage("Lưu cấu hình Jira thành công!");
-        } catch (err) {
-            setMessage("Lưu cấu hình thất bại!");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleTestConnection = async () => {
-        setLoading(true);
-        setMessage("");
-        try {
-            const res = await JiraIntegrationService.testConnection(projectId);
-            const data = res?.data !== undefined ? res.data : res;
-            if (data?.lastTestSucceeded === true || data?.connected === true) {
-                setStatus("CONNECTED");
-                setMessage("Kết nối Jira thành công!");
-            } else {
-                setStatus("FAILED");
-                setMessage("Kết nối Jira thất bại!");
-            }
-        } catch (err) {
-            setStatus("FAILED");
-            setMessage("Không thể kiểm tra kết nối!");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const badgeStyle = {
-        display: "inline-block",
-        padding: "3px 8px",
-        borderRadius: "4px",
-        fontSize: "12px",
-        fontWeight: 700,
-        backgroundColor:
-            status === "CONNECTED"
-                ? "#e3fcef"
-                : status === "FAILED"
-                  ? "#ffebe6"
-                  : "#ebecf0",
-        color:
-            status === "CONNECTED"
-                ? "#006644"
-                : status === "FAILED"
-                  ? "#de350b"
-                  : "#42526e",
-    };
-
-    const inputStyle = {
-        width: "100%",
-        padding: "10px 12px",
-        borderRadius: "4px",
-        border: "1px solid #dfe1e6",
-        fontSize: "14px",
-        marginTop: "6px",
-        boxSizing: "border-box",
-        outline: "none",
-        backgroundColor: isAdmin ? "#fafbfc" : "#f4f5f7",
-    };
 
     return (
-        <div
-            style={{
-                maxWidth: "600px",
-                margin: "0 auto",
-                padding: "36px 24px",
-            }}
-        >
-            <h2
-                style={{
-                    fontSize: "20px",
-                    fontWeight: 700,
-                    color: "#172b4d",
-                    margin: "0 0 16px",
-                }}
-            >
-                Cấu hình Jira Integration
-            </h2>
-
+        <div style={{ padding: "24px", maxWidth: "700px" }}>
             <div
                 style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
                     marginBottom: "20px",
-                    fontSize: "14px",
-                    color: "#5e6c84",
                 }}
             >
-                Trạng thái kết nối:{" "}
-                <span data-testid="connection-status-badge" style={badgeStyle}>
-                    {status}
-                </span>
+                <div>
+                    <h2
+                        style={{
+                            fontSize: "18px",
+                            color: "#172b4d",
+                            margin: "0 0 4px 0",
+                        }}
+                    >
+                        Cấu hình tích hợp Jira
+                    </h2>
+                    <p
+                        style={{
+                            margin: 0,
+                            fontSize: "13px",
+                            color: "#6b778c",
+                        }}
+                    >
+                        Thiết lập đồng bộ Task và Requirement trực tiếp từ Jira
+                        Cloud.
+                    </p>
+                </div>
+                <div>{renderConnectionBadge()}</div>
             </div>
 
             {message && (
                 <div
+                    data-testid="jira-success-message"
                     style={{
-                        padding: "12px 16px",
+                        padding: "10px 14px",
+                        backgroundColor: "#e3fcef",
+                        color: "#006644",
                         borderRadius: "4px",
-                        marginBottom: "20px",
-                        fontSize: "14px",
-                        backgroundColor:
-                            message.includes("thất bại") ||
-                            message.includes("Lỗi") ||
-                            message.includes("Không thể")
-                                ? "#ffebe6"
-                                : "#deebff",
-                        color:
-                            message.includes("thất bại") ||
-                            message.includes("Lỗi") ||
-                            message.includes("Không thể")
-                                ? "#de350b"
-                                : "#0747a6",
+                        marginBottom: "16px",
+                        fontSize: "13px",
                     }}
                 >
                     {message}
                 </div>
             )}
 
-            <form
-                onSubmit={handleSave}
-                style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "18px",
-                }}
-            >
-                <div>
-                    <label
-                        htmlFor="siteUrl"
-                        style={{
-                            display: "block",
-                            fontSize: "13px",
-                            fontWeight: 600,
-                            color: "#344563",
-                        }}
-                    >
-                        Jira Base URL{" "}
-                        <span style={{ color: "#de350b" }}>*</span>
-                    </label>
-                    <input
-                        id="siteUrl"
-                        name="siteUrl"
-                        type="url"
-                        placeholder="https://your-domain.atlassian.net"
-                        value={formData.siteUrl}
-                        onChange={handleChange}
-                        disabled={!isAdmin}
-                        required
-                        style={inputStyle}
-                    />
-                </div>
-
-                <div>
-                    <label
-                        htmlFor="email"
-                        style={{
-                            display: "block",
-                            fontSize: "13px",
-                            fontWeight: 600,
-                            color: "#344563",
-                        }}
-                    >
-                        Email tài khoản{" "}
-                        <span style={{ color: "#de350b" }}>*</span>
-                    </label>
-                    <input
-                        id="email"
-                        name="email"
-                        type="email"
-                        placeholder="name@company.com"
-                        value={formData.email}
-                        onChange={handleChange}
-                        disabled={!isAdmin}
-                        required
-                        style={inputStyle}
-                    />
-                </div>
-
-                <div>
-                    <label
-                        htmlFor="projectKey"
-                        style={{
-                            display: "block",
-                            fontSize: "13px",
-                            fontWeight: 600,
-                            color: "#344563",
-                        }}
-                    >
-                        Project Key <span style={{ color: "#de350b" }}>*</span>
-                    </label>
-                    <input
-                        id="projectKey"
-                        name="projectKey"
-                        type="text"
-                        placeholder="VD: PROJ, CNPM"
-                        value={formData.projectKey}
-                        onChange={handleChange}
-                        disabled={!isAdmin}
-                        required
-                        style={inputStyle}
-                    />
-                </div>
-
-                <div>
-                    <label
-                        htmlFor="apiToken"
-                        style={{
-                            display: "block",
-                            fontSize: "13px",
-                            fontWeight: 600,
-                            color: "#344563",
-                        }}
-                    >
-                        API Token <span style={{ color: "#de350b" }}>*</span>
-                    </label>
-                    <input
-                        id="apiToken"
-                        name="apiToken"
-                        type="password"
-                        placeholder="Nhập Atlassian API Token..."
-                        value={formData.apiToken}
-                        onChange={handleChange}
-                        disabled={!isAdmin}
-                        required
-                        style={inputStyle}
-                    />
-                </div>
-
+            {error && (
                 <div
-                    style={{ display: "flex", gap: "12px", marginTop: "12px" }}
+                    data-testid="jira-error-message"
+                    style={{
+                        padding: "10px 14px",
+                        backgroundColor: "#ffebe6",
+                        color: "#de350b",
+                        borderRadius: "4px",
+                        marginBottom: "16px",
+                        fontSize: "13px",
+                    }}
                 >
-                    {isAdmin && (
-                        <button
-                            type="submit"
-                            data-testid="save-config-btn"
-                            disabled={loading}
+                    {error}
+                </div>
+            )}
+
+            {loading ? (
+                <div
+                    style={{
+                        padding: "24px",
+                        textAlign: "center",
+                        color: "#6b778c",
+                    }}
+                >
+                    Đang tải cấu hình Jira...
+                </div>
+            ) : (
+                <form
+                    onSubmit={handleSaveConfig}
+                    style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "16px",
+                    }}
+                >
+                    <div>
+                        <label
+                            htmlFor="jira-site-url"
                             style={{
-                                backgroundColor: "#0052cc",
-                                color: "#fff",
-                                padding: "10px 20px",
-                                borderRadius: "4px",
-                                border: "none",
+                                display: "block",
+                                fontSize: "13px",
                                 fontWeight: 600,
-                                fontSize: "14px",
-                                cursor: loading ? "not-allowed" : "pointer",
-                                opacity: loading ? 0.6 : 1,
+                                color: "#334155",
+                                marginBottom: "4px",
                             }}
                         >
-                            Lưu cấu hình
-                        </button>
-                    )}
-                    <button
-                        type="button"
-                        data-testid="test-connection-btn"
-                        onClick={handleTestConnection}
-                        disabled={loading}
+                            Jira Site URL *
+                        </label>
+                        <input
+                            id="jira-site-url"
+                            type="url"
+                            name="siteUrl"
+                            value={formData.siteUrl}
+                            onChange={handleInputChange}
+                            placeholder="https://your-domain.atlassian.net"
+                            required
+                            style={{
+                                width: "100%",
+                                padding: "8px 12px",
+                                borderRadius: "6px",
+                                border: "1px solid #cbd5e1",
+                                boxSizing: "border-box",
+                            }}
+                        />
+                    </div>
+
+                    <div
                         style={{
-                            backgroundColor: "#f4f5f7",
-                            color: "#42526e",
-                            padding: "10px 20px",
-                            borderRadius: "4px",
-                            border: "1px solid #dfe1e6",
-                            fontWeight: 600,
-                            fontSize: "14px",
-                            cursor: loading ? "not-allowed" : "pointer",
-                            opacity: loading ? 0.6 : 1,
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr",
+                            gap: "14px",
                         }}
                     >
-                        Test Connection
-                    </button>
-                </div>
-            </form>
+                        <div>
+                            <label
+                                htmlFor="jira-email"
+                                style={{
+                                    display: "block",
+                                    fontSize: "13px",
+                                    fontWeight: 600,
+                                    color: "#334155",
+                                    marginBottom: "4px",
+                                }}
+                            >
+                                Email tài khoản Atlassian *
+                            </label>
+                            <input
+                                id="jira-email"
+                                type="email"
+                                name="email"
+                                value={formData.email}
+                                onChange={handleInputChange}
+                                placeholder="developer@company.com"
+                                required
+                                style={{
+                                    width: "100%",
+                                    padding: "8px 12px",
+                                    borderRadius: "6px",
+                                    border: "1px solid #cbd5e1",
+                                    boxSizing: "border-box",
+                                }}
+                            />
+                        </div>
+
+                        <div>
+                            <label
+                                htmlFor="jira-project-key"
+                                style={{
+                                    display: "block",
+                                    fontSize: "13px",
+                                    fontWeight: 600,
+                                    color: "#334155",
+                                    marginBottom: "4px",
+                                }}
+                            >
+                                Project Key *
+                            </label>
+                            <input
+                                id="jira-project-key"
+                                type="text"
+                                name="projectKey"
+                                value={formData.projectKey}
+                                onChange={handleInputChange}
+                                placeholder="VD: CNPM, PROJ"
+                                required
+                                style={{
+                                    width: "100%",
+                                    padding: "8px 12px",
+                                    borderRadius: "6px",
+                                    border: "1px solid #cbd5e1",
+                                    boxSizing: "border-box",
+                                }}
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label
+                            htmlFor="jira-api-token"
+                            style={{
+                                display: "block",
+                                fontSize: "13px",
+                                fontWeight: 600,
+                                color: "#334155",
+                                marginBottom: "4px",
+                            }}
+                        >
+                            API Token (Write-only)
+                        </label>
+                        <input
+                            id="jira-api-token"
+                            type="password"
+                            name="apiToken"
+                            value={formData.apiToken}
+                            onChange={handleInputChange}
+                            placeholder={
+                                config.configured
+                                    ? "•••••••••••••••• (Nhập mới nếu muốn thay đổi)"
+                                    : "Nhập Jira API Token..."
+                            }
+                            style={{
+                                width: "100%",
+                                padding: "8px 12px",
+                                borderRadius: "6px",
+                                border: "1px solid #cbd5e1",
+                                boxSizing: "border-box",
+                            }}
+                        />
+                    </div>
+
+                    <div
+                        style={{
+                            display: "flex",
+                            justifyContent: "flex-end",
+                            gap: "12px",
+                            marginTop: "12px",
+                        }}
+                    >
+                        {canTest && (
+                            <button
+                                type="button"
+                                data-testid="jira-test-btn"
+                                onClick={handleTestConnection}
+                                disabled={testing || !config.configured}
+                                style={{
+                                    padding: "9px 18px",
+                                    backgroundColor: "#f1f5f9",
+                                    border: "1px solid #94a3b8",
+                                    borderRadius: "6px",
+                                    fontWeight: 600,
+                                    fontSize: "13px",
+                                    color: "#1e293b",
+                                    cursor:
+                                        testing || !config.configured
+                                            ? "not-allowed"
+                                            : "pointer",
+                                    opacity:
+                                        testing || !config.configured ? 0.6 : 1,
+                                }}
+                            >
+                                {testing
+                                    ? "Đang kiểm tra..."
+                                    : "Test Connection"}
+                            </button>
+                        )}
+
+                        <button
+                            type="submit"
+                            data-testid="jira-save-btn"
+                            disabled={submitting}
+                            style={{
+                                padding: "9px 22px",
+                                backgroundColor: "#1d4ed8",
+                                border: "none",
+                                borderRadius: "6px",
+                                fontWeight: 600,
+                                fontSize: "13px",
+                                color: "#ffffff",
+                                cursor: submitting ? "not-allowed" : "pointer",
+                                opacity: submitting ? 0.7 : 1,
+                            }}
+                        >
+                            {submitting ? "Đang lưu..." : "Lưu cấu hình"}
+                        </button>
+                    </div>
+                </form>
+            )}
         </div>
     );
-};
-
-export default JiraConfigComponent;
+}
