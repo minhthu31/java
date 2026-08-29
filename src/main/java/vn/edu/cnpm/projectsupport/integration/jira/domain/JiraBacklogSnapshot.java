@@ -14,8 +14,9 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 @Entity
-@Table(name = "jira_backlog_snapshots", uniqueConstraints =
-        @UniqueConstraint(name = "uk_jira_backlog_project", columnNames = "project_id"))
+@Table(
+        name = "jira_backlog_snapshots",
+        uniqueConstraints = @UniqueConstraint(name = "uk_jira_backlog_project", columnNames = "project_id"))
 public class JiraBacklogSnapshot {
 
     @Id
@@ -25,7 +26,10 @@ public class JiraBacklogSnapshot {
     @Column(name = "project_id", nullable = false)
     private Long projectId;
 
-    @Column(name = "jira_project_key", nullable = false, length = 30)
+    @Column(
+            name = "jira_project_key",
+            nullable = false,
+            length = 30)
     private String jiraProjectKey;
 
     @Column(name = "last_synced_at", nullable = false)
@@ -35,7 +39,10 @@ public class JiraBacklogSnapshot {
     private String snapshotHash;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "raw_snapshot", columnDefinition = "JSON", nullable = false)
+    @Column(
+            name = "raw_snapshot",
+            columnDefinition = "JSON",
+            nullable = false)
     private Map<String, Object> rawSnapshot;
 
     protected JiraBacklogSnapshot() {
@@ -46,16 +53,45 @@ public class JiraBacklogSnapshot {
         this.jiraProjectKey = jiraProjectKey;
     }
 
-    public Long getId() { return id; }
-    public Long getProjectId() { return projectId; }
-    public String getJiraProjectKey() { return jiraProjectKey; }
-    public Instant getLastSyncedAt() { return lastSyncedAt; }
-    public String getSnapshotHash() { return snapshotHash; }
-    public Map<String, Object> getRawSnapshot() { return rawSnapshot; }
+    public Long getId() {
+        return id;
+    }
 
-    public void setLastSyncedAt(Instant lastSyncedAt) { this.lastSyncedAt = lastSyncedAt; }
-    public void setSnapshotHash(String snapshotHash) { this.snapshotHash = snapshotHash; }
-    public void setRawSnapshot(Map<String, Object> rawSnapshot) {
+    public Long getProjectId() {
+        return projectId;
+    }
+
+    public String getJiraProjectKey() {
+        return jiraProjectKey;
+    }
+
+    public Instant getLastSyncedAt() {
+        return lastSyncedAt;
+    }
+
+    public String getSnapshotHash() {
+        return snapshotHash;
+    }
+
+    public Map<String, Object> getRawSnapshot() {
+        return rawSnapshot;
+    }
+
+    public void setJiraProjectKey(String jiraProjectKey) {
+        this.jiraProjectKey = jiraProjectKey;
+    }
+
+    public void setLastSyncedAt(Instant lastSyncedAt) {
+        this.lastSyncedAt = lastSyncedAt;
+    }
+
+    public void setSnapshotHash(String snapshotHash) {
+        this.snapshotHash = snapshotHash;
+    }
+
+    public void setRawSnapshot(
+            Map<String, Object> rawSnapshot) {
+
         this.rawSnapshot = rawSnapshot == null ? null : new LinkedHashMap<>(rawSnapshot);
     }
 }

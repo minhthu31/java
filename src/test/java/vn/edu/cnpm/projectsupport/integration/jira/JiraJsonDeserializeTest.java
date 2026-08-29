@@ -9,8 +9,7 @@ import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraIssueDto;
 
 class JiraJsonDeserializeTest {
 
-    private final ObjectMapper objectMapper =
-            new ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
     void shouldDeserializeRealJiraIssueShapeWithFieldsAndAdfDescription()
@@ -22,6 +21,7 @@ class JiraJsonDeserializeTest {
                   "key": "CNPM-10",
                   "fields": {
                     "summary": "Implement Jira DTO",
+                    "updated": "2026-08-29T10:30:00.000+0700",
                     "description": {
                       "version": 1,
                       "type": "doc",
@@ -63,62 +63,20 @@ class JiraJsonDeserializeTest {
                 }
                 """;
 
-        JiraIssueDto issue =
-                objectMapper.readValue(
-                        json,
-                        JiraIssueDto.class);
+        JiraIssueDto issue = objectMapper.readValue(json, JiraIssueDto.class);
 
-        assertEquals(
-                "10001",
-                issue.id());
-
-        assertEquals(
-                "CNPM-10",
-                issue.key());
-
-        assertEquals(
-                "Implement Jira DTO",
-                issue.fields().summary());
-
-        assertNotNull(
-                issue.fields().description());
-
-        assertEquals(
-                1,
-                issue.fields().description().version());
-
-        assertEquals(
-                "doc",
-                issue.fields().description().type());
-
-        assertEquals(
-                "Description from Jira",
-                issue.fields()
-                        .description()
-                        .content()
-                        .get(0)
-                        .content()
-                        .get(0)
-                        .text());
-
-        assertEquals(
-                "In Progress",
-                issue.fields().status().name());
-
-        assertEquals(
-                "High",
-                issue.fields().priority().name());
-
-        assertEquals(
-                "user-1",
-                issue.fields().assignee().accountId());
-
-        assertEquals(
-                "CNPM",
-                issue.fields().project().key());
-
-        assertEquals(
-                "Task",
-                issue.fields().issuetype().name());
+        assertEquals("10001",issue.id());
+        assertEquals("CNPM-10",issue.key());
+        assertEquals("Implement Jira DTO",issue.fields().summary());
+        assertEquals("2026-08-29T10:30:00.000+0700",issue.updated());
+        assertNotNull(issue.fields().description());
+        assertEquals(1,issue.fields().description().version());
+        assertEquals("doc",issue.fields().description().type());
+        assertEquals("Description from Jira",issue.fields().description().content().get(0).content().get(0).text());
+        assertEquals("In Progress", issue.fields().status().name());
+        assertEquals("High", issue.fields().priority().name());
+        assertEquals("user-1", issue.fields().assignee().accountId());
+        assertEquals("CNPM", issue.fields().project().key());
+        assertEquals("Task", issue.fields().issuetype().name());
     }
 }

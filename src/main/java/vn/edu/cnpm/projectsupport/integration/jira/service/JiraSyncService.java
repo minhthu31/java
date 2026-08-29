@@ -4,8 +4,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.time.format.DateTimeParseException;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
@@ -25,7 +25,6 @@ import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraIssueDto;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraPageDto;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraSprintDto;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraSprintPageDto;
-import vn.edu.cnpm.projectsupport.integration.jira.mapper.JiraMapper;
 import vn.edu.cnpm.projectsupport.integration.jira.pagination.JiraPaginationReader;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.JiraBacklogSnapshotRepository;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.JiraIssueSnapshotRepository;
@@ -48,7 +47,6 @@ public class JiraSyncService {
     private final SprintRepository sprintRepository;
     private final SyncLogRepository syncLogRepository;
     private final JiraPaginationReader paginationReader;
-    private final JiraMapper mapper;
 
     public JiraSyncService(
             ProjectRepository projectRepository,
@@ -57,6 +55,7 @@ public class JiraSyncService {
             JiraBacklogSnapshotRepository backlogSnapshotRepository,
             SprintRepository sprintRepository,
             SyncLogRepository syncLogRepository) {
+
         this.projectRepository = projectRepository;
         this.jiraClient = jiraClient;
         this.issueSnapshotRepository = issueSnapshotRepository;
@@ -64,25 +63,33 @@ public class JiraSyncService {
         this.sprintRepository = sprintRepository;
         this.syncLogRepository = syncLogRepository;
         this.paginationReader = new JiraPaginationReader(PAGE_SIZE, MAX_ITEMS);
-        this.mapper = new JiraMapper();
     }
 
-    public JiraSyncResult syncProject(Long projectId, String projectKey) {
-        Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new IllegalArgumentException("Project không tồn tại"));
+    public JiraSyncResult syncProject(Long projectId) {
+        Project project = projectRepository.findById(projectId).orElseThrow(() ->
+                        new IllegalArgumentException("Project không tồn tại"));
+
+        String projectKey = project.getJiraProjectKey();
+
+        if (projectKey == null || projectKey.isBlank()) {
+            throw new IllegalArgumentException("Project chưa được cấu hình Jira Project Key");
+        }
 
         String correlationId = UUID.randomUUID().toString();
         Instant startedAt = Instant.now();
-        SyncLog log = new SyncLog(projectId, IntegrationProvider.JIRA,
-                "PROJECT_SYNC", projectKey, SyncDirection.IMPORT, correlationId, startedAt);
+
+        SyncLog log = new SyncLog(projectId, IntegrationProvider.JIRA, "PROJECT_SYNC", projectKey, SyncDirection.IMPORT, correlationId, startedAt);
+
         syncLogRepository.save(log);
 
         int[] counters = new int[3];
         int[] errors = new int[1];
+
         Instant syncedAt = Instant.now();
 
         try {
             JiraProject jiraProject = jiraClient.getProject(projectId, projectKey);
+
             updateProjectSnapshot(project, jiraProject, syncedAt);
             projectRepository.save(project);
 
@@ -111,26 +118,30 @@ public class JiraSyncService {
             projectRepository.save(project);
 
             log.setStatus(errors[0] == 0 ? SyncLogStatus.SUCCESS : SyncLogStatus.FAILED);
+
             if (errors[0] > 0) {
                 log.setErrorCode("PARTIAL_SYNC");
                 log.setErrorMessage("Một phần dữ liệu Jira đồng bộ thất bại");
             }
+
             log.setCompletedAt(Instant.now());
             syncLogRepository.save(log);
 
-            return new JiraSyncResult(projectId, jiraProject.key(), counters[0], counters[1],
-                    counters[2], errors[0], syncedAt, correlationId);
+            return new JiraSyncResult(projectId, jiraProject.key(), counters[0], counters[1], counters[2], errors[0], syncedAt, correlationId);
+
         } catch (RuntimeException e) {
             log.setStatus(SyncLogStatus.FAILED);
             log.setErrorCode("SYNC_FAILED");
             log.setErrorMessage(safeMessage(e));
             log.setCompletedAt(Instant.now());
+
             syncLogRepository.save(log);
             throw e;
         }
     }
 
     private void updateProjectSnapshot(Project project, JiraProject jiraProject, Instant syncedAt) {
+
         project.setJiraProjectId(jiraProject.id());
         project.setJiraProjectKey(jiraProject.key());
         project.setJiraSiteUrl(extractOrigin(jiraProject.self()));
@@ -138,8 +149,8 @@ public class JiraSyncService {
     }
 
     private void syncIssues(Long projectId, String projectKey, Instant syncedAt, String correlationId, int[] counters, int[] errors) {
-        paginationReader.readPages(
-                (start, size) -> jiraClient.getIssues(projectId, projectKey, start, size),
+        paginationReader.readPages((start, size) ->
+                        jiraClient.getIssues(projectId, projectKey, start, size),
                 page -> {
                     for (JiraIssueDto dto : page) {
                         try {
@@ -157,28 +168,31 @@ public class JiraSyncService {
         if (dto.id() == null || dto.key() == null) {
             throw new IllegalArgumentException("Jira issue thiếu id hoặc key");
         }
-        JiraIssueSnapshot issue = issueSnapshotRepository
-                .findByProjectIdAndJiraIssueId(projectId, dto.id())
-                .orElseGet(() -> issueSnapshotRepository
-                        .findByProjectIdAndJiraIssueKey(projectId, dto.key())
-                        .orElseGet(() -> new JiraIssueSnapshot(projectId, dto.id(), dto.key())));
+
+        JiraIssueSnapshot issue = issueSnapshotRepository.findByProjectIdAndJiraIssueId(projectId, dto.id()).orElseGet(() ->
+            issueSnapshotRepository.findByProjectIdAndJiraIssueKey(projectId,dto.key()).orElseGet(() ->
+                new JiraIssueSnapshot(projectId, dto.id(), dto.key())));
 
         issue.setSummary(dto.summary());
-        issue.setIssueType(dto.fields() == null || dto.fields().issuetype() == null
-                ? null : dto.fields().issuetype().name());
+        issue.setIssueType(dto.fields() == null || dto.fields().issuetype() == null ? null : dto.fields().issuetype().name());
         issue.setStatus(dto.status() == null ? null : dto.status().name());
+
         issue.setUrl("/browse/" + dto.key());
         issue.setRemoteUpdatedAt(parseInstant(dto.updated()));
         issue.setLastSyncedAt(syncedAt);
-        issue.setSnapshotHash(hash(snapshotMap(dto)));
-        issue.setRawSnapshot(snapshotMap(dto));
+
+        Map<String, Object> raw = snapshotMap(dto);
+
+        issue.setSnapshotHash(hash(raw));
+        issue.setRawSnapshot(raw);
+        
         issueSnapshotRepository.save(issue);
     }
 
     private void syncBacklog(Long projectId, String projectKey, Instant syncedAt, int[] counters, int[] errors) {
         List<Map<String, Object>> all = new ArrayList<>();
-        paginationReader.readPages(
-                (start, size) -> jiraClient.getBacklog(projectId, projectKey, start, size),
+
+        paginationReader.readPages((start, size) -> jiraClient.getBacklog(projectId, projectKey, start, size),
                 page -> {
                     for (JiraIssueDto dto : page) {
                         all.add(snapshotMap(dto));
@@ -186,21 +200,24 @@ public class JiraSyncService {
                     }
                 });
 
-        JiraBacklogSnapshot snapshot = backlogSnapshotRepository.findByProjectId(projectId)
-                .orElseGet(() -> new JiraBacklogSnapshot(projectId, projectKey));
+        JiraBacklogSnapshot snapshot = backlogSnapshotRepository.findByProjectId(projectId).orElseGet(() -> new JiraBacklogSnapshot(projectId, projectKey));
+
+        snapshot.setJiraProjectKey(projectKey);
         Map<String, Object> raw = new LinkedHashMap<>();
+
         raw.put("projectKey", projectKey);
         raw.put("items", all);
         raw.put("count", all.size());
+
         snapshot.setLastSyncedAt(syncedAt);
         snapshot.setSnapshotHash(hash(raw));
         snapshot.setRawSnapshot(raw);
+
         backlogSnapshotRepository.save(snapshot);
     }
 
     private void syncSprints(Long projectId, String projectKey, Instant syncedAt, String correlationId, int[] counters, int[] errors) {
-        paginationReader.readPages(
-                (start, size) -> getSprintPage(projectId, projectKey, start, size),
+        paginationReader.readPages((start, size) -> getSprintPage(projectId, projectKey, start, size),
                 page -> {
                     for (JiraSprintDto dto : page) {
                         try {
@@ -219,13 +236,16 @@ public class JiraSyncService {
         return new JiraPageDto<>(page.startAt(), page.maxResults(), page.total(), page.isLast(), page.values());
     }
 
-    private void upsertSprint(Long projectId, JiraSprintDto dto, Instant syncedAt) {
+    private void upsertSprint(Long projectId, JiraSprintDto dto,Instant syncedAt) {
         Long jiraId = parseLong(dto.id());
+
         if (jiraId == null || dto.name() == null) {
             throw new IllegalArgumentException("Jira sprint thiếu id hoặc name");
         }
-        Sprint sprint = sprintRepository.findByProjectIdAndJiraSprintId(projectId, jiraId)
-                .orElseGet(() -> new Sprint(projectId, dto.name(), dto.state() == null ? "UNKNOWN" : dto.state()));
+
+        Sprint sprint = sprintRepository.findByProjectIdAndJiraSprintId( projectId, jiraId).orElseGet(() ->
+        new Sprint(projectId,dto.name(),dto.state() == null ? "UNKNOWN": dto.state()));
+
         sprint.setJiraSprintId(jiraId);
         sprint.setName(dto.name());
         sprint.setState(dto.state() == null ? "UNKNOWN" : dto.state());
@@ -233,50 +253,91 @@ public class JiraSyncService {
         sprint.setStartDate(parseInstant(dto.startDate()));
         sprint.setEndDate(parseInstant(dto.endDate()));
         sprint.setLastSyncedAt(syncedAt);
+
         sprintRepository.save(sprint);
     }
 
     private void saveError(Long projectId, String entityType, String entityId, String correlationId, RuntimeException e) {
-        SyncLog item = new SyncLog(projectId, IntegrationProvider.JIRA, entityType, entityId,
-                SyncDirection.IMPORT, correlationId, Instant.now());
+
+        SyncLog item = new SyncLog(projectId,IntegrationProvider.JIRA, entityType, entityId, SyncDirection.IMPORT, correlationId,Instant.now());
+
         item.setStatus(SyncLogStatus.FAILED);
         item.setErrorCode("ITEM_SYNC_FAILED");
         item.setErrorMessage(safeMessage(e));
         item.setCompletedAt(Instant.now());
+
         syncLogRepository.save(item);
     }
 
     private Map<String, Object> snapshotMap(JiraIssueDto dto) {
+
         Map<String, Object> raw = new LinkedHashMap<>();
+
         raw.put("id", dto.id());
         raw.put("key", dto.key());
         raw.put("summary", dto.summary());
-        raw.put("status", dto.status() == null ? null : dto.status().name());
-        raw.put("priority", dto.priority() == null ? null : dto.priority().name());
-        raw.put("issueType", dto.fields() == null || dto.fields().issuetype() == null
-                ? null : dto.fields().issuetype().name());
-        raw.put("assignee", dto.assignee() == null ? null : dto.assignee().displayName());
+
+        raw.put(
+                "status",
+                dto.status() == null
+                        ? null
+                        : dto.status().name());
+
+        raw.put(
+                "priority",
+                dto.priority() == null
+                        ? null
+                        : dto.priority().name());
+
+        raw.put(
+                "issueType",
+                dto.fields() == null
+                        || dto.fields().issuetype() == null
+                        ? null
+                        : dto.fields().issuetype().name());
+
+        raw.put(
+                "assignee",
+                dto.assignee() == null
+                        ? null
+                        : dto.assignee().displayName());
+
         raw.put("updated", dto.updated());
+
         return raw;
     }
 
     private String extractOrigin(String self) {
-        if (self == null || self.isBlank()) return null;
+
+        if (self == null || self.isBlank()) {
+            return null;
+        }
+
         try {
-            java.net.URI uri = java.net.URI.create(self);
-            return uri.getScheme() + "://" + uri.getAuthority();
+            java.net.URI uri =
+                    java.net.URI.create(self);
+
+            return uri.getScheme()
+                    + "://"
+                    + uri.getAuthority();
+
         } catch (IllegalArgumentException e) {
             return null;
         }
     }
 
     private Instant parseInstant(String value) {
-        if (value == null || value.isBlank()) return null;
+
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+
         try {
             return OffsetDateTime.parse(value).toInstant();
+
         } catch (DateTimeParseException ignored) {
             try {
-                return OffsetDateTime.parse(value, DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZ")).toInstant();
+                return OffsetDateTime.parse(value, DateTimeFormatter.ofPattern( "yyyy-MM-dd'T'HH:mm:ss.SSSZ")).toInstant();
             } catch (DateTimeParseException ignoredAgain) {
                 return null;
             }
@@ -284,17 +345,22 @@ public class JiraSyncService {
     }
 
     private Long parseLong(String value) {
+
         try {
             return value == null ? null : Long.valueOf(value);
+
         } catch (NumberFormatException e) {
             return null;
         }
     }
 
     private String hash(Object value) {
+
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
+
             return HexFormat.of().formatHex(digest.digest(String.valueOf(value).getBytes(StandardCharsets.UTF_8)));
+
         } catch (Exception e) {
             throw new IllegalStateException("Không thể tạo snapshot hash", e);
         }
@@ -302,6 +368,7 @@ public class JiraSyncService {
 
     private String safeMessage(Exception e) {
         String message = e.getMessage();
-        return message == null ? e.getClass().getSimpleName() : message.substring(0, Math.min(message.length(), 1000));
+
+        return message == null ? e.getClass().getSimpleName(): message.substring(0, Math.min(message.length(), 1000));
     }
 }
