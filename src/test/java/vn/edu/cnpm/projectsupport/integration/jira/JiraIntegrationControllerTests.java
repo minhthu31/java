@@ -102,7 +102,6 @@ class JiraIntegrationControllerTests {
                 .andExpect(jsonPath("$.data.apiToken").doesNotExist())
                 .andExpect(jsonPath("$.data.email").doesNotExist());
 
-        // Kiểm tra lưu DB
         IntegrationConfig persisted = configRepository
                 .findByProjectIdAndProvider(PROJECT_ID, IntegrationProvider.JIRA)
                 .orElseThrow();
@@ -117,7 +116,6 @@ class JiraIntegrationControllerTests {
                 PROJECT_ID);
         assertThat(savedProjectKey).isEqualTo("TEST");
 
-        // GET config phải đọc lại đúng "TEST", không bị fallback về mã nhóm
         mockMvc.perform(get(BASE_URL + "/config", PROJECT_ID)
                         .with(user("admin").roles("ADMIN")))
                 .andExpect(status().isOk())
@@ -149,6 +147,52 @@ class JiraIntegrationControllerTests {
                 .andExpect(jsonPath("$.data.displayName").value("Project Support"));
 
         verify(jiraClient).testConnection(PROJECT_ID, "TEST");
+    }
+
+    @Test
+    @DisplayName("Lỗi xác thực Jira trả về HTTP 200 connected=false và lưu trạng thái thất bại")
+    void authenticationErrorReturnsConnectedFalse() throws Exception {
+        String encrypted = secretService.encrypt("secret-token-12345");
+        IntegrationConfig config = new IntegrationConfig(PROJECT_ID, IntegrationProvider.JIRA, encrypted);
+        config.setBaseUrl("https://example.atlassian.net");
+        config.setAccountIdentifier("admin@example.com");
+        configRepository.save(config);
+
+        jdbcTemplate.update("UPDATE projects SET jira_project_key = ? WHERE id = ?", "TEST", PROJECT_ID);
+
+        when(jiraClient.testConnection(eq(PROJECT_ID), eq("TEST")))
+                .thenThrow(new JiraAuthenticationException("Invalid credentials"));
+
+        mockMvc.perform(post(BASE_URL + "/test-connection", PROJECT_ID)
+                        .with(user("admin").roles("ADMIN"))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.connected").value(false))
+                .andExpect(jsonPath("$.data.errorCode").value("JIRA_AUTHENTICATION_FAILED"));
+
+        IntegrationConfig updated = configRepository.findByProjectIdAndProvider(PROJECT_ID, IntegrationProvider.JIRA).orElseThrow();
+        assertThat(updated.getStatus()).isEqualTo(IntegrationConfigStatus.CONNECTION_FAILED);
+    }
+
+    @Test
+    @DisplayName("Lỗi mạng phía Jira trả về HTTP 502 theo OpenAPI contract")
+    void networkErrorReturnsHttp502() throws Exception {
+        String encrypted = secretService.encrypt("secret-token-12345");
+        IntegrationConfig config = new IntegrationConfig(PROJECT_ID, IntegrationProvider.JIRA, encrypted);
+        config.setBaseUrl("https://example.atlassian.net");
+        config.setAccountIdentifier("admin@example.com");
+        configRepository.save(config);
+
+        jdbcTemplate.update("UPDATE projects SET jira_project_key = ? WHERE id = ?", "TEST", PROJECT_ID);
+
+        when(jiraClient.testConnection(eq(PROJECT_ID), eq("TEST")))
+                .thenThrow(new JiraConnectionException("Jira Cloud unreachable"));
+
+        mockMvc.perform(post(BASE_URL + "/test-connection", PROJECT_ID)
+                        .with(user("admin").roles("ADMIN"))
+                        .with(csrf()))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value("JIRA_CONNECTION_FAILED"));
     }
 
     @Test
