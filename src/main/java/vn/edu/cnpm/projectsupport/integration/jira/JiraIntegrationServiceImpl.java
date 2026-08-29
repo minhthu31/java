@@ -51,8 +51,7 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                     projectId, null, null, null, null, false, null, null);
         }
 
-        // Điểm 1: Lấy đúng projectKey của project để GET config không bị null
-        String projectKey = resolveProjectKey(projectId);
+        String projectKey = getSavedJiraProjectKey(projectId);
 
         return new JiraConnectionResponse(
                 config.getProjectId(),
@@ -74,7 +73,6 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                 .orElseGet(() -> new IntegrationConfig(projectId, IntegrationProvider.JIRA, encryptedSecret));
 
         config.setBaseUrl(request.siteUrl());
-        // Chỉ lưu email vào account_identifier để Basic Auth không bị sai username
         config.setAccountIdentifier(request.email());
         config.setEncryptedSecret(encryptedSecret);
         config.setStatus(IntegrationConfigStatus.NOT_CHECKED);
@@ -82,6 +80,12 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
         config.setLastErrorCode(null);
 
         IntegrationConfig saved = configRepository.save(config);
+
+        // Lưu trực tiếp request.projectKey() vào projects.jira_project_key
+        jdbcTemplate.update(
+                "UPDATE projects SET jira_project_key = ? WHERE id = ?",
+                request.projectKey(),
+                projectId);
 
         return new JiraConnectionResponse(
                 saved.getProjectId(),
@@ -100,11 +104,13 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                 .findByProjectIdAndProvider(projectId, IntegrationProvider.JIRA)
                 .orElseThrow(() -> new ResourceNotFoundException("Jira integration config not found for project: " + projectId));
 
-        String projectKey = resolveProjectKey(projectId);
-        Instant testedAt = Instant.now();
+        String projectKey = getSavedJiraProjectKey(projectId);
+        if (projectKey == null || projectKey.isBlank()) {
+            throw new JiraClientException("Jira project key chưa được cấu hình");
+        }
 
+        Instant testedAt = Instant.now();
         try {
-            // Điểm 2: Gọi JiraClient với đúng projectKey thật, không truyền null
             JiraConnectionResult result = jiraClient.testConnection(projectId, projectKey);
 
             config.setStatus(IntegrationConfigStatus.CONNECTED);
@@ -112,7 +118,6 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
             config.setLastErrorCode(null);
             configRepository.save(config);
 
-            // Điểm 3: Map đúng chuẩn theo OpenAPI contract
             return new JiraConnectionTestResponse(
                     projectId,
                     result.connected(),
@@ -124,7 +129,6 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                     null,
                     "Kết nối Jira Cloud thành công");
         } catch (JiraAuthenticationException | JiraAuthorizationException | JiraProjectNotFoundException | JiraClientException e) {
-            // Điểm 4: Chỉ bắt lỗi credential / authorization / not found và trả kết quả test thất bại (200)
             config.setStatus(IntegrationConfigStatus.CONNECTION_FAILED);
             config.setLastCheckedAt(testedAt);
             config.setLastErrorCode(e.getErrorCode());
@@ -141,7 +145,6 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                     e.getErrorCode(),
                     e.getMessage());
         }
-        // Lỗi mạng/502 (JiraConnectionException) và 429 (JiraRateLimitException) sẽ throw ra ngoài cho GlobalExceptionHandler
     }
 
     @Override
@@ -159,17 +162,17 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
         throw new UnsupportedOperationException("getIssue is handled in subsequent tasks");
     }
 
-    private String resolveProjectKey(Long projectId) {
+    private String getSavedJiraProjectKey(Long projectId) {
         try {
             var keys = jdbcTemplate.query(
-                    "SELECT g.code FROM student_groups g JOIN projects p ON p.group_id = g.id WHERE p.id = ?",
-                    (rs, rowNum) -> rs.getString("code"),
+                    "SELECT jira_project_key FROM projects WHERE id = ?",
+                    (rs, rowNum) -> rs.getString("jira_project_key"),
                     projectId);
             if (!keys.isEmpty() && keys.get(0) != null && !keys.get(0).isBlank()) {
                 return keys.get(0);
             }
         } catch (Exception ignored) {
         }
-        return "CNPM";
+        return null;
     }
 }

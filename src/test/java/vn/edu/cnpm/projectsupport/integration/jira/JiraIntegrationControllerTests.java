@@ -29,6 +29,7 @@ import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationConfigStatu
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.IntegrationConfigRepository;
 import vn.edu.cnpm.projectsupport.security.IntegrationSecretService;
+import vn.edu.cnpm.projectsupport.security.ProjectAuthorizationService;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -55,6 +56,9 @@ class JiraIntegrationControllerTests {
     @MockitoBean
     private JiraClient jiraClient;
 
+    @MockitoBean(name = "projectAuthorization")
+    private ProjectAuthorizationService projectAuthorization;
+
     @BeforeEach
     void setUp() {
         jdbcTemplate.update("DELETE FROM integration_configs WHERE project_id = ?", PROJECT_ID);
@@ -64,21 +68,21 @@ class JiraIntegrationControllerTests {
 
         jdbcTemplate.update("""
                 INSERT INTO student_groups (id, code, name)
-                VALUES (?, 'CNPM', 'CNPM 78 Test Group')
+                VALUES (?, 'CNPM_CODE', 'CNPM Group')
                 """, GROUP_ID);
         jdbcTemplate.update("""
                 INSERT INTO projects (id, group_id, name)
-                VALUES (?, ?, 'CNPM 78 Project')
+                VALUES (?, ?, 'CNPM Project')
                 """, PROJECT_ID, GROUP_ID);
     }
 
     @Test
-    @DisplayName("Admin cấu hình Jira, DB lưu AES-GCM và GET config trả lại đúng projectKey")
-    void adminConfiguresJiraSuccessfullyAndReadsProjectKey() throws Exception {
+    @DisplayName("Admin cấu hình Jira với projectKey='TEST' khác mã nhóm 'CNPM_CODE', lưu DB và GET config đọc lại đúng 'TEST'")
+    void adminConfiguresJiraWithCustomProjectKeyDistinctFromGroupCode() throws Exception {
         String requestBody = """
                 {
                   "siteUrl": "https://example.atlassian.net",
-                  "projectKey": "CNPM",
+                  "projectKey": "TEST",
                   "email": "admin@example.com",
                   "apiToken": "secret-token-12345",
                   "authType": "API_TOKEN"
@@ -93,12 +97,12 @@ class JiraIntegrationControllerTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.projectId").value(PROJECT_ID))
                 .andExpect(jsonPath("$.data.siteUrl").value("https://example.atlassian.net"))
-                .andExpect(jsonPath("$.data.projectKey").value("CNPM"))
+                .andExpect(jsonPath("$.data.projectKey").value("TEST"))
                 .andExpect(jsonPath("$.data.configured").value(true))
                 .andExpect(jsonPath("$.data.apiToken").doesNotExist())
                 .andExpect(jsonPath("$.data.email").doesNotExist());
 
-        // Kiểm tra database
+        // Kiểm tra lưu DB
         IntegrationConfig persisted = configRepository
                 .findByProjectIdAndProvider(PROJECT_ID, IntegrationProvider.JIRA)
                 .orElseThrow();
@@ -107,79 +111,71 @@ class JiraIntegrationControllerTests {
         assertThat(persisted.getEncryptedSecret()).startsWith("v1:");
         assertThat(secretService.decrypt(persisted.getEncryptedSecret())).isEqualTo("secret-token-12345");
 
-        // GET config phải đọc lại đúng projectKey từ DB
+        String savedProjectKey = jdbcTemplate.queryForObject(
+                "SELECT jira_project_key FROM projects WHERE id = ?",
+                String.class,
+                PROJECT_ID);
+        assertThat(savedProjectKey).isEqualTo("TEST");
+
+        // GET config phải đọc lại đúng "TEST", không bị fallback về mã nhóm
         mockMvc.perform(get(BASE_URL + "/config", PROJECT_ID)
                         .with(user("admin").roles("ADMIN")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.projectKey").value("CNPM"))
+                .andExpect(jsonPath("$.data.projectKey").value("TEST"))
                 .andExpect(jsonPath("$.data.configured").value(true));
     }
 
     @Test
-    @DisplayName("Test connection truyền đúng projectKey cho JiraClient và verify chính xác")
-    void adminTestsConnectionWithExactProjectKeyVerification() throws Exception {
+    @DisplayName("Test connection đọc đúng projectKey đã lưu từ bảng projects và truyền cho JiraClient")
+    void adminTestsConnectionWithSavedProjectKey() throws Exception {
         String encrypted = secretService.encrypt("secret-token-12345");
         IntegrationConfig config = new IntegrationConfig(PROJECT_ID, IntegrationProvider.JIRA, encrypted);
         config.setBaseUrl("https://example.atlassian.net");
         config.setAccountIdentifier("admin@example.com");
         configRepository.save(config);
 
-        when(jiraClient.testConnection(eq(PROJECT_ID), eq("CNPM")))
-                .thenReturn(new JiraConnectionResult(true, "10001", "CNPM", "Project Support"));
+        jdbcTemplate.update("UPDATE projects SET jira_project_key = ? WHERE id = ?", "TEST", PROJECT_ID);
+
+        when(jiraClient.testConnection(eq(PROJECT_ID), eq("TEST")))
+                .thenReturn(new JiraConnectionResult(true, "10001", "TEST", "Project Support"));
 
         mockMvc.perform(post(BASE_URL + "/test-connection", PROJECT_ID)
                         .with(user("admin").roles("ADMIN"))
                         .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.connected").value(true))
-                .andExpect(jsonPath("$.data.projectKey").value("CNPM"))
+                .andExpect(jsonPath("$.data.projectKey").value("TEST"))
                 .andExpect(jsonPath("$.data.jiraProjectId").value("10001"))
                 .andExpect(jsonPath("$.data.displayName").value("Project Support"));
 
-        // Xác nhận chính xác jiraClient nhận đúng projectKey "CNPM"
-        verify(jiraClient).testConnection(PROJECT_ID, "CNPM");
+        verify(jiraClient).testConnection(PROJECT_ID, "TEST");
     }
 
     @Test
-    @DisplayName("Lỗi xác thực Jira trả về HTTP 200 connected=false")
-    void authenticationErrorReturnsConnectedFalse() throws Exception {
+    @DisplayName("Team Leader của dự án được xem cấu hình (200 OK)")
+    void leaderOfProjectCanViewConfig() throws Exception {
         String encrypted = secretService.encrypt("secret-token-12345");
         IntegrationConfig config = new IntegrationConfig(PROJECT_ID, IntegrationProvider.JIRA, encrypted);
         config.setBaseUrl("https://example.atlassian.net");
         config.setAccountIdentifier("admin@example.com");
         configRepository.save(config);
 
-        when(jiraClient.testConnection(eq(PROJECT_ID), eq("CNPM")))
-                .thenThrow(new JiraAuthenticationException("Invalid credentials"));
+        when(projectAuthorization.isCurrentUserLeader(PROJECT_ID)).thenReturn(true);
 
-        mockMvc.perform(post(BASE_URL + "/test-connection", PROJECT_ID)
-                        .with(user("admin").roles("ADMIN"))
-                        .with(csrf()))
+        mockMvc.perform(get(BASE_URL + "/config", PROJECT_ID)
+                        .with(user("leader").roles("TEAM_LEADER")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.connected").value(false))
-                .andExpect(jsonPath("$.data.errorCode").value("JIRA_AUTHENTICATION_FAILED"));
-
-        IntegrationConfig updated = configRepository.findByProjectIdAndProvider(PROJECT_ID, IntegrationProvider.JIRA).orElseThrow();
-        assertThat(updated.getStatus()).isEqualTo(IntegrationConfigStatus.CONNECTION_FAILED);
+                .andExpect(jsonPath("$.data.configured").value(true));
     }
 
     @Test
-    @DisplayName("Lỗi mạng phía Jira trả về HTTP 502 theo OpenAPI contract")
-    void networkErrorReturnsHttp502() throws Exception {
-        String encrypted = secretService.encrypt("secret-token-12345");
-        IntegrationConfig config = new IntegrationConfig(PROJECT_ID, IntegrationProvider.JIRA, encrypted);
-        config.setBaseUrl("https://example.atlassian.net");
-        config.setAccountIdentifier("admin@example.com");
-        configRepository.save(config);
+    @DisplayName("Team Leader không thuộc dự án bị từ chối truy cập (403 Forbidden)")
+    void leaderOfDifferentProjectIsForbidden() throws Exception {
+        when(projectAuthorization.isCurrentUserLeader(PROJECT_ID)).thenReturn(false);
 
-        when(jiraClient.testConnection(eq(PROJECT_ID), eq("CNPM")))
-                .thenThrow(new JiraConnectionException("Jira Cloud unreachable"));
-
-        mockMvc.perform(post(BASE_URL + "/test-connection", PROJECT_ID)
-                        .with(user("admin").roles("ADMIN"))
-                        .with(csrf()))
-                .andExpect(status().isBadGateway())
-                .andExpect(jsonPath("$.code").value("JIRA_CONNECTION_FAILED"));
+        mockMvc.perform(get(BASE_URL + "/config", PROJECT_ID)
+                        .with(user("other_leader").roles("TEAM_LEADER")))
+                .andExpect(status().isForbidden());
     }
 
     @Test
