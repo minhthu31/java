@@ -71,7 +71,7 @@ export default function Dashboard({ title }) {
     const canAccessRequirement =
         userRole === "TEAM_LEADER" || userRole === "LECTURER";
 
-    const canAccessJira = userRole === "ADMIN";
+    const canAccessJira = userRole === "ADMIN" || userRole === "TEAM_LEADER";
 
     return (
         <main
