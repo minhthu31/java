@@ -13,10 +13,9 @@ describe("JiraConfigComponent Tests - Contract Strict Verification", () => {
         jest.clearAllMocks();
     });
 
-    test("1. Khởi tạo form với authType API_TOKEN và đọc lastTestSucceeded", async () => {
+    test("1. Khởi tạo form với authType API_TOKEN, đọc status và render lastTestedAt", async () => {
         JiraIntegrationService.getConnection.mockResolvedValueOnce({
             siteUrl: "https://jira.example.com",
-            email: "admin@example.com",
             projectKey: "TEST",
             authType: "API_TOKEN",
             configured: true,
@@ -36,26 +35,15 @@ describe("JiraConfigComponent Tests - Contract Strict Verification", () => {
             expect(screen.getByLabelText(/Jira Base URL/i).value).toBe(
                 "https://jira.example.com",
             );
-            expect(
-                screen.getByLabelText(/Email tài khoản Atlassian/i).value,
-            ).toBe("admin@example.com");
             expect(screen.getByLabelText(/Project Key/i).value).toBe("TEST");
             expect(
                 screen.getByTestId("connection-status-badge").textContent,
             ).toBe("CONNECTED");
+            expect(screen.getByTestId("last-tested-at")).toBeInTheDocument();
         });
     });
 
-    test("2. TEAM_LEADER được quyền đọc GET cấu hình và không thấy nút Test Connection", async () => {
-        JiraIntegrationService.getConnection.mockResolvedValueOnce({
-            siteUrl: "https://jira.example.com",
-            email: "leader@example.com",
-            projectKey: "LEAD",
-            authType: "API_TOKEN",
-            configured: true,
-            lastTestSucceeded: null,
-        });
-
+    test("2. Non-Admin (TEAM_LEADER) không có quyền truy cập màn hình", () => {
         render(
             <JiraConfigComponent
                 projectId={mockProjectId}
@@ -63,22 +51,24 @@ describe("JiraConfigComponent Tests - Contract Strict Verification", () => {
             />,
         );
 
-        await waitFor(() => {
-            expect(JiraIntegrationService.getConnection).toHaveBeenCalledWith(
-                mockProjectId,
-            );
-            expect(screen.getByLabelText(/Jira Base URL/i).value).toBe(
-                "https://jira.example.com",
-            );
-            expect(screen.queryByTestId("test-connection-btn")).toBeNull();
-            expect(screen.getByTestId("save-config-btn")).toBeInTheDocument();
-        });
+        expect(
+            screen.getByTestId("unauthorized-message").textContent,
+        ).toContain("Bạn không có quyền truy cập cấu hình này.");
     });
 
-    test("3. Submit form gửi đầy đủ apiToken và authType API_TOKEN", async () => {
+    test("3. Non-Admin (STUDENT) không có quyền truy cập màn hình", () => {
+        render(
+            <JiraConfigComponent projectId={mockProjectId} role="STUDENT" />,
+        );
+
+        expect(
+            screen.getByTestId("unauthorized-message").textContent,
+        ).toContain("Bạn không có quyền truy cập cấu hình này.");
+    });
+
+    test("4. Submit form gửi đầy đủ apiToken bắt buộc và authType API_TOKEN", async () => {
         JiraIntegrationService.getConnection.mockResolvedValueOnce({
             siteUrl: "",
-            email: "",
             projectKey: "",
             authType: "API_TOKEN",
             configured: false,
@@ -92,9 +82,6 @@ describe("JiraConfigComponent Tests - Contract Strict Verification", () => {
 
         fireEvent.change(screen.getByLabelText(/Jira Base URL/i), {
             target: { value: "https://jira.example.com" },
-        });
-        fireEvent.change(screen.getByLabelText(/Email tài khoản Atlassian/i), {
-            target: { value: "admin@example.com" },
         });
         fireEvent.change(screen.getByLabelText(/Project Key/i), {
             target: { value: "PROJ" },
@@ -110,7 +97,6 @@ describe("JiraConfigComponent Tests - Contract Strict Verification", () => {
                 JiraIntegrationService.configureConnection,
             ).toHaveBeenCalledWith(mockProjectId, {
                 siteUrl: "https://jira.example.com",
-                email: "admin@example.com",
                 projectKey: "PROJ",
                 authType: "API_TOKEN",
                 apiToken: "secret-token-123",
@@ -118,14 +104,17 @@ describe("JiraConfigComponent Tests - Contract Strict Verification", () => {
         });
     });
 
-    test("4. Test connection gọi đúng projectId và không truyền body", async () => {
-        JiraIntegrationService.getConnection.mockResolvedValueOnce({
+    test("5. Test connection xử lý khi HTTP 200 nhưng connected=false", async () => {
+        JiraIntegrationService.getConnection.mockResolvedValue({
             siteUrl: "https://jira.example.com",
-            email: "admin@example.com",
             projectKey: "PROJ",
             configured: true,
         });
-        JiraIntegrationService.testConnection.mockResolvedValueOnce({});
+        JiraIntegrationService.testConnection.mockResolvedValueOnce({
+            connected: false,
+            errorCode: "INVALID_CREDENTIALS",
+            message: "Xác thực Jira thất bại.",
+        });
 
         render(<JiraConfigComponent projectId={mockProjectId} role="ADMIN" />);
 
@@ -138,16 +127,9 @@ describe("JiraConfigComponent Tests - Contract Strict Verification", () => {
             expect(JiraIntegrationService.testConnection).toHaveBeenCalledWith(
                 mockProjectId,
             );
+            expect(
+                screen.getByTestId("jira-error-message").textContent,
+            ).toContain("Xác thực Jira thất bại.");
         });
-    });
-
-    test("5. Hiển thị thông báo khi không có quyền truy cập (STUDENT)", () => {
-        render(
-            <JiraConfigComponent projectId={mockProjectId} role="STUDENT" />,
-        );
-
-        expect(
-            screen.getByTestId("unauthorized-message").textContent,
-        ).toContain("Bạn không có quyền truy cập cấu hình này.");
     });
 });

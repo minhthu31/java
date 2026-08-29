@@ -12,10 +12,10 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
         .replace(/^ROLE_/, "")
         .toUpperCase();
 
+    // Quyền truy cập: Chỉ duy nhất ADMIN được truy cập màn hình cấu hình Jira
     const isAdmin = userRole === "ADMIN";
-    const isTeamLeader = userRole === "TEAM_LEADER";
-    const canView = isAdmin || isTeamLeader;
-    const canEdit = isAdmin || isTeamLeader;
+    const canView = isAdmin;
+    const canEdit = isAdmin;
     const canTest = isAdmin;
 
     const [submitting, setSubmitting] = useState(false);
@@ -32,7 +32,6 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
 
     const [formData, setFormData] = useState({
         siteUrl: "",
-        email: "",
         projectKey: "",
         apiToken: "",
         authType: "API_TOKEN",
@@ -41,7 +40,6 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
     const fetchConfig = useCallback(async () => {
         if (!projectId || !canView) return;
 
-        setError(null);
         try {
             const res = await JiraIntegrationService.getConnection(projectId);
             const data =
@@ -73,7 +71,6 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
 
                 setFormData({
                     siteUrl: url,
-                    email: data.email || data.emailAddress || "",
                     projectKey: data.projectKey || "",
                     authType: data.authType || "API_TOKEN",
                     apiToken: "",
@@ -116,14 +113,10 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
 
         const payload = {
             siteUrl: formData.siteUrl.trim(),
-            email: formData.email.trim(),
             projectKey: formData.projectKey.trim(),
             authType: formData.authType || "API_TOKEN",
+            apiToken: formData.apiToken.trim(),
         };
-
-        if (formData.apiToken) {
-            payload.apiToken = formData.apiToken;
-        }
 
         try {
             await JiraIntegrationService.configureConnection(
@@ -151,9 +144,25 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
         setError(null);
 
         try {
-            await JiraIntegrationService.testConnection(projectId);
-            setMessage("Kết nối tới Jira thành công!");
-            await fetchConfig();
+            const res = await JiraIntegrationService.testConnection(projectId);
+            const data =
+                res?.data !== undefined &&
+                typeof res.data === "object" &&
+                res.data !== null &&
+                !Array.isArray(res.data)
+                    ? res.data
+                    : res;
+
+            if (data && data.connected === false) {
+                setError(
+                    data.message ||
+                        (data.errorCode
+                            ? `Lỗi kết nối Jira: ${data.errorCode}`
+                            : "Kiểm tra kết nối Jira thất bại."),
+                );
+            } else {
+                setMessage("Kết nối tới Jira thành công!");
+            }
         } catch (err) {
             setError(
                 err.response?.data?.message ||
@@ -244,7 +253,12 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
         return (
             <div
                 data-testid="unauthorized-message"
-                style={{ padding: "24px", color: "#de350b" }}
+                style={{
+                    padding: "24px",
+                    color: "#de350b",
+                    fontSize: "14px",
+                    fontWeight: 500,
+                }}
             >
                 Bạn không có quyền truy cập cấu hình này.
             </div>
@@ -257,7 +271,7 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
                 style={{
                     display: "flex",
                     justifyContent: "space-between",
-                    alignItems: "center",
+                    alignItems: "flex-start",
                     marginBottom: "20px",
                 }}
             >
@@ -282,7 +296,24 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
                         Cloud.
                     </p>
                 </div>
-                <div>{renderConnectionBadge()}</div>
+                <div style={{ textAlign: "right" }}>
+                    <div>{renderConnectionBadge()}</div>
+                    {config.lastTestedAt && (
+                        <div
+                            data-testid="last-tested-at"
+                            style={{
+                                fontSize: "12px",
+                                color: "#6b778c",
+                                marginTop: "4px",
+                            }}
+                        >
+                            Kiểm tra lần cuối:{" "}
+                            {new Date(config.lastTestedAt).toLocaleString(
+                                "vi-VN",
+                            )}
+                        </div>
+                    )}
+                </div>
             </div>
 
             {message && (
@@ -356,74 +387,35 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
                     />
                 </div>
 
-                <div
-                    style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: "14px",
-                    }}
-                >
-                    <div>
-                        <label
-                            htmlFor="jira-email"
-                            style={{
-                                display: "block",
-                                fontSize: "13px",
-                                fontWeight: 600,
-                                color: "#334155",
-                                marginBottom: "4px",
-                            }}
-                        >
-                            Email tài khoản Atlassian *
-                        </label>
-                        <input
-                            id="jira-email"
-                            type="email"
-                            name="email"
-                            value={formData.email}
-                            onChange={handleInputChange}
-                            placeholder="developer@company.com"
-                            required
-                            style={{
-                                width: "100%",
-                                padding: "8px 12px",
-                                borderRadius: "6px",
-                                border: "1px solid #cbd5e1",
-                                boxSizing: "border-box",
-                            }}
-                        />
-                    </div>
-
-                    <div>
-                        <label
-                            htmlFor="jira-project-key"
-                            style={{
-                                display: "block",
-                                fontSize: "13px",
-                                fontWeight: 600,
-                                color: "#334155",
-                                marginBottom: "4px",
-                            }}
-                        >
-                            Project Key *
-                        </label>
-                        <input
-                            id="jira-project-key"
-                            type="text"
-                            name="projectKey"
-                            value={formData.projectKey}
-                            onChange={handleInputChange}
-                            placeholder="VD: CNPM, PROJ"
-                            required
-                            style={{
-                                width: "100%",
-                                padding: "8px 12px",
-                                borderRadius: "6px",
-                                border: "1px solid #cbd5e1",
-                                boxSizing: "border-box",
-                            }}
-                        />
-                    </div>
+                <div>
+                    <label
+                        htmlFor="jira-project-key"
+                        style={{
+                            display: "block",
+                            fontSize: "13px",
+                            fontWeight: 600,
+                            color: "#334155",
+                            marginBottom: "4px",
+                        }}
+                    >
+                        Project Key *
+                    </label>
+                    <input
+                        id="jira-project-key"
+                        type="text"
+                        name="projectKey"
+                        value={formData.projectKey}
+                        onChange={handleInputChange}
+                        placeholder="VD: CNPM, PROJ"
+                        required
+                        style={{
+                            width: "100%",
+                            padding: "8px 12px",
+                            borderRadius: "6px",
+                            border: "1px solid #cbd5e1",
+                            boxSizing: "border-box",
+                        }}
+                    />
                 </div>
 
                 <div>
@@ -437,7 +429,7 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
                             marginBottom: "4px",
                         }}
                     >
-                        API Token (Write-only)
+                        API Token (Write-only) *
                     </label>
                     <input
                         id="jira-api-token"
@@ -445,11 +437,8 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
                         name="apiToken"
                         value={formData.apiToken}
                         onChange={handleInputChange}
-                        placeholder={
-                            config.configured
-                                ? "•••••••••••••••• (Nhập mới nếu muốn thay đổi)"
-                                : "Nhập Jira API Token..."
-                        }
+                        required
+                        placeholder="Nhập Jira API Token..."
                         style={{
                             width: "100%",
                             padding: "8px 12px",
@@ -468,27 +457,28 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
                         marginTop: "12px",
                     }}
                 >
-                    {canTest && (
-                        <button
-                            type="button"
-                            data-testid="test-connection-btn"
-                            onClick={handleTestConnection}
-                            disabled={testing}
-                            style={{
-                                padding: "9px 18px",
-                                backgroundColor: "#f1f5f9",
-                                border: "1px solid #94a3b8",
-                                borderRadius: "6px",
-                                fontWeight: 600,
-                                fontSize: "13px",
-                                color: "#1e293b",
-                                cursor: testing ? "not-allowed" : "pointer",
-                                opacity: testing ? 0.6 : 1,
-                            }}
-                        >
-                            {testing ? "Đang kiểm tra..." : "Test Connection"}
-                        </button>
-                    )}
+                    <button
+                        type="button"
+                        data-testid="test-connection-btn"
+                        onClick={handleTestConnection}
+                        disabled={testing || !config.configured}
+                        style={{
+                            padding: "9px 18px",
+                            backgroundColor: "#f1f5f9",
+                            border: "1px solid #94a3b8",
+                            borderRadius: "6px",
+                            fontWeight: 600,
+                            fontSize: "13px",
+                            color: "#1e293b",
+                            cursor:
+                                testing || !config.configured
+                                    ? "not-allowed"
+                                    : "pointer",
+                            opacity: testing || !config.configured ? 0.6 : 1,
+                        }}
+                    >
+                        {testing ? "Đang kiểm tra..." : "Test Connection"}
+                    </button>
 
                     <button
                         type="submit"
