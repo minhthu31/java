@@ -14,7 +14,6 @@ const getRoleTitle = (role) => {
             return "Giảng viên hướng dẫn";
         case "ADMIN":
             return "Quản trị hệ thống";
-        case "STUDENT":
         case "TEAM_MEMBER":
             return "Thành viên nhóm";
         default:
@@ -33,9 +32,7 @@ export default function Dashboard({ title }) {
         }
     }, [user, navigate]);
 
-    if (!user) {
-        return null;
-    }
+    if (!user) return null;
 
     const userRole = user.role
         ? String(user.role).replace("ROLE_", "").toUpperCase()
@@ -46,18 +43,12 @@ export default function Dashboard({ title }) {
     const getProjectId = () => {
         const fromUser =
             user?.projectId || user?.currentProjectId || user?.project?.id;
-
-        if (fromUser && Number(fromUser) > 0) {
-            return Number(fromUser);
-        }
+        if (fromUser && Number(fromUser) > 0) return Number(fromUser);
 
         const fromStorage =
             localStorage.getItem("currentProjectId") ||
             localStorage.getItem("projectId");
-
-        if (fromStorage && Number(fromStorage) > 0) {
-            return Number(fromStorage);
-        }
+        if (fromStorage && Number(fromStorage) > 0) return Number(fromStorage);
 
         return null;
     };
@@ -71,7 +62,7 @@ export default function Dashboard({ title }) {
     const canAccessRequirement =
         userRole === "TEAM_LEADER" || userRole === "LECTURER";
 
-    const canAccessJira = userRole === "ADMIN" || userRole === "TEAM_LEADER";
+    const canAccessJira = userRole === "ADMIN";
 
     return (
         <main
@@ -153,7 +144,6 @@ export default function Dashboard({ title }) {
                 >
                     Xin chào, {user.fullName || user.username || "Người dùng"}
                 </h2>
-
                 <p style={{ margin: 0, color: "#dbeafe", fontSize: "13px" }}>
                     Tài khoản:{" "}
                     <strong style={{ color: "#ffffff" }}>

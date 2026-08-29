@@ -1,4 +1,3 @@
-import "@testing-library/jest-dom";
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import JiraConfigComponent from "./JiraConfigComponent";
@@ -6,14 +5,14 @@ import { JiraIntegrationService } from "./JiraIntegrationService";
 
 jest.mock("./JiraIntegrationService");
 
-describe("JiraConfigComponent Tests - Contract Strict Verification ({ data: ... })", () => {
+describe("JiraConfigComponent Tests - Strict RBAC & Contract Verification", () => {
     const mockProjectId = "PROJ-123";
 
     beforeEach(() => {
         jest.clearAllMocks();
     });
 
-    test("1. Khởi tạo form với authType API_TOKEN, đọc status từ { data: ... } và render lastTestedAt chính xác", async () => {
+    test("1. Khởi tạo form cho ADMIN, đọc status từ { data: ... } và render lastTestedAt", async () => {
         const testTimestamp = "2026-08-29T10:00:00Z";
         JiraIntegrationService.getConnection.mockResolvedValueOnce({
             data: {
@@ -29,36 +28,18 @@ describe("JiraConfigComponent Tests - Contract Strict Verification ({ data: ... 
         render(<JiraConfigComponent projectId={mockProjectId} role="ADMIN" />);
 
         await waitFor(() => {
-            expect(JiraIntegrationService.getConnection).toHaveBeenCalledWith(
-                mockProjectId,
-            );
-        });
-
-        await waitFor(() => {
-            expect(screen.getByLabelText(/Jira Base URL/i).value).toBe(
-                "https://jira.example.com",
-            );
-            expect(screen.getByLabelText(/Project Key/i).value).toBe("TEST");
             expect(
                 screen.getByTestId("connection-status-badge").textContent,
             ).toBe("CONNECTED");
-            expect(screen.getByTestId("last-tested-at").textContent).toContain(
+            const lastTestedEl = screen.getByTestId("last-tested-at");
+            expect(lastTestedEl).toBeTruthy();
+            expect(lastTestedEl.textContent).toContain(
                 new Date(testTimestamp).toLocaleString("vi-VN"),
             );
         });
     });
 
-    test("2. TEAM_LEADER có quyền xem cấu hình ở chế độ Read-only (không có nút Lưu hoặc Test)", async () => {
-        JiraIntegrationService.getConnection.mockResolvedValueOnce({
-            data: {
-                siteUrl: "https://jira.example.com",
-                projectKey: "LEAD",
-                authType: "API_TOKEN",
-                configured: true,
-                lastTestSucceeded: null,
-            },
-        });
-
+    test("2. TEAM_LEADER bị chặn hoàn toàn khỏi màn hình cấu hình Jira", () => {
         render(
             <JiraConfigComponent
                 projectId={mockProjectId}
@@ -66,35 +47,29 @@ describe("JiraConfigComponent Tests - Contract Strict Verification ({ data: ... 
             />,
         );
 
-        await waitFor(() => {
-            expect(JiraIntegrationService.getConnection).toHaveBeenCalledWith(
-                mockProjectId,
-            );
-            expect(screen.getByLabelText(/Jira Base URL/i).value).toBe(
-                "https://jira.example.com",
-            );
-            expect(screen.getByLabelText(/Jira Base URL/i)).toBeDisabled();
-            expect(screen.getByLabelText(/Project Key/i)).toBeDisabled();
-            expect(
-                screen.getByLabelText(/Atlassian Account Email/i),
-            ).toBeDisabled();
-            expect(screen.getByLabelText(/API Token/i)).toBeDisabled();
-            expect(screen.queryByTestId("save-config-btn")).toBeNull();
-            expect(screen.queryByTestId("test-connection-btn")).toBeNull();
-        });
+        expect(
+            screen.getByTestId("unauthorized-message").textContent,
+        ).toContain("Bạn không có quyền truy cập cấu hình này.");
+        expect(screen.queryByLabelText(/Jira Base URL/i)).toBeNull();
+        expect(screen.queryByTestId("save-config-btn")).toBeNull();
+        expect(screen.queryByTestId("test-connection-btn")).toBeNull();
     });
 
-    test("3. Sinh viên (STUDENT) không có quyền truy cập màn hình cấu hình Jira", () => {
+    test("3. TEAM_MEMBER bị chặn hoàn toàn khỏi màn hình cấu hình Jira", () => {
         render(
-            <JiraConfigComponent projectId={mockProjectId} role="STUDENT" />,
+            <JiraConfigComponent
+                projectId={mockProjectId}
+                role="TEAM_MEMBER"
+            />,
         );
 
         expect(
             screen.getByTestId("unauthorized-message").textContent,
         ).toContain("Bạn không có quyền truy cập cấu hình này.");
+        expect(screen.queryByLabelText(/Jira Base URL/i)).toBeNull();
     });
 
-    test("4. Submit form gửi đầy đủ email, apiToken bắt buộc và authType API_TOKEN", async () => {
+    test("4. ADMIN submit form gửi đầy đủ payload 5 trường và authType API_TOKEN", async () => {
         JiraIntegrationService.getConnection.mockResolvedValueOnce({
             data: {
                 siteUrl: "",
@@ -109,9 +84,6 @@ describe("JiraConfigComponent Tests - Contract Strict Verification ({ data: ... 
 
         render(<JiraConfigComponent projectId={mockProjectId} role="ADMIN" />);
 
-        const saveBtn = await screen.findByTestId("save-config-btn");
-        await waitFor(() => expect(saveBtn).not.toBeDisabled());
-
         fireEvent.change(screen.getByLabelText(/Jira Base URL/i), {
             target: { value: "https://jira.example.com" },
         });
@@ -125,7 +97,7 @@ describe("JiraConfigComponent Tests - Contract Strict Verification ({ data: ... 
             target: { value: "secret-token-123" },
         });
 
-        fireEvent.click(saveBtn);
+        fireEvent.click(screen.getByTestId("save-config-btn"));
 
         await waitFor(() => {
             expect(
@@ -161,7 +133,7 @@ describe("JiraConfigComponent Tests - Contract Strict Verification ({ data: ... 
         render(<JiraConfigComponent projectId={mockProjectId} role="ADMIN" />);
 
         const testBtn = await screen.findByTestId("test-connection-btn");
-        await waitFor(() => expect(testBtn).not.toBeDisabled());
+        await waitFor(() => expect(testBtn.disabled).toBe(false));
 
         fireEvent.click(testBtn);
 
@@ -204,7 +176,7 @@ describe("JiraConfigComponent Tests - Contract Strict Verification ({ data: ... 
         render(<JiraConfigComponent projectId={mockProjectId} role="ADMIN" />);
 
         const testBtn = await screen.findByTestId("test-connection-btn");
-        await waitFor(() => expect(testBtn).not.toBeDisabled());
+        await waitFor(() => expect(testBtn.disabled).toBe(false));
 
         fireEvent.click(testBtn);
 

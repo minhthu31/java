@@ -13,10 +13,6 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
         .toUpperCase();
 
     const isAdmin = userRole === "ADMIN";
-    const isTeamLeader = userRole === "TEAM_LEADER";
-    const canView = isAdmin || isTeamLeader;
-    const canEdit = isAdmin;
-    const canTest = isAdmin;
 
     const [submitting, setSubmitting] = useState(false);
     const [testing, setTesting] = useState(false);
@@ -39,7 +35,7 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
     });
 
     const fetchConfig = useCallback(async () => {
-        if (!projectId || !canView) return;
+        if (!projectId || !isAdmin) return;
 
         try {
             const res = await JiraIntegrationService.getConnection(projectId);
@@ -54,7 +50,6 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
             if (data) {
                 const url =
                     data.siteUrl || data.jiraBaseUrl || data.baseUrl || "";
-
                 const isConfigured =
                     data.configured !== undefined
                         ? Boolean(data.configured)
@@ -74,9 +69,8 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
                     siteUrl: url,
                     projectKey: data.projectKey || "",
                     authType: data.authType || "API_TOKEN",
-                    email: isConfigured && !canEdit ? "••••••••••••••••" : "",
-                    apiToken:
-                        isConfigured && !canEdit ? "••••••••••••••••" : "",
+                    email: data.email || "",
+                    apiToken: "",
                 });
                 setError(null);
             }
@@ -89,7 +83,7 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
             });
             setError(null);
         }
-    }, [projectId, canView, canEdit]);
+    }, [projectId, isAdmin]);
 
     useEffect(() => {
         fetchConfig();
@@ -102,7 +96,7 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
 
     const handleSaveConfig = async (e) => {
         e.preventDefault();
-        if (!canEdit || submitting) return;
+        if (!isAdmin || submitting) return;
 
         setSubmitting(true);
         setMessage(null);
@@ -135,7 +129,7 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
     };
 
     const handleTestConnection = async () => {
-        if (!canTest || testing) return;
+        if (!isAdmin || testing) return;
 
         setTesting(true);
         setMessage(null);
@@ -266,7 +260,7 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
         );
     };
 
-    if (!canView) {
+    if (!isAdmin) {
         return (
             <div
                 data-testid="unauthorized-message"
@@ -392,7 +386,6 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
                         name="siteUrl"
                         value={formData.siteUrl}
                         onChange={handleInputChange}
-                        disabled={!canEdit}
                         placeholder="https://your-domain.atlassian.net"
                         required
                         style={{
@@ -401,8 +394,7 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
                             borderRadius: "6px",
                             border: "1px solid #cbd5e1",
                             boxSizing: "border-box",
-                            backgroundColor: !canEdit ? "#f8fafc" : "#fff",
-                            cursor: !canEdit ? "not-allowed" : "text",
+                            backgroundColor: "#fff",
                         }}
                     />
                 </div>
@@ -426,7 +418,6 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
                         name="projectKey"
                         value={formData.projectKey}
                         onChange={handleInputChange}
-                        disabled={!canEdit}
                         placeholder="VD: CNPM, PROJ"
                         required
                         style={{
@@ -435,8 +426,7 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
                             borderRadius: "6px",
                             border: "1px solid #cbd5e1",
                             boxSizing: "border-box",
-                            backgroundColor: !canEdit ? "#f8fafc" : "#fff",
-                            cursor: !canEdit ? "not-allowed" : "text",
+                            backgroundColor: "#fff",
                         }}
                     />
                 </div>
@@ -452,7 +442,7 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
                             marginBottom: "4px",
                         }}
                     >
-                        Atlassian Account Email {canEdit && "*"}
+                        Atlassian Account Email *
                     </label>
                     <input
                         id="jira-email"
@@ -460,21 +450,15 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
                         name="email"
                         value={formData.email}
                         onChange={handleInputChange}
-                        disabled={!canEdit}
-                        required={canEdit}
-                        placeholder={
-                            !canEdit
-                                ? "•••••••••••••••• (Đã ẩn vì lý do bảo mật)"
-                                : "VD: admin@company.com"
-                        }
+                        required
+                        placeholder="VD: admin@company.com"
                         style={{
                             width: "100%",
                             padding: "8px 12px",
                             borderRadius: "6px",
                             border: "1px solid #cbd5e1",
                             boxSizing: "border-box",
-                            backgroundColor: !canEdit ? "#f8fafc" : "#fff",
-                            cursor: !canEdit ? "not-allowed" : "text",
+                            backgroundColor: "#fff",
                         }}
                     />
                 </div>
@@ -490,7 +474,7 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
                             marginBottom: "4px",
                         }}
                     >
-                        API Token (Write-only) {canEdit && "*"}
+                        API Token (Write-only) *
                     </label>
                     <input
                         id="jira-api-token"
@@ -498,21 +482,15 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
                         name="apiToken"
                         value={formData.apiToken}
                         onChange={handleInputChange}
-                        disabled={!canEdit}
-                        required={canEdit}
-                        placeholder={
-                            !canEdit
-                                ? "•••••••••••••••• (Đã ẩn vì lý do bảo mật)"
-                                : "Nhập Jira API Token..."
-                        }
+                        required
+                        placeholder="Nhập Jira API Token..."
                         style={{
                             width: "100%",
                             padding: "8px 12px",
                             borderRadius: "6px",
                             border: "1px solid #cbd5e1",
                             boxSizing: "border-box",
-                            backgroundColor: !canEdit ? "#f8fafc" : "#fff",
-                            cursor: !canEdit ? "not-allowed" : "text",
+                            backgroundColor: "#fff",
                         }}
                     />
                 </div>
@@ -525,52 +503,47 @@ export default function JiraConfigComponent({ projectId, role: propRole }) {
                         marginTop: "12px",
                     }}
                 >
-                    {canTest && (
-                        <button
-                            type="button"
-                            data-testid="test-connection-btn"
-                            onClick={handleTestConnection}
-                            disabled={testing || !config.configured}
-                            style={{
-                                padding: "9px 18px",
-                                backgroundColor: "#f1f5f9",
-                                border: "1px solid #94a3b8",
-                                borderRadius: "6px",
-                                fontWeight: 600,
-                                fontSize: "13px",
-                                color: "#1e293b",
-                                cursor:
-                                    testing || !config.configured
-                                        ? "not-allowed"
-                                        : "pointer",
-                                opacity:
-                                    testing || !config.configured ? 0.6 : 1,
-                            }}
-                        >
-                            {testing ? "Đang kiểm tra..." : "Test Connection"}
-                        </button>
-                    )}
+                    <button
+                        type="button"
+                        data-testid="test-connection-btn"
+                        onClick={handleTestConnection}
+                        disabled={testing || !config.configured}
+                        style={{
+                            padding: "9px 18px",
+                            backgroundColor: "#f1f5f9",
+                            border: "1px solid #94a3b8",
+                            borderRadius: "6px",
+                            fontWeight: 600,
+                            fontSize: "13px",
+                            color: "#1e293b",
+                            cursor:
+                                testing || !config.configured
+                                    ? "not-allowed"
+                                    : "pointer",
+                            opacity: testing || !config.configured ? 0.6 : 1,
+                        }}
+                    >
+                        {testing ? "Đang kiểm tra..." : "Test Connection"}
+                    </button>
 
-                    {canEdit && (
-                        <button
-                            type="submit"
-                            data-testid="save-config-btn"
-                            disabled={submitting}
-                            style={{
-                                padding: "9px 22px",
-                                backgroundColor: "#1d4ed8",
-                                border: "none",
-                                borderRadius: "6px",
-                                fontWeight: 600,
-                                fontSize: "13px",
-                                color: "#ffffff",
-                                cursor: submitting ? "not-allowed" : "pointer",
-                                opacity: submitting ? 0.7 : 1,
-                            }}
-                        >
-                            {submitting ? "Đang lưu..." : "Lưu cấu hình"}
-                        </button>
-                    )}
+                    <button
+                        type="submit"
+                        data-testid="save-config-btn"
+                        disabled={submitting}
+                        style={{
+                            padding: "9px 22px",
+                            backgroundColor: "#1d4ed8",
+                            border: "none",
+                            borderRadius: "6px",
+                            fontWeight: 600,
+                            fontSize: "13px",
+                            color: "#ffffff",
+                            cursor: submitting ? "not-allowed" : "pointer",
+                            opacity: submitting ? 0.7 : 1,
+                        }}
+                    >
+                        {submitting ? "Đang lưu..." : "Lưu cấu hình"}
+                    </button>
                 </div>
             </form>
         </div>
