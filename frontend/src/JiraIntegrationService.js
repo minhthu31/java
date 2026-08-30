@@ -24,24 +24,37 @@ export const JiraIntegrationService = {
     },
 
     syncTask: async (projectId, taskId, idempotencyKey) => {
-        return unwrap(await api.post(
-            `${basePath(projectId)}/tasks/${taskId}/sync`,
-            null,
-            syncHeaders(idempotencyKey),
-        ));
+        const headers = syncHeaders(idempotencyKey);
+        return unwrap(
+            await api.post(
+                `${basePath(projectId)}/tasks/${taskId}/sync`,
+                null,
+                headers,
+            ),
+        );
     },
 
     retryTaskSync: async (projectId, taskId, idempotencyKey) => {
-        return unwrap(await api.post(
-            `${basePath(projectId)}/tasks/${taskId}/retry`,
-            null,
-            syncHeaders(idempotencyKey),
-        ));
+        const key =
+            idempotencyKey ||
+            (typeof crypto !== "undefined" && crypto.randomUUID
+                ? crypto.randomUUID()
+                : `retry-${Date.now()}`);
+        const headers = syncHeaders(key);
+        return unwrap(
+            await api.post(
+                `${basePath(projectId)}/tasks/${taskId}/retry`,
+                null,
+                headers,
+            ),
+        );
     },
 
     getIssue: async (projectId, jiraIssueKey) => {
-        return unwrap(await api.get(
-            `${basePath(projectId)}/issues/${encodeURIComponent(jiraIssueKey)}`,
-        ));
+        return unwrap(
+            await api.get(
+                `${basePath(projectId)}/issues/${encodeURIComponent(jiraIssueKey)}`,
+            ),
+        );
     },
 };

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { TaskService } from "./TaskService";
 import { currentUser } from "./authService";
+import { JiraIntegrationService } from "./JiraIntegrationService";
 
 const FORM_ISSUE_TYPES = ["TASK", "EPIC", "STORY", "BUG"];
 const PRIORITIES = ["HIGHEST", "HIGH", "MEDIUM", "LOW", "LOWEST"];
@@ -12,13 +13,21 @@ const CLASSIFICATIONS = [
     "OTHER",
 ];
 
+const sanitizeErrorMessage = (msg) => {
+    if (!msg || typeof msg !== "string") return "Đồng bộ Jira thất bại.";
+    const cleanMsg = msg.split(/\n\s*at /)[0];
+    return cleanMsg.replace(
+        /(Bearer\s+[A-Za-z0-9-_.]+)|(token=[A-Za-z0-9-_]+)/gi,
+        "[REDACTED]",
+    );
+};
+
 export default function TaskComponent({ projectId }) {
     const user = currentUser() || {};
     const userRole = user.role
         ? String(user.role).replace("ROLE_", "").toUpperCase()
         : null;
 
-    // Phân quyền chuẩn Sprint 2: ADMIN không có quyền trong Task module
     const isLeader = userRole === "TEAM_LEADER";
     const isLecturer = userRole === "LECTURER";
     const isMember = userRole === "TEAM_MEMBER" || userRole === "STUDENT";
@@ -43,6 +52,9 @@ export default function TaskComponent({ projectId }) {
 
     const [pendingStatusChange, setPendingStatusChange] = useState(null);
     const [statusReason, setStatusReason] = useState("");
+
+    const [retryingTaskId, setRetryingTaskId] = useState(null);
+    const [syncNotification, setSyncNotification] = useState(null);
 
     const [formData, setFormData] = useState({
         title: "",
@@ -115,12 +127,9 @@ export default function TaskComponent({ projectId }) {
                 if (isLeader) {
                     setMembersLoading(true);
                     try {
-                        const members = await TaskService.getActiveMembers(
-                            projectId,
-                        );
-                        setActiveMembers(
-                            Array.isArray(members) ? members : [],
-                        );
+                        const members =
+                            await TaskService.getActiveMembers(projectId);
+                        setActiveMembers(Array.isArray(members) ? members : []);
                     } catch {
                         setActiveMembers([]);
                     } finally {
@@ -286,6 +295,90 @@ export default function TaskComponent({ projectId }) {
             }
         } finally {
             setFormSubmitting(false);
+        }
+    };
+
+    const handleRetrySync = async (taskId) => {
+        if (!isLeader || retryingTaskId) return;
+
+        setRetryingTaskId(taskId);
+        setSyncNotification(null);
+
+        setTasks((prev) =>
+            prev.map((t) =>
+                t.id === taskId ? { ...t, syncStatus: "SYNCING" } : t,
+            ),
+        );
+
+        try {
+            const result = await JiraIntegrationService.retryTaskSync(
+                projectId,
+                taskId,
+            );
+            const data = result?.data || result;
+            setSyncNotification({
+                type: "success",
+                message: `Đồng bộ task #${taskId} lên Jira thành công!`,
+            });
+
+            setTasks((prev) =>
+                prev.map((t) =>
+                    t.id === taskId
+                        ? {
+                              ...t,
+                              syncStatus: "SYNCED",
+                              jiraIssueKey:
+                                  data?.jiraIssueKey || t.jiraIssueKey,
+                              jiraIssueUrl:
+                                  data?.jiraIssueUrl || t.jiraIssueUrl,
+                              lastSyncedAt:
+                                  data?.lastSyncedAt ||
+                                  new Date().toISOString(),
+                              syncErrorMessage: null,
+                          }
+                        : t,
+                ),
+            );
+            if (selectedTask && selectedTask.id === taskId) {
+                setSelectedTask((prev) => ({
+                    ...prev,
+                    syncStatus: "SYNCED",
+                    jiraIssueKey: data?.jiraIssueKey || prev.jiraIssueKey,
+                    jiraIssueUrl: data?.jiraIssueUrl || prev.jiraIssueUrl,
+                    lastSyncedAt:
+                        data?.lastSyncedAt || new Date().toISOString(),
+                    syncErrorMessage: null,
+                }));
+            }
+        } catch (err) {
+            const safeMsg = sanitizeErrorMessage(
+                err.message || err.response?.data?.message,
+            );
+            setSyncNotification({
+                type: "error",
+                message: `Lỗi đồng bộ task #${taskId}: ${safeMsg}`,
+            });
+
+            setTasks((prev) =>
+                prev.map((t) =>
+                    t.id === taskId
+                        ? {
+                              ...t,
+                              syncStatus: "SYNC_FAILED",
+                              syncErrorMessage: safeMsg,
+                          }
+                        : t,
+                ),
+            );
+            if (selectedTask && selectedTask.id === taskId) {
+                setSelectedTask((prev) => ({
+                    ...prev,
+                    syncStatus: "SYNC_FAILED",
+                    syncErrorMessage: safeMsg,
+                }));
+            }
+        } finally {
+            setRetryingTaskId(null);
         }
     };
 
@@ -497,6 +590,29 @@ export default function TaskComponent({ projectId }) {
                 border: "1px solid #e2e8f0",
             }}
         >
+            {syncNotification && (
+                <div
+                    data-testid={`sync-notification-${syncNotification.type}`}
+                    style={{
+                        padding: "10px 14px",
+                        borderRadius: "6px",
+                        marginBottom: "14px",
+                        fontSize: "13px",
+                        background:
+                            syncNotification.type === "success"
+                                ? "#dcfce7"
+                                : "#fee2e2",
+                        color:
+                            syncNotification.type === "success"
+                                ? "#15803d"
+                                : "#b91c1c",
+                        border: `1px solid ${syncNotification.type === "success" ? "#86efac" : "#fca5a5"}`,
+                    }}
+                >
+                    {syncNotification.message}
+                </div>
+            )}
+
             {currentView === "create" ? (
                 <div>
                     <div
@@ -742,8 +858,12 @@ export default function TaskComponent({ projectId }) {
                                             : "Chưa gán"}
                                     </option>
                                     {activeMembers.map((member) => (
-                                        <option key={member.id} value={member.id}>
-                                            {member.fullName || member.username} ({member.username})
+                                        <option
+                                            key={member.id}
+                                            value={member.id}
+                                        >
+                                            {member.fullName || member.username}{" "}
+                                            ({member.username})
                                         </option>
                                     ))}
                                 </select>
@@ -1118,6 +1238,11 @@ export default function TaskComponent({ projectId }) {
                                                 allowedStatuses.length > 1 &&
                                                 !isTerminal &&
                                                 !isLecturer;
+                                            const syncStatus =
+                                                task.syncStatus || "NOT_SYNCED";
+                                            const isSyncing =
+                                                syncStatus === "SYNCING" ||
+                                                retryingTaskId === task.id;
 
                                             return (
                                                 <tr
@@ -1163,10 +1288,34 @@ export default function TaskComponent({ projectId }) {
                                                                 color: "#94a3b8",
                                                                 fontFamily:
                                                                     "monospace",
+                                                                marginTop:
+                                                                    "2px",
                                                             }}
                                                         >
-                                                            {task.jiraIssueKey ||
-                                                                "Chưa gắn Jira Key"}
+                                                            {task.jiraIssueKey ? (
+                                                                <a
+                                                                    href={
+                                                                        task.jiraIssueUrl ||
+                                                                        `https://jira.atlassian.net/browse/${task.jiraIssueKey}`
+                                                                    }
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    data-testid={`jira-link-${task.id}`}
+                                                                    style={{
+                                                                        color: "#0284c7",
+                                                                        textDecoration:
+                                                                            "none",
+                                                                        fontWeight: 600,
+                                                                    }}
+                                                                >
+                                                                    {
+                                                                        task.jiraIssueKey
+                                                                    }{" "}
+                                                                    ↗
+                                                                </a>
+                                                            ) : (
+                                                                "Chưa gắn Jira Key"
+                                                            )}
                                                         </div>
                                                     </td>
                                                     <td
@@ -1219,9 +1368,58 @@ export default function TaskComponent({ projectId }) {
                                                             padding: "12px",
                                                         }}
                                                     >
-                                                        {renderSyncBadge(
-                                                            task.syncStatus,
-                                                        )}
+                                                        <div
+                                                            style={{
+                                                                display: "flex",
+                                                                flexDirection:
+                                                                    "column",
+                                                                gap: "4px",
+                                                                alignItems:
+                                                                    "flex-start",
+                                                            }}
+                                                        >
+                                                            {renderSyncBadge(
+                                                                syncStatus,
+                                                            )}
+                                                            {task.lastSyncedAt && (
+                                                                <span
+                                                                    data-testid={`last-synced-at-${task.id}`}
+                                                                    style={{
+                                                                        fontSize:
+                                                                            "10px",
+                                                                        color: "#94a3b8",
+                                                                    }}
+                                                                >
+                                                                    {new Date(
+                                                                        task.lastSyncedAt,
+                                                                    ).toLocaleString(
+                                                                        "vi-VN",
+                                                                    )}
+                                                                </span>
+                                                            )}
+                                                            {syncStatus ===
+                                                                "SYNC_FAILED" &&
+                                                                task.syncErrorMessage && (
+                                                                    <span
+                                                                        data-testid={`sync-error-${task.id}`}
+                                                                        style={{
+                                                                            fontSize:
+                                                                                "11px",
+                                                                            color: "#dc2626",
+                                                                            maxWidth:
+                                                                                "160px",
+                                                                        }}
+                                                                        title={
+                                                                            task.syncErrorMessage
+                                                                        }
+                                                                    >
+                                                                        ⚠️{" "}
+                                                                        {
+                                                                            task.syncErrorMessage
+                                                                        }
+                                                                    </span>
+                                                                )}
+                                                        </div>
                                                     </td>
                                                     <td
                                                         style={{
@@ -1296,30 +1494,80 @@ export default function TaskComponent({ projectId }) {
                                                             textAlign: "right",
                                                         }}
                                                     >
-                                                        <button
-                                                            type="button"
-                                                            onClick={() =>
-                                                                handleOpenDetail(
-                                                                    task,
-                                                                )
-                                                            }
+                                                        <div
                                                             style={{
-                                                                padding:
-                                                                    "5px 12px",
-                                                                fontSize:
-                                                                    "12px",
-                                                                background:
-                                                                    "#fff",
-                                                                border: "1px solid #94a3b8",
-                                                                borderRadius:
-                                                                    "4px",
-                                                                cursor: "pointer",
-                                                                color: "#1e293b",
-                                                                fontWeight: 500,
+                                                                display: "flex",
+                                                                justifyContent:
+                                                                    "flex-end",
+                                                                gap: "8px",
                                                             }}
                                                         >
-                                                            Xem chi tiết
-                                                        </button>
+                                                            {isLeader &&
+                                                                (syncStatus ===
+                                                                    "SYNC_FAILED" ||
+                                                                    isSyncing) && (
+                                                                    <button
+                                                                        type="button"
+                                                                        data-testid={`retry-sync-btn-${task.id}`}
+                                                                        disabled={
+                                                                            isSyncing
+                                                                        }
+                                                                        onClick={() =>
+                                                                            handleRetrySync(
+                                                                                task.id,
+                                                                            )
+                                                                        }
+                                                                        style={{
+                                                                            padding:
+                                                                                "5px 10px",
+                                                                            fontSize:
+                                                                                "12px",
+                                                                            background:
+                                                                                "#fee2e2",
+                                                                            color: "#991b1b",
+                                                                            border: "1px solid #fca5a5",
+                                                                            borderRadius:
+                                                                                "4px",
+                                                                            cursor: isSyncing
+                                                                                ? "not-allowed"
+                                                                                : "pointer",
+                                                                            opacity:
+                                                                                isSyncing
+                                                                                    ? 0.6
+                                                                                    : 1,
+                                                                            fontWeight: 600,
+                                                                        }}
+                                                                    >
+                                                                        {isSyncing
+                                                                            ? "Đang retry..."
+                                                                            : "Retry Jira"}
+                                                                    </button>
+                                                                )}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    handleOpenDetail(
+                                                                        task,
+                                                                    )
+                                                                }
+                                                                style={{
+                                                                    padding:
+                                                                        "5px 12px",
+                                                                    fontSize:
+                                                                        "12px",
+                                                                    background:
+                                                                        "#fff",
+                                                                    border: "1px solid #94a3b8",
+                                                                    borderRadius:
+                                                                        "4px",
+                                                                    cursor: "pointer",
+                                                                    color: "#1e293b",
+                                                                    fontWeight: 500,
+                                                                }}
+                                                            >
+                                                                Xem chi tiết
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             );
@@ -1514,7 +1762,26 @@ export default function TaskComponent({ projectId }) {
                             }}
                         >
                             Jira Key:{" "}
-                            {selectedTask.jiraIssueKey || "Chưa liên kết"}
+                            {selectedTask.jiraIssueKey ? (
+                                <a
+                                    href={
+                                        selectedTask.jiraIssueUrl ||
+                                        `https://jira.atlassian.net/browse/${selectedTask.jiraIssueKey}`
+                                    }
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    data-testid="modal-jira-link"
+                                    style={{
+                                        color: "#0284c7",
+                                        textDecoration: "none",
+                                        fontWeight: 600,
+                                    }}
+                                >
+                                    {selectedTask.jiraIssueKey} ↗
+                                </a>
+                            ) : (
+                                "Chưa liên kết"
+                            )}
                         </p>
 
                         <div
@@ -1613,12 +1880,63 @@ export default function TaskComponent({ projectId }) {
                             </div>
                         </div>
 
+                        {selectedTask.syncStatus === "SYNC_FAILED" &&
+                            selectedTask.syncErrorMessage && (
+                                <div
+                                    data-testid="modal-sync-error"
+                                    style={{
+                                        padding: "10px 14px",
+                                        background: "#fee2e2",
+                                        color: "#991b1b",
+                                        border: "1px solid #fca5a5",
+                                        borderRadius: "6px",
+                                        fontSize: "12px",
+                                        marginBottom: "16px",
+                                    }}
+                                >
+                                    <strong>Lỗi đồng bộ Jira:</strong>{" "}
+                                    {selectedTask.syncErrorMessage}
+                                </div>
+                            )}
+
                         <div
                             style={{
                                 display: "flex",
                                 justifyContent: "flex-end",
+                                gap: "8px",
                             }}
                         >
+                            {isLeader &&
+                                selectedTask.syncStatus === "SYNC_FAILED" && (
+                                    <button
+                                        type="button"
+                                        data-testid="modal-retry-sync-btn"
+                                        disabled={
+                                            retryingTaskId === selectedTask.id
+                                        }
+                                        onClick={() =>
+                                            handleRetrySync(selectedTask.id)
+                                        }
+                                        style={{
+                                            padding: "8px 18px",
+                                            background: "#fee2e2",
+                                            color: "#991b1b",
+                                            border: "1px solid #fca5a5",
+                                            borderRadius: "6px",
+                                            cursor:
+                                                retryingTaskId ===
+                                                selectedTask.id
+                                                    ? "not-allowed"
+                                                    : "pointer",
+                                            fontSize: "13px",
+                                            fontWeight: 600,
+                                        }}
+                                    >
+                                        {retryingTaskId === selectedTask.id
+                                            ? "Đang retry..."
+                                            : "Retry Đồng bộ Jira"}
+                                    </button>
+                                )}
                             <button
                                 type="button"
                                 onClick={() => setSelectedTask(null)}
