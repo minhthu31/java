@@ -10,7 +10,6 @@ import java.net.URI;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -38,63 +37,130 @@ public class JdkJiraHttpTransport implements JiraHttpTransport {
     }
 
     @Override
-public JiraHttpResponse get(
-        String url,
-        Map<String, String> headers,
-        java.time.Duration timeout)
-        throws IOException, InterruptedException {
+    public JiraHttpResponse get(
+            String url,
+            Map<String, String> headers,
+            java.time.Duration timeout)
+            throws IOException, InterruptedException {
 
-    URI uri = URI.create(url);
+        URI uri = URI.create(url);
 
-    validateUri(uri);
+        validateUri(uri);
 
-    InetAddress address =
-            resolveAndValidateHost(uri.getHost());
+        InetAddress address =
+                resolveAndValidateHost(uri.getHost());
 
-    int port =
-            uri.getPort() == -1
-                    ? HTTPS_DEFAULT_PORT
-                    : uri.getPort();
+        int port =
+                uri.getPort() == -1
+                        ? HTTPS_DEFAULT_PORT
+                        : uri.getPort();
 
-    int timeoutMillis =
-            toTimeoutMillis(timeout);
+        int timeoutMillis =
+                toTimeoutMillis(timeout);
+
+        /*
+         * Kết nối TCP TRỰC TIẾP tới IP đã được kiểm tra.
+         *
+         * Không kết nối tới hostname nữa.
+         * Đây là điểm chống DNS rebinding quan trọng.
+         */
+        try (SSLSocket socket =
+                     (SSLSocket) sslSocketFactory.createSocket()) {
+
+            socket.setSoTimeout(timeoutMillis);
+
+            socket.connect(
+                    new InetSocketAddress(address, port),
+                    timeoutMillis);
+
+            configureTls(
+                    socket,
+                    uri.getHost());
+
+            socket.startHandshake();
+
+            sendRequest(
+                    socket,
+                    uri,
+                    headers,
+                    port);
+
+            return readResponse(socket);
+
+        } catch (GeneralSecurityException exception) {
+
+            throw new IOException(
+                    "TLS connection tới Jira thất bại",
+                    exception);
+        }
+    }
 
     /*
-     * Kết nối TCP TRỰC TIẾP tới IP đã được kiểm tra.
-     *
-     * Không kết nối tới hostname nữa.
-     * Đây là điểm chống DNS rebinding quan trọng.
+     * ============================================================
+     * POST REQUEST
+     * ============================================================
      */
-    try (SSLSocket socket =
-                 (SSLSocket) sslSocketFactory.createSocket()) {
 
-        socket.setSoTimeout(timeoutMillis);
+    @Override
+    public JiraHttpResponse post(
+            String url,
+            Map<String, String> headers,
+            String body,
+            java.time.Duration timeout)
+            throws IOException, InterruptedException {
 
-        socket.connect(
-                new InetSocketAddress(address, port),
-                timeoutMillis);
+        URI uri = URI.create(url);
 
-        configureTls(
-                socket,
-                uri.getHost());
+        validateUri(uri);
 
-        socket.startHandshake();
+        InetAddress address =
+                resolveAndValidateHost(uri.getHost());
 
-        sendRequest(
-                socket,
-                uri,
-                headers,
-                port);
+        int port =
+                uri.getPort() == -1
+                        ? HTTPS_DEFAULT_PORT
+                        : uri.getPort();
 
-        return readResponse(socket);
+        int timeoutMillis =
+                toTimeoutMillis(timeout);
 
-    } catch (GeneralSecurityException exception) {
+        /*
+         * Kết nối TCP TRỰC TIẾP tới IP đã được kiểm tra.
+         *
+         * Không resolve hostname lần thứ hai.
+         * Giữ nguyên cơ chế chống DNS rebinding giống GET.
+         */
+        try (SSLSocket socket =
+                     (SSLSocket) sslSocketFactory.createSocket()) {
 
-        throw new IOException(
-                "TLS connection tới Jira thất bại",
-                exception);
+            socket.setSoTimeout(timeoutMillis);
+
+            socket.connect(
+                    new InetSocketAddress(address, port),
+                    timeoutMillis);
+
+            configureTls(
+                    socket,
+                    uri.getHost());
+
+            socket.startHandshake();
+
+            sendPostRequest(
+                    socket,
+                    uri,
+                    headers,
+                    body,
+                    port);
+
+            return readResponse(socket);
+
+        } catch (GeneralSecurityException exception) {
+
+            throw new IOException(
+                    "TLS connection tới Jira thất bại",
+                    exception);
+        }
     }
-}
 
     /**
      * Chỉ chấp nhận HTTPS.
@@ -332,6 +398,120 @@ public JiraHttpResponse get(
         output.write(
                 request.toString()
                         .getBytes(StandardCharsets.ISO_8859_1));
+
+        output.flush();
+    }
+
+    /*
+     * ============================================================
+     * GỬI POST REQUEST
+     * ============================================================
+     */
+
+    private void sendPostRequest(
+            SSLSocket socket,
+            URI uri,
+            Map<String, String> headers,
+            String body,
+            int port)
+            throws IOException {
+
+        OutputStream output =
+                socket.getOutputStream();
+
+        String hostHeader =
+                uri.getHost();
+
+        if (port != HTTPS_DEFAULT_PORT) {
+            hostHeader += ":" + port;
+        }
+
+        byte[] bodyBytes =
+                body == null
+                        ? new byte[0]
+                        : body.getBytes(StandardCharsets.UTF_8);
+
+        StringBuilder request =
+                new StringBuilder();
+
+        request.append("POST ")
+                .append(buildRequestTarget(uri))
+                .append(" HTTP/1.1\r\n");
+
+        request.append("Host: ")
+                .append(hostHeader)
+                .append("\r\n");
+
+        /*
+         * Không nhận gzip để tránh phải xử lý compression
+         * ở transport.
+         */
+        request.append("Accept-Encoding: identity\r\n");
+
+        /*
+         * Đóng connection sau khi nhận response.
+         */
+        request.append("Connection: close\r\n");
+
+        /*
+         * Jira REST API sử dụng JSON.
+         */
+        request.append("Content-Type: application/json\r\n");
+
+        /*
+         * Content-Length phải được tính từ byte UTF-8 thực tế,
+         * không phải số lượng ký tự Java.
+         */
+        request.append("Content-Length: ")
+                .append(bodyBytes.length)
+                .append("\r\n");
+
+        if (headers != null) {
+
+            for (Map.Entry<String, String> entry :
+                    headers.entrySet()) {
+
+                String name =
+                        entry.getKey();
+
+                if (name == null
+                        || name.isBlank()) {
+                    continue;
+                }
+
+                /*
+                 * Không cho caller override các header
+                 * liên quan tới routing/framing.
+                 */
+                if (name.equalsIgnoreCase("Host")
+                        || name.equalsIgnoreCase("Connection")
+                        || name.equalsIgnoreCase("Content-Length")
+                        || name.equalsIgnoreCase("Transfer-Encoding")
+                        || name.equalsIgnoreCase("Accept-Encoding")
+                        || name.equalsIgnoreCase("Content-Type")) {
+                    continue;
+                }
+
+                request.append(name)
+                        .append(": ")
+                        .append(entry.getValue())
+                        .append("\r\n");
+            }
+        }
+
+        request.append("\r\n");
+
+        /*
+         * Gửi HTTP headers.
+         */
+        output.write(
+                request.toString()
+                        .getBytes(StandardCharsets.ISO_8859_1));
+
+        /*
+         * Gửi JSON body.
+         */
+        output.write(bodyBytes);
 
         output.flush();
     }

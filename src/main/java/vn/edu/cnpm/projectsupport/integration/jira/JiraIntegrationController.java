@@ -1,3 +1,4 @@
+
 package vn.edu.cnpm.projectsupport.integration.jira;
 
 import jakarta.validation.Valid;
@@ -8,13 +9,16 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
 import vn.edu.cnpm.projectsupport.common.api.ApiResponse;
 import vn.edu.cnpm.projectsupport.integration.jira.contract.JiraConnectionRequest;
 import vn.edu.cnpm.projectsupport.integration.jira.contract.JiraConnectionResponse;
 import vn.edu.cnpm.projectsupport.integration.jira.contract.JiraConnectionTestResponse;
 import vn.edu.cnpm.projectsupport.integration.jira.contract.JiraIntegrationService;
+import vn.edu.cnpm.projectsupport.integration.jira.contract.JiraTaskSyncResponse;
 
 @RestController
 @RequestMapping("/api/v1/projects/{projectId}/integrations/jira")
@@ -22,15 +26,22 @@ public class JiraIntegrationController {
 
     private final JiraIntegrationService jiraIntegrationService;
 
-    public JiraIntegrationController(JiraIntegrationService jiraIntegrationService) {
+    public JiraIntegrationController(
+            JiraIntegrationService jiraIntegrationService) {
+
         this.jiraIntegrationService = jiraIntegrationService;
     }
 
     @GetMapping("/config")
     @PreAuthorize("hasRole('ADMIN') or (hasRole('TEAM_LEADER') and @projectAuthorization.isCurrentUserLeader(#projectId))")
-    public ResponseEntity<ApiResponse<JiraConnectionResponse>> getJiraConnection(@PathVariable Long projectId) {
-        JiraConnectionResponse response = jiraIntegrationService.getConnection(projectId);
-        return ResponseEntity.ok(ApiResponse.success(response));
+    public ResponseEntity<ApiResponse<JiraConnectionResponse>> getJiraConnection(
+            @PathVariable Long projectId) {
+
+        JiraConnectionResponse response =
+                jiraIntegrationService.getConnection(projectId);
+
+        return ResponseEntity.ok(
+                ApiResponse.success(response));
     }
 
     @PutMapping("/config")
@@ -38,14 +49,75 @@ public class JiraIntegrationController {
     public ResponseEntity<ApiResponse<JiraConnectionResponse>> configureJiraConnection(
             @PathVariable Long projectId,
             @Valid @RequestBody JiraConnectionRequest request) {
-        JiraConnectionResponse response = jiraIntegrationService.configureConnection(projectId, request);
-        return ResponseEntity.ok(ApiResponse.success(response));
+
+        JiraConnectionResponse response =
+                jiraIntegrationService.configureConnection(
+                        projectId,
+                        request);
+
+        return ResponseEntity.ok(
+                ApiResponse.success(response));
     }
 
     @PostMapping("/test-connection")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<JiraConnectionTestResponse>> testJiraConnection(@PathVariable Long projectId) {
-        JiraConnectionTestResponse response = jiraIntegrationService.testConnection(projectId);
-        return ResponseEntity.ok(ApiResponse.success(response));
+    public ResponseEntity<ApiResponse<JiraConnectionTestResponse>> testJiraConnection(
+            @PathVariable Long projectId) {
+
+        JiraConnectionTestResponse response =
+                jiraIntegrationService.testConnection(projectId);
+
+        return ResponseEntity.ok(
+                ApiResponse.success(response));
+    }
+
+    /*
+     * ============================================================
+     * CNPM-80
+     * Sync local Task -> Jira
+     * ============================================================
+     */
+
+    @PostMapping("/tasks/{taskId}/sync")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEAM_LEADER') and @projectAuthorization.isCurrentUserLeader(#projectId))")
+    public ResponseEntity<ApiResponse<JiraTaskSyncResponse>> syncTaskToJira(
+            @PathVariable Long projectId,
+            @PathVariable Long taskId,
+            @RequestHeader(value = "Idempotency-Key", required = false)
+            String idempotencyKey) {
+
+        JiraTaskSyncResponse response =
+                jiraIntegrationService.syncTask(
+                        projectId,
+                        taskId,
+                        idempotencyKey);
+
+        return ResponseEntity.ok(
+                ApiResponse.success(response));
+    }
+
+    /*
+     * ============================================================
+     * CNPM-80
+     * Retry Task -> Jira
+     * ============================================================
+     */
+
+    @PostMapping("/tasks/{taskId}/sync/retry")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEAM_LEADER') and @projectAuthorization.isCurrentUserLeader(#projectId))")
+    public ResponseEntity<ApiResponse<JiraTaskSyncResponse>> retryTaskSync(
+            @PathVariable Long projectId,
+            @PathVariable Long taskId,
+            @RequestHeader(value = "Idempotency-Key", required = false)
+            String idempotencyKey) {
+
+        JiraTaskSyncResponse response =
+                jiraIntegrationService.retryTaskSync(
+                        projectId,
+                        taskId,
+                        idempotencyKey);
+
+        return ResponseEntity.ok(
+                ApiResponse.success(response));
     }
 }

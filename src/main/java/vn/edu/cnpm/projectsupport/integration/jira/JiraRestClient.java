@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -18,6 +19,8 @@ import org.springframework.stereotype.Service;
 
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationConfig;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraCreateIssueRequest;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraCreateIssueResponse;
 import vn.edu.cnpm.projectsupport.integration.jira.exception.JiraApiException;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.IntegrationConfigRepository;
 import vn.edu.cnpm.projectsupport.security.IntegrationSecretService;
@@ -59,31 +62,15 @@ public class JiraRestClient implements JiraClient {
         IntegrationConfig config =
                 getIntegrationConfig(projectId);
 
-        /*
-         * Validate project key trước khi đưa vào URL.
-         */
         validateProjectKey(projectKey);
 
-        /*
-         * 1. Kiểm tra authentication với Jira.
-         */
         get(
                 config,
                 "/rest/api/3/myself");
 
-        /*
-         * 2. Kiểm tra project có tồn tại và account
-         *    có quyền truy cập project hay không.
-         */
         JiraProject project =
                 getProject(projectId, projectKey);
 
-        /*
-         * 3. Kiểm tra Create Metadata.
-         *
-         * Endpoint này xác nhận integration có thể
-         * truy cập metadata cần thiết cho việc tạo Jira issue.
-         */
         get(
                 config,
                 "/rest/api/3/issue/createmeta?projectKeys="
@@ -120,6 +107,117 @@ public class JiraRestClient implements JiraClient {
                 text(node, "self"));
     }
 
+    @Override
+    public JiraCreateIssueResponse createIssue(
+            Long projectId,
+            String projectKey,
+            JiraCreateIssueRequest request) {
+
+        validateProjectKey(projectKey);
+
+        if (request == null) {
+            throw new JiraClientException(
+                    "Jira create issue request không được null");
+        }
+
+        if (request.summary() == null
+                || request.summary().isBlank()) {
+
+            throw new JiraClientException(
+                    "Jira issue summary không được để trống");
+        }
+
+        if (request.issueType() == null
+                || request.issueType().isBlank()) {
+
+            throw new JiraClientException(
+                    "Jira issue type không được để trống");
+        }
+
+        IntegrationConfig config =
+                getIntegrationConfig(projectId);
+
+        /*
+         * Tạo JSON body theo Jira REST API.
+         */
+        Map<String, Object> fields =
+                new HashMap<>();
+
+        fields.put(
+                "project",
+                Map.of("key", projectKey));
+
+        fields.put(
+                "summary",
+                request.summary());
+
+        fields.put(
+                "issuetype",
+                Map.of("name", request.issueType()));
+
+        if (request.description() != null
+                && !request.description().isBlank()) {
+
+            fields.put(
+                    "description",
+                    Map.of(
+                            "type", "doc",
+                            "version", 1,
+                            "content", List.of(
+                                    Map.of(
+                                            "type", "paragraph",
+                                            "content", List.of(
+                                                    Map.of(
+                                                            "type", "text",
+                                                            "text", request.description()
+                                                    )
+                                            )
+                                    )
+                            )
+                    )
+            );
+        }
+
+        if (request.priority() != null
+                && !request.priority().isBlank()) {
+
+            fields.put(
+                    "priority",
+                    Map.of(
+                            "name",
+                            request.priority()));
+        }
+
+        Map<String, Object> payload =
+                Map.of("fields", fields);
+
+        String body;
+
+        try {
+
+            body =
+                    objectMapper
+                            .writeValueAsString(payload);
+
+        } catch (Exception exception) {
+
+            throw new JiraClientException(
+                    "Không thể tạo Jira request body",
+                    exception);
+        }
+
+        JsonNode response =
+                post(
+                        config,
+                        "/rest/api/3/issue",
+                        body);
+
+        return new JiraCreateIssueResponse(
+                text(response, "id"),
+                text(response, "key"),
+                text(response, "self"));
+    }
+
     private IntegrationConfig getIntegrationConfig(
             Long projectId) {
 
@@ -145,15 +243,8 @@ public class JiraRestClient implements JiraClient {
         String baseUrl =
                 normalizeBaseUrl(config.getBaseUrl());
 
-        /*
-         * Resolve DNS và chặn địa chỉ private/local
-         * trước khi thực hiện HTTP request.
-         */
         validateResolvedHost(baseUrl);
 
-        /*
-         * Kiểm tra encrypted secret trước khi decrypt.
-         */
         String encryptedSecret =
                 config.getEncryptedSecret();
 
@@ -164,9 +255,6 @@ public class JiraRestClient implements JiraClient {
                     "Jira secret chưa được cấu hình");
         }
 
-        /*
-         * Giải mã Jira token.
-         */
         String token =
                 secretService.decrypt(
                         encryptedSecret);
@@ -177,9 +265,6 @@ public class JiraRestClient implements JiraClient {
                     "Jira secret chưa được cấu hình");
         }
 
-        /*
-         * Kiểm tra account identifier.
-         */
         String accountIdentifier =
                 config.getAccountIdentifier();
 
@@ -190,11 +275,6 @@ public class JiraRestClient implements JiraClient {
                     "Jira account identifier chưa được cấu hình");
         }
 
-        /*
-         * Tạo Basic Authentication.
-         *
-         * Không đưa raw token trực tiếp vào header.
-         */
         String credentials =
                 accountIdentifier + ":" + token;
 
@@ -231,9 +311,6 @@ public class JiraRestClient implements JiraClient {
 
         } catch (InterruptedException exception) {
 
-            /*
-             * Khôi phục trạng thái interrupted của thread.
-             */
             Thread.currentThread().interrupt();
 
             throw new JiraConnectionException(
@@ -248,10 +325,107 @@ public class JiraRestClient implements JiraClient {
 
         } catch (RuntimeException exception) {
 
-            /*
-             * Không để RuntimeException từ HTTP client
-             * thoát trực tiếp ra ngoài.
-             */
+            throw new JiraClientException(
+                    "Không thể gọi Jira",
+                    exception);
+        }
+    }
+
+    private JsonNode post(
+            IntegrationConfig config,
+            String path,
+            String body) {
+
+        String baseUrl =
+                normalizeBaseUrl(config.getBaseUrl());
+
+        validateResolvedHost(baseUrl);
+
+        String encryptedSecret =
+                config.getEncryptedSecret();
+
+        if (encryptedSecret == null
+                || encryptedSecret.isBlank()) {
+
+            throw new JiraClientException(
+                    "Jira secret chưa được cấu hình");
+        }
+
+        String token =
+                secretService.decrypt(
+                        encryptedSecret);
+
+        if (token == null || token.isBlank()) {
+
+            throw new JiraClientException(
+                    "Jira secret chưa được cấu hình");
+        }
+
+        String accountIdentifier =
+                config.getAccountIdentifier();
+
+        if (accountIdentifier == null
+                || accountIdentifier.isBlank()) {
+
+            throw new JiraClientException(
+                    "Jira account identifier chưa được cấu hình");
+        }
+
+        String credentials =
+                accountIdentifier + ":" + token;
+
+        String basicAuth =
+                Base64.getEncoder()
+                        .encodeToString(
+                                credentials.getBytes(
+                                        StandardCharsets.UTF_8));
+
+        Map<String, String> headers =
+                new HashMap<>();
+
+        headers.put(
+                "Authorization",
+                "Basic " + basicAuth);
+
+        headers.put(
+                "Accept",
+                "application/json");
+
+        headers.put(
+                "Content-Type",
+                "application/json");
+
+        try {
+
+            JiraHttpResponse response =
+                    transport.post(
+                            baseUrl + path,
+                            headers,
+                            body,
+                            safeTimeout());
+
+            return handleResponse(response);
+
+        } catch (JiraApiException exception) {
+
+            throw exception;
+
+        } catch (InterruptedException exception) {
+
+            Thread.currentThread().interrupt();
+
+            throw new JiraConnectionException(
+                    "Không thể kết nối Jira",
+                    exception);
+
+        } catch (IOException exception) {
+
+            throw new JiraConnectionException(
+                    "Không thể kết nối Jira",
+                    exception);
+
+        } catch (RuntimeException exception) {
+
             throw new JiraClientException(
                     "Không thể gọi Jira",
                     exception);
@@ -338,9 +512,6 @@ public class JiraRestClient implements JiraClient {
                 }
 
             } catch (NumberFormatException ignored) {
-                /*
-                 * Giữ retry = ZERO nếu header không hợp lệ.
-                 */
             }
         }
 
@@ -349,23 +520,6 @@ public class JiraRestClient implements JiraClient {
                 retry);
     }
 
-    /**
-     * Chỉ chấp nhận HTTPS origin hợp lệ.
-     *
-     * Hợp lệ:
-     * https://example.atlassian.net
-     * https://example.atlassian.net/
-     * https://example.atlassian.net:443
-     *
-     * Không hợp lệ:
-     * http://example.atlassian.net
-     * https://example.atlassian.net:8080
-     * https://example.atlassian.net:8443
-     * https://example.atlassian.net/path
-     * https://example.atlassian.net?x=1
-     * https://example.atlassian.net#fragment
-     * https://user:password@example.atlassian.net
-     */
     private String normalizeBaseUrl(
             String raw) {
 
@@ -383,9 +537,6 @@ public class JiraRestClient implements JiraClient {
             URI uri =
                     URI.create(normalized);
 
-            /*
-             * Chỉ HTTPS.
-             */
             String scheme =
                     uri.getScheme();
 
@@ -395,14 +546,6 @@ public class JiraRestClient implements JiraClient {
                         "Jira base URL phải sử dụng HTTPS");
             }
 
-            /*
-             * Chỉ cho phép port HTTPS mặc định 443.
-             *
-             * - Không ghi port: -1 -> hợp lệ.
-             * - :443 -> hợp lệ.
-             * - :8080 -> không hợp lệ.
-             * - :8443 -> không hợp lệ.
-             */
             int port =
                     uri.getPort();
 
@@ -412,9 +555,6 @@ public class JiraRestClient implements JiraClient {
                         "Jira base URL phải sử dụng port HTTPS mặc định 443");
             }
 
-            /*
-             * Phải có host.
-             */
             if (uri.getHost() == null
                     || uri.getHost().isBlank()) {
 
@@ -422,18 +562,12 @@ public class JiraRestClient implements JiraClient {
                         "Jira base URL không hợp lệ");
             }
 
-            /*
-             * Không cho phép user-info.
-             */
             if (uri.getUserInfo() != null) {
 
                 throw new JiraClientException(
                         "Jira base URL không được chứa user information");
             }
 
-            /*
-             * Không cho phép query hoặc fragment.
-             */
             if (uri.getQuery() != null
                     || uri.getFragment() != null) {
 
@@ -441,11 +575,6 @@ public class JiraRestClient implements JiraClient {
                         "Jira base URL không được chứa query hoặc fragment");
             }
 
-            /*
-             * Chỉ chấp nhận origin.
-             *
-             * Path chỉ được phép là "/" hoặc rỗng.
-             */
             String path =
                     uri.getPath();
 
@@ -457,10 +586,6 @@ public class JiraRestClient implements JiraClient {
                         "Jira base URL phải là HTTPS origin");
             }
 
-            /*
-             * Loại bỏ "/" cuối URL để khi nối endpoint
-             * không tạo thành "//rest/api/...".
-             */
             return normalized.replaceAll("/+$", "");
 
         } catch (JiraClientException exception) {
@@ -475,17 +600,6 @@ public class JiraRestClient implements JiraClient {
         }
     }
 
-    /**
-     * Resolve DNS và kiểm tra toàn bộ địa chỉ IP
-     * mà hostname trỏ tới.
-     *
-     * Mục đích:
-     * - Chặn loopback.
-     * - Chặn private IP.
-     * - Chặn link-local.
-     * - Chặn multicast.
-     * - Chặn wildcard/any-local.
-     */
     private void validateResolvedHost(
             String baseUrl) {
 
@@ -512,9 +626,6 @@ public class JiraRestClient implements JiraClient {
                         "Không thể resolve Jira host");
             }
 
-            /*
-             * Kiểm tra tất cả IP mà hostname resolve tới.
-             */
             for (InetAddress address : addresses) {
 
                 if (isUnsafeAddress(address)) {
@@ -538,10 +649,6 @@ public class JiraRestClient implements JiraClient {
         }
     }
 
-    /**
-     * Kiểm tra địa chỉ IP có thuộc nhóm không an toàn
-     * cho outbound Jira request hay không.
-     */
     private boolean isUnsafeAddress(
             InetAddress address) {
 
@@ -552,9 +659,6 @@ public class JiraRestClient implements JiraClient {
                 || address.isMulticastAddress();
     }
 
-    /**
-     * Đảm bảo timeout không vượt quá giới hạn cho phép.
-     */
     private Duration safeTimeout() {
 
         return DEFAULT_TIMEOUT.compareTo(MAX_TIMEOUT) > 0
@@ -562,12 +666,6 @@ public class JiraRestClient implements JiraClient {
                 : DEFAULT_TIMEOUT;
     }
 
-    /**
-     * Jira Project Key phải:
-     * - Bắt đầu bằng chữ in hoa.
-     * - Sau đó chỉ được chứa A-Z, 0-9 hoặc _.
-     * - Độ dài tối đa 30 ký tự.
-     */
     private void validateProjectKey(
             String projectKey) {
 
@@ -581,9 +679,6 @@ public class JiraRestClient implements JiraClient {
         }
     }
 
-    /**
-     * Lấy text field an toàn từ JSON.
-     */
     private String text(
             JsonNode node,
             String field) {
