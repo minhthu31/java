@@ -1,0 +1,130 @@
+{
+	"info": {
+		"name": "CNPM Sprint 3 - Jira Integration",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Config & Test Connection",
+			"item": [
+				{
+					"name": "Cập nhật cấu hình Jira",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Response có chứa success = true\", function () { var jsonData = pm.response.json(); pm.expect(jsonData.success).to.be.true; });"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_admin}}", "type": "string" } ] },
+						"method": "PUT",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/config", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "integrations", "jira", "config" ] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"siteUrl\": \"{{jira_site_url}}\",\n  \"projectKey\": \"{{jira_project_key}}\",\n  \"email\": \"{{jira_email}}\",\n  \"apiToken\": \"{{jira_api_token}}\",\n  \"authType\": \"BASIC\"\n}"
+						}
+					}
+				},
+				{
+					"name": "Test Connection",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_admin}}", "type": "string" } ] },
+						"method": "POST",
+						"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/test-connection", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "integrations", "jira", "test-connection" ] }
+					}
+				}
+			]
+		},
+		{
+			"name": "2. Task Sync & Action",
+			"item": [
+				{
+					"name": "Tạo Task (Có Idempotency-Key)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 201\", function () { pm.response.to.have.status(201); });"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Idempotency-Key", "value": "{{$guid}}" }
+						],
+						"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/tasks", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "tasks" ] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Đồng bộ Task test\",\n  \"acceptanceCriteria\": \"Kiểm tra Jira\",\n  \"issueType\": \"TASK\",\n  \"priority\": \"HIGH\"\n}"
+						}
+					}
+				},
+				{
+					"name": "Cập nhật Status Task",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
+						"method": "PATCH",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/tasks/1/status", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "tasks", "1", "status" ] },
+						"body": { "mode": "raw", "raw": "{\n  \"status\": \"IN_PROGRESS\"\n}" }
+					}
+				}
+			]
+		},
+		{
+			"name": "3. Retry & Fetch (Cần xác minh Endpoint)",
+			"item": [
+				{
+					"name": "Mock - Retry Sync Task",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
+						"method": "POST",
+						"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/tasks/1/retry", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "tasks", "1", "retry" ] }
+					}
+				},
+				{
+					"name": "Mock - Fetch Jira Issues",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
+						"method": "POST",
+						"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/sync-issues", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "integrations", "jira", "sync-issues" ] }
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{ "key": "baseUrl", "value": "" },
+		{ "key": "projectId", "value": "" },
+		{ "key": "token_admin", "value": "" },
+		{ "key": "token_leader", "value": "" },
+		{ "key": "jira_site_url", "value": "" },
+		{ "key": "jira_project_key", "value": "" },
+		{ "key": "jira_email", "value": "" },
+		{ "key": "jira_api_token", "value": "" }
+	]
+}
