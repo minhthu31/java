@@ -16,6 +16,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraIssueDto;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraAdfDocumentDto;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraIssueTypeDto;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraParentIssueDto;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraIssueFieldsDto;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraPageDto;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraPriorityDto;
@@ -121,7 +124,8 @@ public class JiraRestClient implements JiraClient {
     }
 
     @Override
-    public JiraPageDto<JiraIssueDto> getBacklog(Long projectId, String projectKey, int startAt, int maxResults) {
+    public JiraPageDto<JiraIssueDto> getBacklog(
+            Long projectId, String projectKey, int startAt, int maxResults) {
         validatePage(startAt, maxResults);
         validateProjectKey(projectKey);
         IntegrationConfig config = getIntegrationConfig(projectId);
@@ -132,7 +136,8 @@ public class JiraRestClient implements JiraClient {
     }
 
     @Override
-    public JiraSprintPageDto getSprints(Long projectId, String projectKey, int startAt, int maxResults) {
+    public JiraSprintPageDto getSprints(
+            Long projectId, String projectKey, int startAt, int maxResults) {
         validatePage(startAt, maxResults);
         validateProjectKey(projectKey);
         IntegrationConfig config = getIntegrationConfig(projectId);
@@ -206,34 +211,22 @@ public class JiraRestClient implements JiraClient {
         String id = text(node, "id");
         String key = text(node, "key");
         String summary = text(fields, "summary");
-        String updated = text(fields, "updated");
-
         JiraStatusDto status = null;
         JsonNode statusNode = fields == null ? null : fields.get("status");
         if (statusNode != null && !statusNode.isNull()) {
-            status = new JiraStatusDto(
-                    text(statusNode, "id"),
-                    text(statusNode, "name"));
+            status = new JiraStatusDto(text(statusNode, "id"), text(statusNode, "name"));
         }
-
         JiraPriorityDto priority = null;
         JsonNode priorityNode = fields == null ? null : fields.get("priority");
         if (priorityNode != null && !priorityNode.isNull()) {
-            priority = new JiraPriorityDto(
-                    text(priorityNode, "id"),
-                    text(priorityNode, "name"));
+            priority = new JiraPriorityDto(text(priorityNode, "id"), text(priorityNode, "name"));
         }
-
         JiraUserDto assignee = null;
         JsonNode assigneeNode = fields == null ? null : fields.get("assignee");
         if (assigneeNode != null && !assigneeNode.isNull()) {
-            assignee = new JiraUserDto(
-                    text(assigneeNode, "accountId"),
-                    text(assigneeNode, "displayName"),
-                    text(assigneeNode, "emailAddress"),
-                    assigneeNode.path("active").asBoolean(false));
+            assignee = new JiraUserDto(text(assigneeNode, "accountId"), text(assigneeNode, "displayName"),
+                    text(assigneeNode, "emailAddress"), assigneeNode.path("active").asBoolean(false));
         }
-
         JiraProjectDto project = null;
         JsonNode projectNode = fields == null ? null : fields.get("project");
         if (projectNode != null && !projectNode.isNull()) {
@@ -243,19 +236,58 @@ public class JiraRestClient implements JiraClient {
                     text(projectNode, "name"));
         }
 
-        JiraIssueFieldsDto issueFields = new JiraIssueFieldsDto(
-                summary,
-                null,
-                status,
-                priority,
-                assignee,
-                project,
-                null,
-                null,
-                null,
-                updated);
+        JiraIssueTypeDto issueType = null;
+        JsonNode issueTypeNode = fields == null ? null : fields.get("issuetype");
+        if (issueTypeNode != null && !issueTypeNode.isNull()) {
+            issueType = new JiraIssueTypeDto(
+                    text(issueTypeNode, "id"),
+                    text(issueTypeNode, "name"));
+        }
 
-        return new JiraIssueDto(id, key, issueFields);
+        java.time.LocalDate dueDate = null;
+        String dueDateText = text(fields, "duedate");
+        if (dueDateText != null && !dueDateText.isBlank()) {
+            try {
+                dueDate = java.time.LocalDate.parse(dueDateText);
+            } catch (java.time.format.DateTimeParseException ignored) {
+                // Jira returned an unexpected date format; keep the optional field null.
+            }
+        }
+
+        JiraParentIssueDto parent = null;
+        JsonNode parentNode = fields == null ? null : fields.get("parent");
+        if (parentNode != null && !parentNode.isNull()) {
+            parent = new JiraParentIssueDto(
+                    text(parentNode, "id"),
+                    text(parentNode, "key"));
+        }
+
+        String updated = text(fields, "updated");
+        JiraAdfDocumentDto description = null;
+        JsonNode descriptionNode = fields == null ? null : fields.get("description");
+        if (descriptionNode != null && !descriptionNode.isNull()) {
+            try {
+                description = objectMapper.readValue(
+                        descriptionNode.toString(), JiraAdfDocumentDto.class);
+            } catch (Exception ignored) {
+                // Keep description null when Jira returns an unsupported ADF shape.
+            }
+        }
+
+        return new JiraIssueDto(
+                id,
+                key,
+                new JiraIssueFieldsDto(
+                        summary,
+                        description,
+                        status,
+                        priority,
+                        assignee,
+                        project,
+                        issueType,
+                        dueDate,
+                        parent,
+                        updated));
     }
 
     private JiraSprintPageDto toSprintPage(JsonNode node) {
@@ -279,10 +311,13 @@ public class JiraRestClient implements JiraClient {
         return value == null || value.isNull() ? fallback : value.asInt();
     }
 
-    private IntegrationConfig getIntegrationConfig(Long projectId) {
+    private IntegrationConfig getIntegrationConfig(
+            Long projectId) {
+
         if (projectId == null || projectId <= 0) {
             throw new JiraClientException("Project ID không hợp lệ");
         }
+
         return integrationConfigRepository.findByProjectIdAndProvider(projectId, IntegrationProvider.JIRA).orElseThrow(() ->
                         new JiraClientException("Jira integration chưa được cấu hình cho project"));
     }
@@ -344,102 +379,209 @@ public class JiraRestClient implements JiraClient {
         }
     }
 
-    private JsonNode handleResponse(JiraHttpResponse response) {
+    private JsonNode handleResponse(
+            JiraHttpResponse response) {
 
-        int status = response.statusCode();
+        int status =
+                response.statusCode();
 
         if (status == 401) {
-            throw new JiraAuthenticationException("Jira authentication thất bại");
+
+            throw new JiraAuthenticationException(
+                    "Jira authentication thất bại");
         }
 
         if (status == 403) {
-            throw new JiraAuthorizationException("Tài khoản không có quyền truy cập Jira resource");
+
+            throw new JiraAuthorizationException(
+                    "Tài khoản không có quyền truy cập Jira resource");
         }
 
         if (status == 404) {
-            throw new JiraProjectNotFoundException("Jira project/resource không tồn tại");
+
+            throw new JiraProjectNotFoundException(
+                    "Jira project/resource không tồn tại");
         }
 
         if (status == 429) {
+
             return throwRateLimit(response);
         }
 
         if (status >= 500) {
-            throw new JiraConnectionException("Jira đang không khả dụng");
+
+            throw new JiraConnectionException(
+                    "Jira đang không khả dụng");
         }
 
         if (status < 200 || status >= 300) {
-            throw new JiraClientException("Jira request thất bại");
+
+            throw new JiraClientException(
+                    "Jira request thất bại");
         }
 
         try {
 
-            return objectMapper.readTree(response.body() == null ? "{}" : response.body());
+            return objectMapper.readTree(
+                    response.body() == null
+                            ? "{}"
+                            : response.body());
 
         } catch (Exception exception) {
-            throw new JiraClientException("Jira trả về dữ liệu không hợp lệ", exception);
+
+            throw new JiraClientException(
+                    "Jira trả về dữ liệu không hợp lệ",
+                    exception);
         }
     }
 
-    private JsonNode throwRateLimit(JiraHttpResponse response) {
-        String retryAfter = response.headers().get("retry-after");
-        Duration retry = Duration.ZERO;
+    private JsonNode throwRateLimit(
+            JiraHttpResponse response) {
+
+        String retryAfter =
+                response.headers().get("retry-after");
+
+        Duration retry =
+                Duration.ZERO;
 
         if (retryAfter != null) {
+
             try {
-                long seconds = Long.parseLong(retryAfter.trim());
+
+                long seconds =
+                        Long.parseLong(
+                                retryAfter.trim());
 
                 if (seconds >= 0) {
-                    retry = Duration.ofSeconds(seconds);
+
+                    retry =
+                            Duration.ofSeconds(seconds);
                 }
 
             } catch (NumberFormatException ignored) {
-
+                /*
+                 * Giữ retry = ZERO nếu header không hợp lệ.
+                 */
             }
         }
-        throw new JiraRateLimitException("Jira rate limit exceeded", retry);
+
+        throw new JiraRateLimitException(
+                "Jira rate limit exceeded",
+                retry);
     }
 
-    private String normalizeBaseUrl(String raw) {
+    /**
+     * Chỉ chấp nhận HTTPS origin hợp lệ.
+     *
+     * Hợp lệ:
+     * https://example.atlassian.net
+     * https://example.atlassian.net/
+     * https://example.atlassian.net:443
+     *
+     * Không hợp lệ:
+     * http://example.atlassian.net
+     * https://example.atlassian.net:8080
+     * https://example.atlassian.net:8443
+     * https://example.atlassian.net/path
+     * https://example.atlassian.net?x=1
+     * https://example.atlassian.net#fragment
+     * https://user:password@example.atlassian.net
+     */
+    private String normalizeBaseUrl(
+            String raw) {
+
         if (raw == null || raw.isBlank()) {
-            throw new JiraClientException("Jira base URL chưa được cấu hình");
+
+            throw new JiraClientException(
+                    "Jira base URL chưa được cấu hình");
         }
 
-        String normalized = raw.trim();
+        String normalized =
+                raw.trim();
+
         try {
-            URI uri = URI.create(normalized);
-            String scheme = uri.getScheme();
+
+            URI uri =
+                    URI.create(normalized);
+
+            /*
+             * Chỉ HTTPS.
+             */
+            String scheme =
+                    uri.getScheme();
 
             if (!"https".equalsIgnoreCase(scheme)) {
-                throw new JiraClientException("Jira base URL phải sử dụng HTTPS");
+
+                throw new JiraClientException(
+                        "Jira base URL phải sử dụng HTTPS");
             }
 
-            int port = uri.getPort();
+            /*
+             * Chỉ cho phép port HTTPS mặc định 443.
+             *
+             * - Không ghi port: -1 -> hợp lệ.
+             * - :443 -> hợp lệ.
+             * - :8080 -> không hợp lệ.
+             * - :8443 -> không hợp lệ.
+             */
+            int port =
+                    uri.getPort();
 
             if (port != -1 && port != 443) {
-                throw new JiraClientException("Jira base URL phải sử dụng port HTTPS mặc định 443");
+
+                throw new JiraClientException(
+                        "Jira base URL phải sử dụng port HTTPS mặc định 443");
             }
 
-            if (uri.getHost() == null || uri.getHost().isBlank()) {
+            /*
+             * Phải có host.
+             */
+            if (uri.getHost() == null
+                    || uri.getHost().isBlank()) {
 
-                throw new JiraClientException("Jira base URL không hợp lệ");
+                throw new JiraClientException(
+                        "Jira base URL không hợp lệ");
             }
 
+            /*
+             * Không cho phép user-info.
+             */
             if (uri.getUserInfo() != null) {
-                throw new JiraClientException("Jira base URL không được chứa user information");
+
+                throw new JiraClientException(
+                        "Jira base URL không được chứa user information");
             }
 
-            if (uri.getQuery() != null || uri.getFragment() != null) {
+            /*
+             * Không cho phép query hoặc fragment.
+             */
+            if (uri.getQuery() != null
+                    || uri.getFragment() != null) {
 
-                throw new JiraClientException("Jira base URL không được chứa query hoặc fragment");
+                throw new JiraClientException(
+                        "Jira base URL không được chứa query hoặc fragment");
             }
 
-            String path = uri.getPath();
+            /*
+             * Chỉ chấp nhận origin.
+             *
+             * Path chỉ được phép là "/" hoặc rỗng.
+             */
+            String path =
+                    uri.getPath();
 
-            if (path != null && !path.isBlank() && !"/".equals(path)) {
-                throw new JiraClientException("Jira base URL phải là HTTPS origin");
+            if (path != null
+                    && !path.isBlank()
+                    && !"/".equals(path)) {
+
+                throw new JiraClientException(
+                        "Jira base URL phải là HTTPS origin");
             }
 
+            /*
+             * Loại bỏ "/" cuối URL để khi nối endpoint
+             * không tạo thành "//rest/api/...".
+             */
             return normalized.replaceAll("/+$", "");
 
         } catch (JiraClientException exception) {
@@ -448,41 +590,81 @@ public class JiraRestClient implements JiraClient {
 
         } catch (IllegalArgumentException exception) {
 
-            throw new JiraClientException("Jira base URL không hợp lệ",exception);
+            throw new JiraClientException(
+                    "Jira base URL không hợp lệ",
+                    exception);
         }
     }
 
-    private void validateResolvedHost(String baseUrl) {
+    /**
+     * Resolve DNS và kiểm tra toàn bộ địa chỉ IP
+     * mà hostname trỏ tới.
+     *
+     * Mục đích:
+     * - Chặn loopback.
+     * - Chặn private IP.
+     * - Chặn link-local.
+     * - Chặn multicast.
+     * - Chặn wildcard/any-local.
+     */
+    private void validateResolvedHost(
+            String baseUrl) {
+
         try {
 
-            URI uri = URI.create(baseUrl);
-            String host = uri.getHost();
+            URI uri =
+                    URI.create(baseUrl);
+
+            String host =
+                    uri.getHost();
 
             if (host == null || host.isBlank()) {
-                throw new JiraClientException("Jira host không hợp lệ");
+
+                throw new JiraClientException(
+                        "Jira host không hợp lệ");
             }
 
-            InetAddress[] addresses = InetAddress.getAllByName(host);
+            InetAddress[] addresses =
+                    InetAddress.getAllByName(host);
 
             if (addresses.length == 0) {
-                throw new JiraClientException("Không thể resolve Jira host");
+
+                throw new JiraClientException(
+                        "Không thể resolve Jira host");
             }
 
+            /*
+             * Kiểm tra tất cả IP mà hostname resolve tới.
+             */
             for (InetAddress address : addresses) {
+
                 if (isUnsafeAddress(address)) {
-                    throw new JiraClientException("Jira host trỏ tới địa chỉ mạng không được phép");
+
+                    throw new JiraClientException(
+                            "Jira host trỏ tới địa chỉ mạng không được phép");
                 }
             }
 
         } catch (UnknownHostException exception) {
-            throw new JiraClientException("Không thể resolve Jira host", exception);
+
+            throw new JiraClientException(
+                    "Không thể resolve Jira host",
+                    exception);
 
         } catch (IllegalArgumentException exception) {
-            throw new JiraClientException("Jira host không hợp lệ",exception);
+
+            throw new JiraClientException(
+                    "Jira host không hợp lệ",
+                    exception);
         }
     }
 
-    private boolean isUnsafeAddress(InetAddress address) {
+    /**
+     * Kiểm tra địa chỉ IP có thuộc nhóm không an toàn
+     * cho outbound Jira request hay không.
+     */
+    private boolean isUnsafeAddress(
+            InetAddress address) {
 
         return address.isAnyLocalAddress()
                 || address.isLoopbackAddress()
@@ -491,21 +673,51 @@ public class JiraRestClient implements JiraClient {
                 || address.isMulticastAddress();
     }
 
+    /**
+     * Đảm bảo timeout không vượt quá giới hạn cho phép.
+     */
     private Duration safeTimeout() {
-        return DEFAULT_TIMEOUT.compareTo(MAX_TIMEOUT) > 0 ? MAX_TIMEOUT: DEFAULT_TIMEOUT;
+
+        return DEFAULT_TIMEOUT.compareTo(MAX_TIMEOUT) > 0
+                ? MAX_TIMEOUT
+                : DEFAULT_TIMEOUT;
     }
 
-    private void validateProjectKey(String projectKey) {
-        if (projectKey == null || !PROJECT_KEY_PATTERN.matcher(projectKey.trim()).matches()) {
-            throw new JiraClientException("Jira Project Key không hợp lệ");
+    /**
+     * Jira Project Key phải:
+     * - Bắt đầu bằng chữ in hoa.
+     * - Sau đó chỉ được chứa A-Z, 0-9 hoặc _.
+     * - Độ dài tối đa 30 ký tự.
+     */
+    private void validateProjectKey(
+            String projectKey) {
+
+        if (projectKey == null
+                || !PROJECT_KEY_PATTERN
+                        .matcher(projectKey.trim())
+                        .matches()) {
+
+            throw new JiraClientException(
+                    "Jira Project Key không hợp lệ");
         }
     }
 
-    private String text(JsonNode node,String field) {
+    /**
+     * Lấy text field an toàn từ JSON.
+     */
+    private String text(
+            JsonNode node,
+            String field) {
+
         if (node == null) {
             return null;
         }
-        JsonNode value = node.get(field);
-        return value == null || value.isNull() ? null : value.asText();
+
+        JsonNode value =
+                node.get(field);
+
+        return value == null || value.isNull()
+                ? null
+                : value.asText();
     }
 }

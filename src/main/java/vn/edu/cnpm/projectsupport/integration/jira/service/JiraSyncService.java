@@ -38,7 +38,6 @@ import vn.edu.cnpm.projectsupport.sprint.repository.SprintRepository;
 public class JiraSyncService {
 
     private static final int PAGE_SIZE = 50;
-    private static final int MAX_ITEMS = 1000;
 
     private final ProjectRepository projectRepository;
     private final JiraClient jiraClient;
@@ -62,25 +61,43 @@ public class JiraSyncService {
         this.backlogSnapshotRepository = backlogSnapshotRepository;
         this.sprintRepository = sprintRepository;
         this.syncLogRepository = syncLogRepository;
-        this.paginationReader = new JiraPaginationReader(PAGE_SIZE, MAX_ITEMS);
+        this.paginationReader = new JiraPaginationReader(PAGE_SIZE);
     }
 
     public JiraSyncResult syncProject(Long projectId) {
-        Project project = projectRepository.findById(projectId).orElseThrow(() ->
-                        new IllegalArgumentException("Project không tồn tại"));
-
-        String projectKey = project.getJiraProjectKey();
-
-        if (projectKey == null || projectKey.isBlank()) {
-            throw new IllegalArgumentException("Project chưa được cấu hình Jira Project Key");
-        }
-
         String correlationId = UUID.randomUUID().toString();
         Instant startedAt = Instant.now();
 
-        SyncLog log = new SyncLog(projectId, IntegrationProvider.JIRA, "PROJECT_SYNC", projectKey, SyncDirection.IMPORT, correlationId, startedAt);
+        Project project = projectRepository.findById(projectId).orElse(null);
+        String projectKey = project == null ? null : project.getJiraProjectKey();
 
+        SyncLog log = new SyncLog(
+                project == null ? null : projectId,
+                IntegrationProvider.JIRA,
+                "PROJECT_SYNC",
+                projectKey,
+                SyncDirection.IMPORT,
+                correlationId,
+                startedAt);
         syncLogRepository.save(log);
+
+        if (project == null) {
+            log.setStatus(SyncLogStatus.FAILED);
+            log.setErrorCode("PROJECT_NOT_FOUND");
+            log.setErrorMessage("Project không tồn tại");
+            log.setCompletedAt(Instant.now());
+            syncLogRepository.save(log);
+            throw new IllegalArgumentException("Project không tồn tại");
+        }
+
+        if (projectKey == null || projectKey.isBlank()) {
+            log.setStatus(SyncLogStatus.FAILED);
+            log.setErrorCode("JIRA_PROJECT_KEY_MISSING");
+            log.setErrorMessage("Project chưa được cấu hình Jira Project Key");
+            log.setCompletedAt(Instant.now());
+            syncLogRepository.save(log);
+            throw new IllegalArgumentException("Project chưa được cấu hình Jira Project Key");
+        }
 
         int[] counters = new int[3];
         int[] errors = new int[1];
@@ -185,7 +202,7 @@ public class JiraSyncService {
 
         issue.setSnapshotHash(hash(raw));
         issue.setRawSnapshot(raw);
-        
+
         issueSnapshotRepository.save(issue);
     }
 
