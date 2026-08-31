@@ -152,9 +152,11 @@ public class JiraRestClient implements JiraClient {
                 "summary",
                 request.summary());
 
+        String issueTypeId = resolveIssueTypeId(
+                config, projectKey, request.issueType());
         fields.put(
                 "issuetype",
-                Map.of("name", request.issueType()));
+                Map.of("id", issueTypeId));
 
         if (request.description() != null
                 && !request.description().isBlank()) {
@@ -182,12 +184,15 @@ public class JiraRestClient implements JiraClient {
         if (request.priority() != null
                 && !request.priority().isBlank()) {
 
+            String priorityId = resolvePriorityId(
+                    config, projectKey, request.issueType(), request.priority());
+
             fields.put(
                     "priority",
-                    Map.of(
-                            "name",
-                            request.priority()));
+                    Map.of("id", priorityId));
         }
+
+        addMappingFields(config, projectKey, request, fields);
 
         if (request.labels() != null && !request.labels().isEmpty()) {
             fields.put("labels", request.labels());
@@ -290,6 +295,13 @@ public class JiraRestClient implements JiraClient {
         if (request.priority() != null && !request.priority().isBlank()) {
             fields.put("priority", Map.of("name", request.priority()));
         }
+        if (request.assigneeEmail() != null && !request.assigneeEmail().isBlank()) {
+            String accountId = resolveAssigneeAccountId(config, request.assigneeEmail(), null);
+            fields.put("assignee", Map.of("accountId", accountId));
+        }
+        if (request.dueDate() != null && !request.dueDate().isBlank()) {
+            fields.put("duedate", request.dueDate().substring(0, Math.min(10, request.dueDate().length())));
+        }
         if (request.labels() != null && !request.labels().isEmpty()) {
             fields.put("labels", request.labels());
         }
@@ -302,6 +314,202 @@ public class JiraRestClient implements JiraClient {
         } catch (Exception e) {
             throw new JiraClientException("Không thể cập nhật Jira issue", e);
         }
+    }
+
+
+    private String resolveIssueTypeId(
+            IntegrationConfig config,
+            String projectKey,
+            String issueTypeName) {
+
+        if (issueTypeName == null || issueTypeName.isBlank()) {
+            throw new JiraClientException("Jira issue type không được để trống");
+        }
+
+        JsonNode meta = get(
+                config,
+                "/rest/api/3/issue/createmeta?projectKeys="
+                        + URLEncoder.encode(projectKey, StandardCharsets.UTF_8)
+                        + "&expand=projects.issuetypes.fields");
+
+        JsonNode projects = meta.get("projects");
+        if (projects != null && projects.isArray()) {
+            for (JsonNode project : projects) {
+                JsonNode issueTypes = project.get("issuetypes");
+                if (issueTypes != null && issueTypes.isArray()) {
+                    for (JsonNode issueType : issueTypes) {
+                        if (issueTypeName.equalsIgnoreCase(text(issueType, "name"))) {
+                            String id = text(issueType, "id");
+                            if (id != null && !id.isBlank()) {
+                                return id;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        throw new JiraClientException(
+                "Không tìm thấy Jira Issue Type trong metadata: " + issueTypeName);
+    }
+
+    private String resolvePriorityId(
+            IntegrationConfig config,
+            String projectKey,
+            String issueTypeName,
+            String priorityName) {
+
+        if (priorityName == null || priorityName.isBlank()) {
+            throw new JiraClientException("Jira priority không được để trống");
+        }
+
+        String key = projectKey;
+        if (key == null || key.isBlank()) {
+            throw new JiraClientException(
+                    "Không thể resolve Jira priority vì thiếu project key");
+        }
+
+        JsonNode meta = get(
+                config,
+                "/rest/api/3/issue/createmeta?projectKeys="
+                        + URLEncoder.encode(key, StandardCharsets.UTF_8)
+                        + "&expand=projects.issuetypes.fields");
+
+        JsonNode projects = meta.get("projects");
+        if (projects != null && projects.isArray()) {
+            for (JsonNode project : projects) {
+                JsonNode issueTypes = project.get("issuetypes");
+                if (issueTypes == null || !issueTypes.isArray()) {
+                    continue;
+                }
+
+                for (JsonNode issueType : issueTypes) {
+                    if (issueTypeName != null
+                            && !issueTypeName.equalsIgnoreCase(text(issueType, "name"))) {
+                        continue;
+                    }
+
+                    JsonNode fields = issueType.get("fields");
+                    JsonNode priority = fields == null ? null : fields.get("priority");
+                    JsonNode values = priority == null ? null : priority.get("allowedValues");
+                    if (values != null && values.isArray()) {
+                        for (JsonNode value : values) {
+                            if (priorityName.equalsIgnoreCase(text(value, "name"))) {
+                                String id = text(value, "id");
+                                if (id != null && !id.isBlank()) {
+                                    return id;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Some Jira metadata configurations do not expose priority allowedValues.
+        JsonNode priorities = get(config, "/rest/api/3/priority");
+        if (priorities != null && priorities.isArray()) {
+            for (JsonNode priority : priorities) {
+                if (priorityName.equalsIgnoreCase(text(priority, "name"))) {
+                    String id = text(priority, "id");
+                    if (id != null && !id.isBlank()) {
+                        return id;
+                    }
+                }
+            }
+        }
+
+        throw new JiraClientException(
+                "Không tìm thấy Jira Priority trong metadata: " + priorityName);
+    }
+
+    private String resolveAssigneeAccountId(
+            IntegrationConfig config,
+            String email,
+            String projectKey) {
+
+        String query = URLEncoder.encode(email.trim(), StandardCharsets.UTF_8);
+        String path = "/rest/api/3/user/assignable/search?query=" + query;
+        if (projectKey != null && !projectKey.isBlank()) {
+            path += "&project=" + URLEncoder.encode(projectKey, StandardCharsets.UTF_8);
+        }
+
+        JsonNode users = get(config, path);
+        if (users != null && users.isArray()) {
+            for (JsonNode user : users) {
+                String userEmail = text(user, "emailAddress");
+                if (userEmail != null && email.equalsIgnoreCase(userEmail)) {
+                    String accountId = text(user, "accountId");
+                    if (accountId != null && !accountId.isBlank()) {
+                        return accountId;
+                    }
+                }
+            }
+            if (!users.isEmpty()) {
+                String accountId = text(users.get(0), "accountId");
+                if (accountId != null && !accountId.isBlank()) {
+                    return accountId;
+                }
+            }
+        }
+
+        throw new JiraClientException(
+                "Không tìm thấy Jira account cho assignee: " + email);
+    }
+
+    private void addMappingFields(
+            IntegrationConfig config,
+            String projectKey,
+            JiraCreateIssueRequest request,
+            Map<String, Object> fields) {
+
+        if (request.assigneeEmail() != null && !request.assigneeEmail().isBlank()) {
+            fields.put(
+                    "assignee",
+                    Map.of("accountId",
+                            resolveAssigneeAccountId(config, request.assigneeEmail(), projectKey)));
+        }
+
+        if (request.dueDate() != null && !request.dueDate().isBlank()) {
+            fields.put(
+                    "duedate",
+                    request.dueDate().substring(0, Math.min(10, request.dueDate().length())));
+        }
+
+        if (request.sprintId() != null && !request.sprintId().isBlank()) {
+            String sprintField = resolveCustomFieldId(config, "Sprint");
+            if (sprintField != null) {
+                fields.put(sprintField, List.of(request.sprintId()));
+            }
+        }
+
+        if (request.epicKey() != null && !request.epicKey().isBlank()) {
+            String epicField = resolveCustomFieldId(config, "Epic Link");
+            if (epicField != null) {
+                fields.put(epicField, request.epicKey());
+            } else {
+                // Modern Jira Cloud projects use parent for an Epic relationship.
+                fields.put("parent", Map.of("key", request.epicKey()));
+            }
+        }
+    }
+
+    private String resolveCustomFieldId(
+            IntegrationConfig config,
+            String fieldName) {
+
+        JsonNode fields = get(config, "/rest/api/3/field");
+        if (fields != null && fields.isArray()) {
+            for (JsonNode field : fields) {
+                if (fieldName.equalsIgnoreCase(text(field, "name"))) {
+                    String id = text(field, "id");
+                    if (id != null && id.startsWith("customfield_")) {
+                        return id;
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     private IntegrationConfig getIntegrationConfig(

@@ -3,6 +3,7 @@ package vn.edu.cnpm.projectsupport.integration.jira;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -27,6 +28,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.http.HttpStatus;
 
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationConfig;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider;
@@ -128,7 +130,6 @@ class JiraIntegrationServiceImplTest {
                         IntegrationProvider.JIRA))
                 .thenReturn(Optional.of(config));
 
-        
         when(jdbcTemplate.query(
                 anyString(),
                 ArgumentMatchers.<RowMapper<String>>any(),
@@ -153,7 +154,6 @@ class JiraIntegrationServiceImplTest {
                 .thenReturn(Optional.empty());
     }
 
-    
     @Test
     void taskStartsAsNotSynced() {
 
@@ -161,7 +161,6 @@ class JiraIntegrationServiceImplTest {
                 .isEqualTo(SyncStatus.NOT_SYNCED);
     }
 
-    
     @Test
     void changesTaskToSyncingBeforeCallingJira() {
 
@@ -193,7 +192,6 @@ class JiraIntegrationServiceImplTest {
                 .isEqualTo(SyncStatus.SYNCING);
     }
 
-    
     @Test
     void successfulSyncStoresJiraMappingAndMarksTaskSynced() {
 
@@ -266,8 +264,6 @@ class JiraIntegrationServiceImplTest {
                 .isNotNull();
     }
 
-    
-
     @Test
     void failedSyncMarksTaskSyncFailed() {
 
@@ -304,7 +300,6 @@ class JiraIntegrationServiceImplTest {
                 .saveAndFlush(any(JiraIssue.class));
     }
 
-
     @Test
     void retryFailedTaskCanSyncSuccessfully() {
 
@@ -340,8 +335,6 @@ class JiraIntegrationServiceImplTest {
                         eq(PROJECT_KEY),
                         any(JiraCreateIssueRequest.class));
     }
-
-    
 
     @Test
     void existingMappingPreventsDuplicateJiraIssue() {
@@ -383,11 +376,11 @@ class JiraIntegrationServiceImplTest {
                 .saveAndFlush(any(JiraIssue.class));
     }
 
-    
     @Test
     void localTaskIsRetainedWhenJiraFails() {
 
-        task.setTitle("Original local task");
+        task.setTitle(
+                "Original local task");
 
         task.setDescription(
                 "Original description");
@@ -417,12 +410,10 @@ class JiraIntegrationServiceImplTest {
                 .isEqualTo(
                         SyncStatus.SYNC_FAILED);
 
-        
         verify(taskRepository, times(2))
                 .save(any(Task.class));
     }
 
-    
     @Test
     void createsSyncLogForEverySyncAttempt() {
 
@@ -446,11 +437,9 @@ class JiraIntegrationServiceImplTest {
                 ArgumentCaptor.forClass(
                         SyncLog.class);
 
-        
         verify(syncLogRepository, times(2))
                 .save(captor.capture());
 
-        
         SyncLog log =
                 captor.getValue();
 
@@ -488,8 +477,6 @@ class JiraIntegrationServiceImplTest {
                 .isNotNull();
     }
 
-    
-
     @Test
     void repeatedRetriesCreateOnlyOneJiraIssue() {
 
@@ -509,7 +496,6 @@ class JiraIntegrationServiceImplTest {
                                 "Temporary Jira outage"))
                 .thenReturn(jiraResponse);
 
-        
         var first =
                 service.syncTask(
                         PROJECT_ID,
@@ -524,7 +510,6 @@ class JiraIntegrationServiceImplTest {
                 .isEqualTo(
                         SyncStatus.SYNC_FAILED);
 
-        
         clearInvocations(
                 jiraIssueRepository);
 
@@ -548,7 +533,6 @@ class JiraIntegrationServiceImplTest {
                 .isEqualTo(
                         SyncStatus.SYNCED);
 
-        
         JiraIssue savedIssue =
                 new JiraIssue(
                         TASK_ID,
@@ -590,7 +574,6 @@ class JiraIntegrationServiceImplTest {
                         any(JiraCreateIssueRequest.class));
     }
 
-
     @Test
     void retryIsRejectedWhenTaskIsCurrentlySyncing() {
 
@@ -612,7 +595,6 @@ class JiraIntegrationServiceImplTest {
                         any());
     }
 
-    
     @Test
     void rejectsMissingIdempotencyKey() {
 
@@ -621,7 +603,134 @@ class JiraIntegrationServiceImplTest {
                         PROJECT_ID,
                         TASK_ID,
                         null))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Idempotency-Key là bắt buộc");
+                .isInstanceOf(
+                        IllegalArgumentException.class)
+                .hasMessageContaining(
+                        "Idempotency-Key là bắt buộc");
+    }
+
+    @Test
+    void syncingTaskReturnsConflictWithSyncAlreadyRunning() {
+
+        task.setSyncStatus(
+                SyncStatus.SYNCING);
+
+        Throwable thrown =
+                catchThrowable(() ->
+                        service.syncTask(
+                                PROJECT_ID,
+                                TASK_ID,
+                                "running-1"));
+
+        assertThat(thrown)
+                .isInstanceOf(
+                        JiraClientException.class);
+
+        JiraClientException exception =
+                (JiraClientException) thrown;
+
+        assertThat(exception.getStatus())
+                .isEqualTo(
+                        HttpStatus.CONFLICT);
+
+        assertThat(exception.getErrorCode())
+                .isEqualTo(
+                        "SYNC_ALREADY_RUNNING");
+
+        assertThat(exception.isRetryable())
+                .isTrue();
+
+        verify(jiraClient, never())
+                .createIssue(
+                        any(),
+                        any(),
+                        any());
+    }
+
+    @Test
+    void createRequestContainsTaskMappingFields() {
+
+        task.setAssigneeUserId(50L);
+
+        task.setDeadline(
+                Instant.parse(
+                        "2026-09-10T15:30:00Z"));
+
+        task.setSprintId(60L);
+
+        task.setFeatureId(70L);
+
+        when(jdbcTemplate.query(
+                ArgumentMatchers.contains("FROM users"),
+                ArgumentMatchers.<RowMapper<String>>any(),
+                eq(50L)))
+                .thenReturn(
+                        java.util.List.of(
+                                "assignee@example.com"));
+
+        when(jdbcTemplate.query(
+                ArgumentMatchers.contains("FROM sprints"),
+                ArgumentMatchers.<RowMapper<String>>any(),
+                eq(60L),
+                eq(PROJECT_ID)))
+                .thenReturn(
+                        java.util.List.of("9001"));
+
+        when(jdbcTemplate.query(
+                ArgumentMatchers.contains("FROM features"),
+                ArgumentMatchers.<RowMapper<String>>any(),
+                eq(70L),
+                eq(PROJECT_ID)))
+                .thenReturn(
+                        java.util.List.of(
+                                "CNPM-EPIC-1"));
+
+        when(jiraClient.createIssue(
+                eq(PROJECT_ID),
+                eq(PROJECT_KEY),
+                any(JiraCreateIssueRequest.class)))
+                .thenReturn(
+                        new JiraCreateIssueResponse(
+                                "10001",
+                                "CNPM-100",
+                                BASE_URL
+                                        + "/rest/api/3/issue/10001"));
+
+        service.syncTask(
+                PROJECT_ID,
+                TASK_ID,
+                "mapping-1");
+
+        ArgumentCaptor<JiraCreateIssueRequest> captor =
+                ArgumentCaptor.forClass(
+                        JiraCreateIssueRequest.class);
+
+        verify(jiraClient)
+                .createIssue(
+                        eq(PROJECT_ID),
+                        eq(PROJECT_KEY),
+                        captor.capture());
+
+        JiraCreateIssueRequest request =
+                captor.getValue();
+
+        assertThat(request.assigneeEmail())
+                .isEqualTo(
+                        "assignee@example.com");
+
+        assertThat(request.dueDate())
+                .startsWith(
+                        "2026-09-10");
+
+        assertThat(request.sprintId())
+                .isEqualTo("9001");
+
+        assertThat(request.epicKey())
+                .isEqualTo(
+                        "CNPM-EPIC-1");
+
+        assertThat(request.labels())
+                .containsExactly(
+                        "cnpm-local-task-" + TASK_ID);
     }
 }

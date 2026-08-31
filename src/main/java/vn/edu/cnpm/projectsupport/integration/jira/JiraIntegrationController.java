@@ -19,6 +19,8 @@ import vn.edu.cnpm.projectsupport.integration.jira.contract.JiraConnectionRespon
 import vn.edu.cnpm.projectsupport.integration.jira.contract.JiraConnectionTestResponse;
 import vn.edu.cnpm.projectsupport.integration.jira.contract.JiraIntegrationService;
 import vn.edu.cnpm.projectsupport.integration.jira.contract.JiraTaskSyncResponse;
+import vn.edu.cnpm.projectsupport.integration.jira.exception.JiraApiException;
+import org.springframework.http.HttpStatus;
 
 @RestController
 @RequestMapping("/api/v1/projects/{projectId}/integrations/jira")
@@ -80,7 +82,7 @@ public class JiraIntegrationController {
 
     @PostMapping("/tasks/{taskId}/sync")
     @PreAuthorize("hasRole('ADMIN') or (hasRole('TEAM_LEADER') and @projectAuthorization.isCurrentUserLeader(#projectId))")
-    public ResponseEntity<ApiResponse<JiraTaskSyncResponse>> syncTaskToJira(
+    public ResponseEntity<?> syncTaskToJira(
             @PathVariable Long projectId,
             @PathVariable Long taskId,
             @RequestHeader(value = "Idempotency-Key", required = true)
@@ -91,6 +93,8 @@ public class JiraIntegrationController {
                         projectId,
                         taskId,
                         idempotencyKey);
+
+        throwIfSyncFailed(response);
 
         return ResponseEntity.ok(
                 ApiResponse.success(response));
@@ -105,7 +109,7 @@ public class JiraIntegrationController {
 
     @PostMapping("/tasks/{taskId}/retry")
     @PreAuthorize("hasRole('ADMIN') or (hasRole('TEAM_LEADER') and @projectAuthorization.isCurrentUserLeader(#projectId))")
-    public ResponseEntity<ApiResponse<JiraTaskSyncResponse>> retryTaskSync(
+    public ResponseEntity<?> retryTaskSync(
             @PathVariable Long projectId,
             @PathVariable Long taskId,
             @RequestHeader(value = "Idempotency-Key", required = true)
@@ -117,7 +121,47 @@ public class JiraIntegrationController {
                         taskId,
                         idempotencyKey);
 
+        throwIfSyncFailed(response);
+
         return ResponseEntity.ok(
                 ApiResponse.success(response));
+    }
+
+
+    private void throwIfSyncFailed(JiraTaskSyncResponse response) {
+        if (response == null || response.errorCode() == null
+                || response.errorCode().isBlank()) {
+            return;
+        }
+
+        String code = response.errorCode();
+        HttpStatus status;
+        boolean retryable = response.retryable();
+
+        if ("SYNC_ALREADY_RUNNING".equals(code)
+                || "IDEMPOTENCY_KEY_REUSED".equals(code)
+                || "DUPLICATE_REMOTE_ISSUE".equals(code)) {
+            status = HttpStatus.CONFLICT;
+        } else if ("JIRA_AUTHENTICATION_FAILED".equals(code)) {
+            status = HttpStatus.UNAUTHORIZED;
+        } else if ("JIRA_AUTHORIZATION_FAILED".equals(code)) {
+            status = HttpStatus.FORBIDDEN;
+        } else if ("JIRA_RESOURCE_NOT_FOUND".equals(code)) {
+            status = HttpStatus.NOT_FOUND;
+        } else if ("JIRA_CONNECTION_FAILED".equals(code)
+                || "JIRA_SYNC_FAILED".equals(code)
+                || code.endsWith("Exception")) {
+            status = HttpStatus.BAD_GATEWAY;
+        } else {
+            status = HttpStatus.BAD_REQUEST;
+        }
+
+        throw new JiraApiException(
+                status,
+                code,
+                retryable,
+                null,
+                response.message(),
+                null);
     }
 }
