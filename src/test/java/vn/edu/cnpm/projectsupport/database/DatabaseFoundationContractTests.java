@@ -58,4 +58,27 @@ class DatabaseFoundationContractTests {
     private int countOccurrences(String value, String token) {
         return (value.length() - value.replace(token, "").length()) / token.length();
     }
+
+    @Test
+    void v6ContainsJiraSnapshotTablesAndSyncColumns()
+            throws IOException {
+
+        String migration = new ClassPathResource("db/migration/V6__jira_snapshot_sync.sql").getContentAsString(StandardCharsets.UTF_8);
+
+        assertTrue(migration.contains("CREATE TABLE jira_issue_snapshots"));
+
+        assertTrue(migration.contains("CREATE TABLE jira_backlog_snapshots"));
+
+        assertTrue(migration.contains("jira_last_synced_at"));
+
+        assertTrue(migration.contains("last_synced_at"));
+
+        assertTrue(migration.contains("jira_project_key"));
+
+        assertTrue(migration.contains("uk_jira_snapshot_project_id"));
+
+        assertTrue(migration.contains("uk_jira_snapshot_project_key"));
+
+        assertTrue(migration.contains("uk_jira_backlog_project"));
+    }
 }

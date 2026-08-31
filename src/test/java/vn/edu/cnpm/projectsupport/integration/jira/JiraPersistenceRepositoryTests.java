@@ -24,6 +24,8 @@ import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLogStatus;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.IntegrationConfigRepository;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.JiraIssueRepository;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.SyncLogRepository;
+import vn.edu.cnpm.projectsupport.integration.jira.domain.JiraBacklogSnapshot;
+import vn.edu.cnpm.projectsupport.integration.jira.repository.JiraBacklogSnapshotRepository;
 
 @DataJpaTest
 @ActiveProfiles("test")
@@ -46,6 +48,9 @@ class JiraPersistenceRepositoryTests {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private JiraBacklogSnapshotRepository jiraBacklogSnapshotRepository;
 
     @BeforeEach
     void setUpProjectAndTasks() {
@@ -236,4 +241,22 @@ class JiraPersistenceRepositoryTests {
                 VALUES (?, ?, ?, 'Repository test', 'TASK', 'MEDIUM', 'TO_DO', 'NOT_SYNCED')
                 """, taskId, projectId, title);
     }
+
+    @Test
+    void backlogSnapshotCanBeUpdatedWhenJiraProjectKeyChanges() {
+        JiraBacklogSnapshot snapshot = new JiraBacklogSnapshot(PROJECT_ID, "OLD");
+        snapshot.setLastSyncedAt(Instant.parse("2026-08-29T08:00:00Z"));
+        snapshot.setSnapshotHash("hash-old");
+        snapshot.setRawSnapshot(Map.of("projectKey", "OLD", "items", java.util.List.of()));
+
+        jiraBacklogSnapshotRepository.saveAndFlush(snapshot);
+
+        JiraBacklogSnapshot found = jiraBacklogSnapshotRepository.findByProjectId(PROJECT_ID).orElseThrow();
+        found.setJiraProjectKey("NEW");
+        jiraBacklogSnapshotRepository.saveAndFlush(found);
+
+        JiraBacklogSnapshot updated = jiraBacklogSnapshotRepository.findByProjectId(PROJECT_ID).orElseThrow();
+        assertThat(updated.getJiraProjectKey())
+                .isEqualTo("NEW");
+        }
 }

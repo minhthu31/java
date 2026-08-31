@@ -28,4 +28,8 @@ public record JiraIssueDto(String id, String key, JiraIssueFieldsDto fields) {
     public JiraProjectDto project() {
         return fields == null ? null : fields.project();
     }
+
+    public String updated() {
+        return fields == null ? null : fields.updated();
+    }
 }
