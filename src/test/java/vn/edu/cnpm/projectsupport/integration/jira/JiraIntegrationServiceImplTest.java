@@ -811,4 +811,97 @@ class JiraIntegrationServiceImplTest {
                 .containsExactly(
                         "cnpm-local-task-" + TASK_ID);
     }
+    @Test
+    void retryReconcilesIssueAndRetriesSprintAssignmentAfterSprintFailure() {
+        task.setSprintId(60L);
+
+        vn.edu.cnpm.projectsupport.sprint.domain.Sprint sprint =
+                new vn.edu.cnpm.projectsupport.sprint.domain.Sprint(
+                        PROJECT_ID,
+                        "Sprint 1",
+                        "ACTIVE");
+        sprint.setJiraSprintId(9001L);
+
+        when(sprintRepository.findByIdAndProjectId(60L, PROJECT_ID))
+                .thenReturn(Optional.of(sprint));
+
+        when(jiraClient.createIssue(
+                eq(PROJECT_ID),
+                eq(PROJECT_KEY),
+                any(JiraCreateIssueRequest.class)))
+                .thenReturn(
+                        new JiraCreateIssueResponse(
+                                "10001",
+                                "CNPM-100",
+                                BASE_URL + "/rest/api/3/issue/10001"));
+
+        org.mockito.Mockito.doThrow(
+                new JiraConnectionException("Sprint API unavailable"))
+                .doNothing()
+                .when(jiraClient)
+                .addIssueToSprint(
+                        eq(PROJECT_ID),
+                        eq("9001"),
+                        eq("10001"));
+
+        var first = service.syncTask(
+                PROJECT_ID,
+                TASK_ID,
+                "sprint-retry-1");
+
+        assertThat(first.syncStatus())
+                .isEqualTo(SyncStatus.SYNC_FAILED);
+
+        assertThat(task.getSyncStatus())
+                .isEqualTo(SyncStatus.SYNC_FAILED);
+
+        assertThat(jiraIssueRepository
+                .findByTaskId(TASK_ID))
+                .isEmpty();
+
+        clearInvocations(
+                jiraClient,
+                jiraIssueRepository);
+
+        when(jiraIssueRepository.findByTaskId(TASK_ID))
+                .thenReturn(Optional.empty());
+
+        when(jiraClient.findIssuesByLabel(
+                PROJECT_ID,
+                PROJECT_KEY,
+                "cnpm-local-task-" + TASK_ID))
+                .thenReturn(
+                        java.util.List.of(
+                                new JiraCreateIssueResponse(
+                                        "10001",
+                                        "CNPM-100",
+                                        BASE_URL + "/rest/api/3/issue/10001")));
+
+        var second = service.retryTaskSync(
+                PROJECT_ID,
+                TASK_ID,
+                "sprint-retry-2");
+
+        assertThat(second.syncStatus())
+                .isEqualTo(SyncStatus.SYNCED);
+
+        assertThat(task.getSyncStatus())
+                .isEqualTo(SyncStatus.SYNCED);
+
+        verify(jiraClient, times(1))
+                .findIssuesByLabel(
+                        PROJECT_ID,
+                        PROJECT_KEY,
+                        "cnpm-local-task-" + TASK_ID);
+
+        verify(jiraClient, times(1))
+                .addIssueToSprint(
+                        PROJECT_ID,
+                        "9001",
+                        "10001");
+
+        verify(jiraIssueRepository)
+                .saveAndFlush(any(JiraIssue.class));
+    }
+
 }

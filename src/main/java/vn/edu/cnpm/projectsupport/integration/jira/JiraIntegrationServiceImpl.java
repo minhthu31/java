@@ -38,6 +38,7 @@ import vn.edu.cnpm.projectsupport.integration.jira.repository.IntegrationConfigR
 import vn.edu.cnpm.projectsupport.integration.jira.repository.JiraIssueRepository;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.SyncLogRepository;
 import vn.edu.cnpm.projectsupport.feature.repository.FeatureRepository;
+import vn.edu.cnpm.projectsupport.sprint.domain.Sprint;
 import vn.edu.cnpm.projectsupport.sprint.repository.SprintRepository;
 import vn.edu.cnpm.projectsupport.security.IntegrationSecretService;
 import vn.edu.cnpm.projectsupport.task.domain.SyncStatus;
@@ -420,6 +421,11 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                             issue.getJiraIssueId(),
                             updateRequest);
 
+                    assignSprintIfRequired(
+                            projectId,
+                            task,
+                            issue.getJiraIssueId());
+
                     Instant syncedAt = Instant.now();
                     issue.setLastSyncedAt(syncedAt);
                     issue.setSnapshotHash(fingerprint);
@@ -458,6 +464,12 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                         "Task không ở trạng thái có thể retry");
             }
 
+            // Resolve all mandatory local-to-Jira mappings before reconcile/create.
+            // Mapping failures must surface as their contract error codes rather than
+            // being hidden by the label-reconcile path.
+            JiraCreateIssueRequest request =
+                    buildCreateRequest(task, taskId);
+
             String label = "cnpm-local-task-" + taskId;
 
             /*
@@ -466,6 +478,9 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
              */
             List<JiraCreateIssueResponse> discoveredIssues =
                     jiraClient.findIssuesByLabel(projectId, projectKey, label);
+            if (discoveredIssues == null) {
+                discoveredIssues = List.of();
+            }
             if (discoveredIssues.size() > 1) {
                 throw duplicateRemoteIssueException(label);
             }
@@ -507,20 +522,32 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
             task.setSyncStatus(SyncStatus.SYNCING);
             taskRepository.save(task);
 
+            boolean remoteIssueReady = discovered != null;
+            boolean sprintAssignmentFailed = false;
+
             try {
                 JiraCreateIssueResponse jiraResponse = discovered;
 
                 if (jiraResponse == null) {
-                    JiraCreateIssueRequest request =
-                            buildCreateRequest(task, taskId);
-
                     jiraResponse = jiraClient.createIssue(
                             projectId,
                             projectKey,
                             request);
+                    remoteIssueReady = true;
                 }
 
                 validateJiraCreateResponse(jiraResponse);
+
+                remoteIssueReady = true;
+                try {
+                    assignSprintIfRequired(
+                            projectId,
+                            task,
+                            jiraResponse.id());
+                } catch (Exception sprintException) {
+                    sprintAssignmentFailed = true;
+                    throw sprintException;
+                }
 
                 Instant syncedAt = Instant.now();
                 String jiraIssueUrl = buildJiraIssueUrl(
@@ -573,10 +600,28 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
 
             } catch (Exception exception) {
                 /*
+                 * Các lỗi nghiệp vụ/API đã có HTTP status + error code riêng
+                 * phải được đẩy lên controller để trả đúng HTTP response.
+                 * Không chuyển chúng thành HTTP 200 + SYNC_FAILED.
+                 */
+                if (exception instanceof JiraApiException
+                        && !(exception instanceof JiraConnectionException)) {
+                    syncLog.setStatus(SyncLogStatus.FAILED);
+                    syncLog.setErrorCode(extractErrorCode(exception));
+                    syncLog.setErrorMessage(safeErrorMessage(exception));
+                    syncLog.setCompletedAt(Instant.now());
+                    syncLogRepository.save(syncLog);
+                    throw exception;
+                }
+
+                /*
                  * Nếu create đã thành công nhưng response bị timeout/mất kết nối,
                  * hoặc local save gặp lỗi, luôn reconcile bằng label trước.
                  */
-                if (!isRetryable(exception) && !(exception instanceof DataIntegrityViolationException)) {
+                if (sprintAssignmentFailed
+                        || (!remoteIssueReady
+                        && !isRetryable(exception)
+                        && !(exception instanceof DataIntegrityViolationException))) {
                     task.setSyncStatus(SyncStatus.SYNC_FAILED);
                     taskRepository.save(task);
                     syncLog.setStatus(SyncLogStatus.FAILED);
@@ -584,7 +629,18 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                     syncLog.setErrorMessage(safeErrorMessage(exception));
                     syncLog.setCompletedAt(Instant.now());
                     syncLogRepository.save(syncLog);
-                    throw exception;
+
+                    return new JiraTaskSyncResponse(
+                            taskId,
+                            SyncStatus.SYNC_FAILED,
+                            remoteIssueReady ? null : null,
+                            null,
+                            null,
+                            retry ? 2 : 1,
+                            isRetryable(exception),
+                            null,
+                            extractErrorCode(exception),
+                            safeErrorMessage(exception));
                 }
 
                 try {
@@ -610,6 +666,11 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                                 syncedAt);
                         issue.setSnapshotHash(fingerprint);
                         issue.setRawSnapshot(snapshot(task));
+
+                        assignSprintIfRequired(
+                                projectId,
+                                task,
+                                reconciled.id());
 
                         try {
                             jiraIssueRepository.saveAndFlush(issue);
@@ -664,6 +725,35 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                         safeErrorMessage(exception));
             }
         }
+    }
+
+    private void assignSprintIfRequired(
+            Long projectId,
+            Task task,
+            String jiraIssueId) {
+
+        if (task.getSprintId() == null) {
+            return;
+        }
+
+        Sprint sprint = sprintRepository
+                .findByIdAndProjectId(
+                        task.getSprintId(),
+                        task.getProjectId())
+                .orElseThrow(() -> mappingMissingException(
+                        "SPRINT_MAPPING_MISSING",
+                        "Không tìm thấy Sprint của Task trong Project"));
+
+        if (sprint.getJiraSprintId() == null) {
+            throw mappingMissingException(
+                    "SPRINT_MAPPING_MISSING",
+                    "Sprint " + task.getSprintId() + " chưa có Jira sprint mapping");
+        }
+
+        jiraClient.addIssueToSprint(
+                projectId,
+                String.valueOf(sprint.getJiraSprintId()),
+                jiraIssueId);
     }
 
     private IntegrationConfig getConfig(Long projectId) {

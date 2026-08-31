@@ -1407,18 +1407,6 @@ class JiraRestClientTest {
                                 """,
                                 Map.of()));
 
-        when(transport.post(
-                eq(BASE_URL
-                        + "/rest/agile/1.0/sprint/9001/issue"),
-                any(),
-                any(String.class),
-                eq(Duration.ofSeconds(10))))
-                .thenReturn(
-                        new JiraHttpResponse(
-                                204,
-                                "",
-                                Map.of()));
-
         JiraCreateIssueRequest request =
                 new JiraCreateIssueRequest(
                         "Implement mapping",
@@ -1484,21 +1472,6 @@ class JiraRestClientTest {
         assertTrue(
                 body.contains(
                         "cnpm-local-task-200"));
-
-        ArgumentCaptor<String> sprintBodyCaptor =
-                ArgumentCaptor.forClass(String.class);
-
-        verify(transport)
-                .post(
-                        eq(BASE_URL
-                                + "/rest/agile/1.0/sprint/9001/issue"),
-                        any(),
-                        sprintBodyCaptor.capture(),
-                        eq(Duration.ofSeconds(10)));
-
-        assertTrue(
-                sprintBodyCaptor.getValue()
-                        .contains("\"issues\":[\"10001\"]"));
     }
 
     @Test

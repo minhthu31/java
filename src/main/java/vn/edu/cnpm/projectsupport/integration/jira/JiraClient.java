@@ -28,4 +28,9 @@ public interface JiraClient {
             String projectKey,
             String jiraIssueId,
             JiraCreateIssueRequest request);
+
+    void addIssueToSprint(
+            Long projectId,
+            String jiraSprintId,
+            String jiraIssueId);
 }

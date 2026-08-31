@@ -223,18 +223,10 @@ public class JiraRestClient implements JiraClient {
                         "/rest/api/3/issue",
                         body);
 
-        JiraCreateIssueResponse created =
-                new JiraCreateIssueResponse(
-                        text(response, "id"),
-                        text(response, "key"),
-                        text(response, "self"));
-
-        if (request.sprintId() != null
-                && !request.sprintId().isBlank()) {
-            addIssueToSprint(config, request.sprintId(), created.id());
-        }
-
-        return created;
+        return new JiraCreateIssueResponse(
+                text(response, "id"),
+                text(response, "key"),
+                text(response, "self"));
     }
 
     @Override
@@ -320,9 +312,6 @@ public class JiraRestClient implements JiraClient {
         try {
             String body = objectMapper.writeValueAsString(Map.of("fields", fields));
             put(config, "/rest/api/3/issue/" + jiraIssueId, body);
-            if (request.sprintId() != null && !request.sprintId().isBlank()) {
-                addIssueToSprint(config, request.sprintId(), jiraIssueId);
-            }
         } catch (JiraApiException e) {
             throw e;
         } catch (Exception e) {
@@ -481,10 +470,13 @@ public class JiraRestClient implements JiraClient {
                 && "EPIC".equalsIgnoreCase(issueTypeName.trim());
     }
 
-    private void addIssueToSprint(
-            IntegrationConfig config,
+    @Override
+    public void addIssueToSprint(
+            Long projectId,
             String jiraSprintId,
             String jiraIssueId) {
+
+        IntegrationConfig config = getIntegrationConfig(projectId);
 
         if (jiraSprintId == null || jiraSprintId.isBlank()) {
             return;
