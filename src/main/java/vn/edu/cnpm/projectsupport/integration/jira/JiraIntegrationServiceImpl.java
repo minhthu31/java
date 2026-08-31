@@ -914,15 +914,15 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
 
     private JiraClientException syncAlreadyRunningException(String message) {
         return new JiraClientException(
-               org.springframework.http.HttpStatus.CONFLICT,
-               "SYNC_ALREADY_RUNNING",
+                org.springframework.http.HttpStatus.CONFLICT,
+                "SYNC_ALREADY_RUNNING",
                 true,
                 message);
     }
 
     private JiraApiException mappingMissingException(String code, String message) {
         return new JiraApiException(
-                org.springframework.http.HttpStatus.BAD_REQUEST,
+                org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY,
                 code,
                 false,
                 null,

@@ -17,6 +17,7 @@ import java.util.regex.Pattern;
 import java.net.URLEncoder;
 
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
 
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationConfig;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider;
@@ -222,10 +223,18 @@ public class JiraRestClient implements JiraClient {
                         "/rest/api/3/issue",
                         body);
 
-        return new JiraCreateIssueResponse(
-                text(response, "id"),
-                text(response, "key"),
-                text(response, "self"));
+        JiraCreateIssueResponse created =
+                new JiraCreateIssueResponse(
+                        text(response, "id"),
+                        text(response, "key"),
+                        text(response, "self"));
+
+        if (request.sprintId() != null
+                && !request.sprintId().isBlank()) {
+            addIssueToSprint(config, request.sprintId(), created.id());
+        }
+
+        return created;
     }
 
     @Override
@@ -311,6 +320,9 @@ public class JiraRestClient implements JiraClient {
         try {
             String body = objectMapper.writeValueAsString(Map.of("fields", fields));
             put(config, "/rest/api/3/issue/" + jiraIssueId, body);
+            if (request.sprintId() != null && !request.sprintId().isBlank()) {
+                addIssueToSprint(config, request.sprintId(), jiraIssueId);
+            }
         } catch (JiraApiException e) {
             throw e;
         } catch (Exception e) {
@@ -351,8 +363,13 @@ public class JiraRestClient implements JiraClient {
             }
         }
 
-        throw new JiraClientException(
-                "Không tìm thấy Jira Issue Type trong metadata: " + issueTypeName);
+        throw new JiraApiException(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "ISSUE_TYPE_MAPPING_MISSING",
+                false,
+                null,
+                "Không tìm thấy Jira Issue Type trong metadata: " + issueTypeName,
+                null);
     }
 
     private String resolvePriorityId(
@@ -421,8 +438,13 @@ public class JiraRestClient implements JiraClient {
             }
         }
 
-        throw new JiraClientException(
-                "Không tìm thấy Jira Priority trong metadata: " + priorityName);
+        throw new JiraApiException(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "PRIORITY_MAPPING_MISSING",
+                false,
+                null,
+                "Không tìm thấy Jira Priority trong metadata: " + priorityName,
+                null);
     }
 
     private void addMappingFields(
@@ -431,34 +453,64 @@ public class JiraRestClient implements JiraClient {
             JiraCreateIssueRequest request,
             Map<String, Object> fields) {
 
-        if (request.assigneeAccountId() != null && !request.assigneeAccountId().isBlank()) {
+        if (request.assigneeAccountId() != null
+                && !request.assigneeAccountId().isBlank()) {
             fields.put(
                     "assignee",
                     Map.of("accountId", request.assigneeAccountId().trim()));
         }
 
-        if (request.dueDate() != null && !request.dueDate().isBlank()) {
+        if (request.dueDate() != null
+                && !request.dueDate().isBlank()) {
             fields.put(
                     "duedate",
                     normalizeDueDate(request.dueDate()));
         }
 
-        if (request.sprintId() != null && !request.sprintId().isBlank()) {
-            String sprintField = resolveCustomFieldId(config, "Sprint");
-            if (sprintField == null) {
-                throw new JiraClientException("Không tìm thấy Jira Sprint custom field trong metadata");
-            }
-            fields.put(sprintField, List.of(request.sprintId()));
+        if (request.epicKey() != null
+                && !request.epicKey().isBlank()
+                && !isEpicIssueType(request.issueType())) {
+            fields.put(
+                    "parent",
+                    Map.of("key", request.epicKey().trim()));
+        }
+    }
+
+    private boolean isEpicIssueType(String issueTypeName) {
+        return issueTypeName != null
+                && "EPIC".equalsIgnoreCase(issueTypeName.trim());
+    }
+
+    private void addIssueToSprint(
+            IntegrationConfig config,
+            String jiraSprintId,
+            String jiraIssueId) {
+
+        if (jiraSprintId == null || jiraSprintId.isBlank()) {
+            return;
         }
 
-        if (request.epicKey() != null && !request.epicKey().isBlank()) {
-            String epicField = resolveCustomFieldId(config, "Epic Link");
-            if (epicField != null) {
-                fields.put(epicField, request.epicKey());
-            } else {
-                // Modern Jira Cloud projects use parent for an Epic relationship.
-                fields.put("parent", Map.of("key", request.epicKey()));
-            }
+        if (jiraIssueId == null || jiraIssueId.isBlank()) {
+            throw new JiraClientException(
+                    "Jira issue id không được để trống khi đưa vào Sprint");
+        }
+
+        String path =
+                "/rest/agile/1.0/sprint/"
+                        + jiraSprintId.trim()
+                        + "/issue";
+
+        try {
+            String body =
+                    objectMapper.writeValueAsString(
+                            Map.of("issues", List.of(jiraIssueId)));
+            post(config, path, body);
+        } catch (JiraApiException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new JiraClientException(
+                    "Không thể đưa Jira Issue vào Sprint",
+                    e);
         }
     }
 
@@ -801,10 +853,12 @@ public class JiraRestClient implements JiraClient {
 
         try {
 
-            return objectMapper.readTree(
-                    response.body() == null
-                            ? "{}"
-                            : response.body());
+            String body = response.body();
+            if (body == null || body.isBlank()) {
+                return objectMapper.createObjectNode();
+            }
+
+            return objectMapper.readTree(body);
 
         } catch (Exception exception) {
 
