@@ -37,6 +37,7 @@ import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLog;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLogStatus;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraCreateIssueRequest;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraCreateIssueResponse;
+import vn.edu.cnpm.projectsupport.integration.jira.exception.JiraApiException;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.IntegrationConfigRepository;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.JiraIssueRepository;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.SyncLogRepository;
@@ -811,6 +812,156 @@ class JiraIntegrationServiceImplTest {
                 .containsExactly(
                         "cnpm-local-task-" + TASK_ID);
     }
+
+    @Test
+    void jiraApiExceptionDuringCreateMarksTaskFailedAndSyncLogFailed() {
+        JiraApiException failure = new JiraApiException(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "PRIORITY_MAPPING_MISSING",
+                false,
+                null,
+                "Priority mapping missing",
+                null);
+
+        when(jiraClient.createIssue(
+                eq(PROJECT_ID),
+                eq(PROJECT_KEY),
+                any(JiraCreateIssueRequest.class)))
+                .thenThrow(failure);
+
+        assertThatThrownBy(() -> service.syncTask(
+                PROJECT_ID, TASK_ID, "jira-api-fail-1"))
+                .isSameAs(failure);
+
+        assertThat(task.getSyncStatus())
+                .isEqualTo(SyncStatus.SYNC_FAILED);
+
+        ArgumentCaptor<SyncLog> captor =
+                ArgumentCaptor.forClass(SyncLog.class);
+
+        verify(syncLogRepository, times(2))
+                .save(captor.capture());
+
+        SyncLog failedLog = captor.getAllValues().get(1);
+        assertThat(failedLog.getStatus())
+                .isEqualTo(SyncLogStatus.FAILED);
+        assertThat(failedLog.getErrorCode())
+                .isEqualTo("PRIORITY_MAPPING_MISSING");
+        assertThat(failedLog.getCompletedAt())
+                .isNotNull();
+    }
+
+    @Test
+    void jiraApiExceptionDuringSprintAssignmentMarksTaskFailedAndSyncLogFailed() {
+        task.setSprintId(60L);
+
+        vn.edu.cnpm.projectsupport.sprint.domain.Sprint sprint =
+                new vn.edu.cnpm.projectsupport.sprint.domain.Sprint(
+                        PROJECT_ID,
+                        "Sprint 1",
+                        "ACTIVE");
+        sprint.setJiraSprintId(9001L);
+
+        when(sprintRepository.findByIdAndProjectId(60L, PROJECT_ID))
+                .thenReturn(Optional.of(sprint));
+
+        JiraApiException failure = new JiraApiException(
+                org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY,
+                "SPRINT_ASSIGNMENT_FAILED",
+                false,
+                null,
+                "Sprint assignment failed",
+                null);
+
+        when(jiraClient.createIssue(
+                eq(PROJECT_ID),
+                eq(PROJECT_KEY),
+                any(JiraCreateIssueRequest.class)))
+                .thenReturn(new JiraCreateIssueResponse(
+                        "10001",
+                        "CNPM-100",
+                        BASE_URL + "/rest/api/3/issue/10001"));
+
+        org.mockito.Mockito.doThrow(failure)
+                .when(jiraClient)
+                .addIssueToSprint(
+                        eq(PROJECT_ID),
+                        eq("9001"),
+                        eq("10001"));
+
+        assertThatThrownBy(() -> service.syncTask(
+                PROJECT_ID, TASK_ID, "jira-api-sprint-fail-1"))
+                .isSameAs(failure);
+
+        assertThat(task.getSyncStatus())
+                .isEqualTo(SyncStatus.SYNC_FAILED);
+
+        ArgumentCaptor<SyncLog> captor =
+                ArgumentCaptor.forClass(SyncLog.class);
+
+        verify(syncLogRepository, times(2))
+                .save(captor.capture());
+
+        SyncLog failedLog = captor.getAllValues().get(1);
+        assertThat(failedLog.getStatus())
+                .isEqualTo(SyncLogStatus.FAILED);
+        assertThat(failedLog.getErrorCode())
+                .isEqualTo("SPRINT_ASSIGNMENT_FAILED");
+        assertThat(failedLog.getCompletedAt())
+                .isNotNull();
+    }
+
+    @Test
+    void jiraApiExceptionDuringUpdateMarksTaskFailedAndSyncLogFailed() {
+        JiraIssue existingIssue = new JiraIssue(
+                TASK_ID,
+                "10001",
+                "CNPM-100",
+                BASE_URL + "/browse/CNPM-100",
+                Instant.parse("2026-08-25T08:00:00Z"));
+        existingIssue.setSnapshotHash("old-fingerprint");
+
+        when(jiraIssueRepository.findByTaskId(TASK_ID))
+                .thenReturn(Optional.of(existingIssue));
+
+        JiraApiException failure = new JiraApiException(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "ISSUE_TYPE_MAPPING_MISSING",
+                false,
+                null,
+                "Issue type mapping missing",
+                null);
+
+        org.mockito.Mockito.doThrow(failure)
+                .when(jiraClient)
+                .updateIssue(
+                        eq(PROJECT_ID),
+                        eq(PROJECT_KEY),
+                        eq("10001"),
+                        any(JiraCreateIssueRequest.class));
+
+        assertThatThrownBy(() -> service.syncTask(
+                PROJECT_ID, TASK_ID, "jira-api-update-fail-1"))
+                .isSameAs(failure);
+
+        assertThat(task.getSyncStatus())
+                .isEqualTo(SyncStatus.SYNC_FAILED);
+
+        ArgumentCaptor<SyncLog> captor =
+                ArgumentCaptor.forClass(SyncLog.class);
+
+        verify(syncLogRepository, times(2))
+                .save(captor.capture());
+
+        SyncLog failedLog = captor.getAllValues().get(1);
+        assertThat(failedLog.getStatus())
+                .isEqualTo(SyncLogStatus.FAILED);
+        assertThat(failedLog.getErrorCode())
+                .isEqualTo("ISSUE_TYPE_MAPPING_MISSING");
+        assertThat(failedLog.getCompletedAt())
+                .isNotNull();
+    }
+
     @Test
     void retryReconcilesIssueAndRetriesSprintAssignmentAfterSprintFailure() {
         task.setSprintId(60L);

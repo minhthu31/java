@@ -266,6 +266,7 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
      */
 
     @Override
+    @Transactional(noRollbackFor = JiraApiException.class)
     public JiraTaskSyncResponse syncTask(
             Long projectId,
             Long taskId,
@@ -279,6 +280,7 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
     }
 
     @Override
+    @Transactional(noRollbackFor = JiraApiException.class)
     public JiraTaskSyncResponse retryTaskSync(
             Long projectId,
             Long taskId,
@@ -409,7 +411,7 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                 syncLog.setRetryCount(retry ? 1 : 0);
                 syncLog.setIdempotencyKey(normalizedKey);
                 syncLog.setRequestFingerprint(fingerprint);
-                syncLogRepository.saveAndFlush(syncLog);
+                syncLogRepository.save(syncLog);
 
                 try {
                     JiraCreateIssueRequest updateRequest =
@@ -444,6 +446,10 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                             taskId, issue,
                             "Task đã thay đổi và đã được cập nhật lên Jira");
                 } catch (Exception exception) {
+                    task.setSyncStatus(SyncStatus.SYNC_FAILED);
+                    task.setIdempotencyKey(normalizedKey);
+                    taskRepository.save(task);
+
                     syncLog.setStatus(SyncLogStatus.FAILED);
                     syncLog.setErrorCode(extractErrorCode(exception));
                     syncLog.setErrorMessage(safeErrorMessage(exception));
@@ -522,7 +528,6 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
             task.setSyncStatus(SyncStatus.SYNCING);
             taskRepository.save(task);
 
-            boolean remoteIssueReady = discovered != null;
             boolean sprintAssignmentFailed = false;
 
             try {
@@ -533,12 +538,10 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                             projectId,
                             projectKey,
                             request);
-                    remoteIssueReady = true;
                 }
 
                 validateJiraCreateResponse(jiraResponse);
 
-                remoteIssueReady = true;
                 try {
                     assignSprintIfRequired(
                             projectId,
@@ -606,6 +609,10 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                  */
                 if (exception instanceof JiraApiException
                         && !(exception instanceof JiraConnectionException)) {
+                    task.setSyncStatus(SyncStatus.SYNC_FAILED);
+                    task.setIdempotencyKey(normalizedKey);
+                    taskRepository.save(task);
+
                     syncLog.setStatus(SyncLogStatus.FAILED);
                     syncLog.setErrorCode(extractErrorCode(exception));
                     syncLog.setErrorMessage(safeErrorMessage(exception));
@@ -619,8 +626,7 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                  * hoặc local save gặp lỗi, luôn reconcile bằng label trước.
                  */
                 if (sprintAssignmentFailed
-                        || (!remoteIssueReady
-                        && !isRetryable(exception)
+                        || (!isRetryable(exception)
                         && !(exception instanceof DataIntegrityViolationException))) {
                     task.setSyncStatus(SyncStatus.SYNC_FAILED);
                     taskRepository.save(task);
@@ -633,7 +639,7 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                     return new JiraTaskSyncResponse(
                             taskId,
                             SyncStatus.SYNC_FAILED,
-                            remoteIssueReady ? null : null,
+                            null,
                             null,
                             null,
                             retry ? 2 : 1,
