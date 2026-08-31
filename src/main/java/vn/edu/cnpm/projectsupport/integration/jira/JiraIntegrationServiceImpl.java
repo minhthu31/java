@@ -1,7 +1,15 @@
 package vn.edu.cnpm.projectsupport.integration.jira;
 
 import java.time.Instant;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+import org.springframework.dao.DataIntegrityViolationException;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -38,6 +46,7 @@ import vn.edu.cnpm.projectsupport.task.repository.TaskRepository;
 public class JiraIntegrationServiceImpl implements JiraIntegrationService {
 
     private static final String ENTITY_TYPE_TASK = "TASK";
+    private static final Map<Long, Object> TASK_LOCKS = new ConcurrentHashMap<>();
 
     private final IntegrationConfigRepository configRepository;
     private final IntegrationSecretService secretService;
@@ -280,322 +289,451 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
 
         validateIds(projectId, taskId);
 
-        /*
-         * ========================================================
-         * 1. Lấy Task
-         * ========================================================
-         */
+        // Validate Idempotency-Key before loading the Task so invalid requests
+        // fail with the API-contract error instead of ResourceNotFoundException.
+        String normalizedKey = requireIdempotencyKey(idempotencyKey);
 
-        Task task =
-                taskRepository
-                        .findById(taskId)
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "Không tìm thấy Task với ID: "
-                                                + taskId));
+        // Lock the Task row for the whole sync decision path. This is required
+        // to prevent concurrent requests from creating duplicate Jira Issues.
+        Task task = taskRepository.findByIdForUpdate(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy Task với ID: " + taskId));
 
         if (!projectId.equals(task.getProjectId())) {
             throw new ResourceNotFoundException(
-                    "Task "
-                            + taskId
-                            + " không thuộc Project "
-                            + projectId);
+                    "Task " + taskId + " không thuộc Project " + projectId);
         }
+
+        String fingerprint = requestFingerprint(task, retry);
 
         /*
-         * ========================================================
-         * 2. Mapping check
-         *
-         * Nếu JiraIssue đã tồn tại cho Task:
-         * - Không gọi Jira createIssue()
-         * - Đảm bảo Task = SYNCED
-         * - Trả mapping cũ
-         *
-         * Đây là lớp chống duplicate quan trọng nhất.
-         * ========================================================
+         * Idempotency được kiểm tra trước mọi remote side-effect.
          */
-
-        var existingIssue =
-                jiraIssueRepository.findByTaskId(taskId);
-
-        if (existingIssue.isPresent()) {
-
-            JiraIssue issue =
-                    existingIssue.get();
-
-            if (task.getSyncStatus() != SyncStatus.SYNCED) {
-                task.setSyncStatus(SyncStatus.SYNCED);
-                taskRepository.save(task);
-            }
-
-            return buildSyncedResponse(
-                    taskId,
-                    issue,
-                    "Task đã được đồng bộ lên Jira trước đó");
-        }
-
-        /*
-         * ========================================================
-         * 3. Kiểm tra trạng thái Task
-         * ========================================================
-         */
-
-        if (!retry
-                && task.getSyncStatus() == SyncStatus.SYNCED) {
-
-            return buildAlreadySyncedResponse(task);
-        }
-
-        if (task.getSyncStatus() == SyncStatus.SYNCING) {
-
-            throw new JiraClientException(
-                    "Task đang trong quá trình đồng bộ");
-        }
-
-        if (retry
-                && task.getSyncStatus() != SyncStatus.SYNC_FAILED
-                && task.getSyncStatus() != SyncStatus.NOT_SYNCED) {
-
-            throw new JiraClientException(
-                    "Task không ở trạng thái có thể retry");
-        }
-
-        /*
-         * ========================================================
-         * 4. Lấy IntegrationConfig
-         *
-         * BẮT BUỘC theo projectId + provider.
-         * Không dùng Jira config toàn cục.
-         * ========================================================
-         */
-
-        IntegrationConfig config =
-                configRepository
-                        .findByProjectIdAndProvider(
-                                projectId,
-                                IntegrationProvider.JIRA)
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "Jira integration chưa được cấu hình cho Project: "
-                                                + projectId));
-
-        String projectKey =
-                getSavedJiraProjectKey(projectId);
-
-        if (projectKey == null
-                || projectKey.isBlank()) {
-
-            throw new JiraClientException(
-                    "Jira project key chưa được cấu hình");
-        }
-
-        /*
-         * ========================================================
-         * 5. Idempotency key
-         *
-         * Ưu tiên:
-         *   request key
-         *   -> key đã lưu trên Task
-         *   -> key deterministic theo Task
-         *
-         * Không tạo UUID mới mỗi lần retry.
-         * ========================================================
-         */
-
-        String normalizedKey =
-                normalizeIdempotencyKey(idempotencyKey);
-
-        if (normalizedKey == null) {
-            normalizedKey =
-                    normalizeIdempotencyKey(
-                            task.getIdempotencyKey());
-        }
-
-        if (normalizedKey == null) {
-            normalizedKey =
-                    "task-" + taskId + "-jira";
-        }
-
-        if (task.getIdempotencyKey() == null
-                || task.getIdempotencyKey().isBlank()) {
-
-            task.setIdempotencyKey(normalizedKey);
-            taskRepository.save(task);
-        }
-
-        /*
-         * ========================================================
-         * 6. Tạo SyncLog cho MỖI lần sync/retry
-         * ========================================================
-         */
-
-        String correlationId =
-                UUID.randomUUID().toString();
-
-        Instant startedAt =
-                Instant.now();
-
-        SyncLog syncLog =
-                new SyncLog(
+        var previousLog = syncLogRepository
+                .findFirstByProjectIdAndEntityTypeAndEntityIdAndIdempotencyKeyOrderByStartedAtDesc(
                         projectId,
-                        IntegrationProvider.JIRA,
                         ENTITY_TYPE_TASK,
                         String.valueOf(taskId),
-                        SyncDirection.EXPORT,
-                        correlationId,
-                        startedAt);
+                        normalizedKey);
 
-        syncLog.setRetryCount(
-                retry ? 1 : 0);
+        if (previousLog.isPresent()) {
+            SyncLog old = previousLog.get();
 
-        syncLogRepository.save(syncLog);
+            if (old.getRequestFingerprint() != null
+                    && !old.getRequestFingerprint().equals(fingerprint)) {
+                throw idempotencyKeyReusedException();
+            }
 
-        /*
-         * ========================================================
-         * 7. NOT_SYNCED / SYNC_FAILED -> SYNCING
-         *
-         * Lưu trạng thái trước khi gọi Jira.
-         * ========================================================
-         */
+            if (old.getStatus() != SyncLogStatus.RUNNING) {
+                return responseFromSyncLog(old, taskId);
+            }
 
-        task.setSyncStatus(
-                SyncStatus.SYNCING);
+            throw new JiraClientException(
+                    "Request đồng bộ với Idempotency-Key này đang được xử lý");
+        }
 
-        taskRepository.save(task);
+        Object lock = TASK_LOCKS.computeIfAbsent(taskId, ignored -> new Object());
 
-        /*
-         * ========================================================
-         * 8. Gọi Jira createIssue()
-         * ========================================================
-         */
+        synchronized (lock) {
+            /*
+             * Double-check idempotency sau khi lấy lock để chống hai request
+             * đồng thời trong cùng JVM trước khi tạo Jira Issue.
+             */
+            var lockedPreviousLog = syncLogRepository
+                    .findFirstByProjectIdAndEntityTypeAndEntityIdAndIdempotencyKeyOrderByStartedAtDesc(
+                            projectId, ENTITY_TYPE_TASK, String.valueOf(taskId), normalizedKey);
+            if (lockedPreviousLog.isPresent()) {
+                SyncLog old = lockedPreviousLog.get();
+                if (!fingerprint.equals(old.getRequestFingerprint())) {
+                    throw idempotencyKeyReusedException();
+                }
+                if (old.getStatus() != SyncLogStatus.RUNNING) {
+                    return responseFromSyncLog(old, taskId);
+                }
+                throw new JiraClientException(
+                        "Request đồng bộ với Idempotency-Key này đang được xử lý");
+            }
 
-        try {
+            var mapped = jiraIssueRepository.findByTaskId(taskId);
+            if (mapped.isPresent()) {
+                JiraIssue issue = mapped.get();
 
-            JiraCreateIssueRequest request =
-                    new JiraCreateIssueRequest(
-                            task.getTitle(),
-                            task.getDescription(),
-                            task.getIssueType().name(),
-                            task.getPriority().name());
+                // Mapping đã tồn tại là nguồn sự thật để tránh tạo Jira Issue trùng.
+                // Nếu mapping cũ chưa có snapshotHash thì không thể kết luận dữ liệu
+                // đã thay đổi; giữ nguyên mapping thay vì tạo Issue mới.
+                if (issue.getSnapshotHash() == null
+                        || fingerprint.equals(issue.getSnapshotHash())) {
+                    if (task.getSyncStatus() != SyncStatus.SYNCED) {
+                        task.setSyncStatus(SyncStatus.SYNCED);
+                        taskRepository.save(task);
+                    }
+                    return buildSyncedResponse(
+                            taskId, issue, "Task đã được đồng bộ lên Jira trước đó");
+                }
 
-            JiraCreateIssueResponse jiraResponse =
-                    jiraClient.createIssue(
+                /*
+                 * Task đã SYNCED nhưng dữ liệu local thay đổi:
+                 * update remote issue thay vì tạo issue mới.
+                 */
+                String correlationId = UUID.randomUUID().toString();
+                Instant startedAt = Instant.now();
+                SyncLog syncLog = new SyncLog(
+                        projectId, IntegrationProvider.JIRA, ENTITY_TYPE_TASK,
+                        String.valueOf(taskId), SyncDirection.EXPORT,
+                        correlationId, startedAt);
+                syncLog.setRetryCount(retry ? 1 : 0);
+                syncLog.setIdempotencyKey(normalizedKey);
+                syncLog.setRequestFingerprint(fingerprint);
+                syncLogRepository.saveAndFlush(syncLog);
+
+                try {
+                    JiraCreateIssueRequest updateRequest =
+                            buildCreateRequest(task, taskId);
+
+                    jiraClient.updateIssue(
+                            projectId,
+                            issue.getJiraIssueId(),
+                            updateRequest);
+
+                    Instant syncedAt = Instant.now();
+                    issue.setLastSyncedAt(syncedAt);
+                    issue.setSnapshotHash(fingerprint);
+                    issue.setRawSnapshot(snapshot(task));
+                    jiraIssueRepository.saveAndFlush(issue);
+
+                    task.setSyncStatus(SyncStatus.SYNCED);
+                    task.setIdempotencyKey(normalizedKey);
+                    taskRepository.save(task);
+
+                    syncLog.setStatus(SyncLogStatus.SUCCESS);
+                    syncLog.setCompletedAt(Instant.now());
+                    syncLogRepository.save(syncLog);
+
+                    return buildSyncedResponse(
+                            taskId, issue,
+                            "Task đã thay đổi và đã được cập nhật lên Jira");
+                } catch (Exception exception) {
+                    syncLog.setStatus(SyncLogStatus.FAILED);
+                    syncLog.setErrorCode(extractErrorCode(exception));
+                    syncLog.setErrorMessage(safeErrorMessage(exception));
+                    syncLog.setCompletedAt(Instant.now());
+                    syncLogRepository.save(syncLog);
+                    throw exception;
+                }
+            }
+
+            if (task.getSyncStatus() == SyncStatus.SYNCING) {
+                throw new JiraClientException("Task đang trong quá trình đồng bộ");
+            }
+
+            if (retry
+                    && task.getSyncStatus() != SyncStatus.SYNC_FAILED
+                    && task.getSyncStatus() != SyncStatus.NOT_SYNCED) {
+                throw new JiraClientException(
+                        "Task không ở trạng thái có thể retry");
+            }
+
+            IntegrationConfig config = getConfig(projectId);
+            String projectKey = requireProjectKey(projectId);
+            String label = "cnpm-local-task-" + taskId;
+
+            /*
+             * Jira có thể đã tạo Issue nhưng local mapping chưa lưu được.
+             * Kiểm tra label trước khi create để reconcile.
+             */
+            List<JiraCreateIssueResponse> discoveredIssues =
+                    jiraClient.findIssuesByLabel(projectId, projectKey, label);
+            if (discoveredIssues.size() > 1) {
+                throw duplicateRemoteIssueException(label);
+            }
+            JiraCreateIssueResponse discovered =
+                    discoveredIssues.isEmpty() ? null : discoveredIssues.get(0);
+
+            String correlationId = UUID.randomUUID().toString();
+            Instant startedAt = Instant.now();
+
+            SyncLog syncLog = new SyncLog(
+                    projectId,
+                    IntegrationProvider.JIRA,
+                    ENTITY_TYPE_TASK,
+                    String.valueOf(taskId),
+                    SyncDirection.EXPORT,
+                    correlationId,
+                    startedAt);
+            syncLog.setRetryCount(retry ? 1 : 0);
+            syncLog.setIdempotencyKey(normalizedKey);
+            syncLog.setRequestFingerprint(fingerprint);
+            try {
+                syncLogRepository.save(syncLog);
+            } catch (DataIntegrityViolationException concurrentRequest) {
+                SyncLog existing = syncLogRepository
+                        .findFirstByProjectIdAndEntityTypeAndEntityIdAndIdempotencyKeyOrderByStartedAtDesc(
+                                projectId, ENTITY_TYPE_TASK, String.valueOf(taskId), normalizedKey)
+                        .orElseThrow(() -> concurrentRequest);
+                if (!fingerprint.equals(existing.getRequestFingerprint())) {
+                    throw idempotencyKeyReusedException();
+                }
+                if (existing.getStatus() != SyncLogStatus.RUNNING) {
+                    return responseFromSyncLog(existing, taskId);
+                }
+                throw new JiraClientException(
+                        "Request đồng bộ với Idempotency-Key này đang được xử lý");
+            }
+
+            task.setIdempotencyKey(normalizedKey);
+            task.setSyncStatus(SyncStatus.SYNCING);
+            taskRepository.save(task);
+
+            try {
+                JiraCreateIssueResponse jiraResponse = discovered;
+
+                if (jiraResponse == null) {
+                    JiraCreateIssueRequest request =
+                            buildCreateRequest(task, taskId);
+
+                    jiraResponse = jiraClient.createIssue(
                             projectId,
                             projectKey,
                             request);
+                }
 
-            validateJiraCreateResponse(
-                    jiraResponse);
+                validateJiraCreateResponse(jiraResponse);
 
-            Instant syncedAt =
-                    Instant.now();
+                Instant syncedAt = Instant.now();
+                String jiraIssueUrl = buildJiraIssueUrl(
+                        config.getBaseUrl(),
+                        jiraResponse.key());
 
-            String jiraIssueUrl =
-                    buildJiraIssueUrl(
-                            config.getBaseUrl(),
-                            jiraResponse.key());
+                JiraIssue jiraIssue = new JiraIssue(
+                        taskId,
+                        jiraResponse.id(),
+                        jiraResponse.key(),
+                        jiraIssueUrl,
+                        syncedAt);
+                jiraIssue.setSnapshotHash(fingerprint);
+                jiraIssue.setRawSnapshot(snapshot(task));
 
-            /*
-             * ====================================================
-             * 9. Lưu JiraIssue mapping
-             * ====================================================
-             */
+                try {
+                    jiraIssueRepository.saveAndFlush(jiraIssue);
+                } catch (DataIntegrityViolationException duplicate) {
+                    /*
+                     * Request khác có thể vừa lưu mapping. Đọc lại thay vì
+                     * tạo thêm Issue.
+                     */
+                    JiraIssue existing = jiraIssueRepository
+                            .findByTaskId(taskId)
+                            .orElseThrow(() -> duplicate);
+                    jiraIssue = existing;
+                }
 
-            JiraIssue jiraIssue =
-                    new JiraIssue(
-                            taskId,
-                            jiraResponse.id(),
-                            jiraResponse.key(),
-                            jiraIssueUrl,
-                            syncedAt);
+                task.setSyncStatus(SyncStatus.SYNCED);
+                task.setIdempotencyKey(normalizedKey);
+                taskRepository.save(task);
 
-            jiraIssueRepository.saveAndFlush(
-                    jiraIssue);
+                syncLog.setStatus(SyncLogStatus.SUCCESS);
+                syncLog.setCompletedAt(Instant.now());
+                syncLogRepository.save(syncLog);
 
-            /*
-             * ====================================================
-             * 10. Task -> SYNCED
-             * ====================================================
-             */
+                return new JiraTaskSyncResponse(
+                        taskId,
+                        SyncStatus.SYNCED,
+                        jiraResponse.id(),
+                        jiraResponse.key(),
+                        jiraIssueUrl,
+                        retry ? 2 : 1,
+                        false,
+                        syncedAt,
+                        null,
+                        retry
+                                ? "Retry đồng bộ Jira thành công"
+                                : "Đồng bộ Task lên Jira thành công");
 
-            task.setSyncStatus(
-                    SyncStatus.SYNCED);
+            } catch (Exception exception) {
+                /*
+                 * Nếu create đã thành công nhưng response bị timeout/mất kết nối,
+                 * hoặc local save gặp lỗi, luôn reconcile bằng label trước.
+                 */
+                if (!isRetryable(exception) && !(exception instanceof DataIntegrityViolationException)) {
+                    task.setSyncStatus(SyncStatus.SYNC_FAILED);
+                    taskRepository.save(task);
+                    syncLog.setStatus(SyncLogStatus.FAILED);
+                    syncLog.setErrorCode(extractErrorCode(exception));
+                    syncLog.setErrorMessage(safeErrorMessage(exception));
+                    syncLog.setCompletedAt(Instant.now());
+                    syncLogRepository.save(syncLog);
+                    return new JiraTaskSyncResponse(
+                            taskId, SyncStatus.SYNC_FAILED, null, null, null,
+                            retry ? 2 : 1, isRetryable(exception), null,
+                            extractErrorCode(exception), safeErrorMessage(exception));
+                }
 
-            taskRepository.save(task);
+                try {
+                    List<JiraCreateIssueResponse> reconciledIssues =
+                            jiraClient.findIssuesByLabel(
+                                    projectId, projectKey, label);
+                    if (reconciledIssues.size() > 1) {
+                        throw duplicateRemoteIssueException(label);
+                    }
+                    JiraCreateIssueResponse reconciled =
+                            reconciledIssues.isEmpty() ? null : reconciledIssues.get(0);
 
-            /*
-             * ====================================================
-             * 11. SyncLog -> SUCCESS
-             * ====================================================
-             */
+                    if (reconciled != null) {
+                        Instant syncedAt = Instant.now();
+                        String url = buildJiraIssueUrl(
+                                config.getBaseUrl(), reconciled.key());
 
-            syncLog.setStatus(
-                    SyncLogStatus.SUCCESS);
+                        JiraIssue issue = new JiraIssue(
+                                taskId,
+                                reconciled.id(),
+                                reconciled.key(),
+                                url,
+                                syncedAt);
+                        issue.setSnapshotHash(fingerprint);
+                        issue.setRawSnapshot(snapshot(task));
 
-            syncLog.setCompletedAt(
-                    Instant.now());
+                        try {
+                            jiraIssueRepository.saveAndFlush(issue);
+                        } catch (DataIntegrityViolationException ignored) {
+                            issue = jiraIssueRepository.findByTaskId(taskId)
+                                    .orElse(issue);
+                        }
 
-            syncLogRepository.save(syncLog);
+                        task.setSyncStatus(SyncStatus.SYNCED);
+                        task.setIdempotencyKey(normalizedKey);
+                        taskRepository.save(task);
 
-            return new JiraTaskSyncResponse(
-                    taskId,
-                    SyncStatus.SYNCED,
-                    jiraResponse.id(),
-                    jiraResponse.key(),
-                    jiraIssueUrl,
-                    retry ? 2 : 1,
-                    false,
-                    syncedAt,
-                    null,
-                    retry
-                            ? "Retry đồng bộ Jira thành công"
-                            : "Đồng bộ Task lên Jira thành công");
+                        syncLog.setStatus(SyncLogStatus.SUCCESS);
+                        syncLog.setCompletedAt(Instant.now());
+                        syncLogRepository.save(syncLog);
 
-        } catch (Exception exception) {
+                        return new JiraTaskSyncResponse(
+                                taskId,
+                                SyncStatus.SYNCED,
+                                reconciled.id(),
+                                reconciled.key(),
+                                url,
+                                retry ? 2 : 1,
+                                false,
+                                syncedAt,
+                                null,
+                                "Đã tìm thấy Jira Issue sau khi reconcile");
+                    }
+                } catch (Exception ignored) {
+                    // Giữ lỗi gốc.
+                }
 
-            /*
-             * ====================================================
-             * 12. Jira thất bại
-             *
-             * QUAN TRỌNG:
-             * - Không xóa Task
-             * - Không chuyển Task về NOT_SYNCED
-             * - Chuyển sang SYNC_FAILED
-             * - Ghi SyncLog FAILED
-             * ====================================================
-             */
+                task.setSyncStatus(SyncStatus.SYNC_FAILED);
+                taskRepository.save(task);
 
-            task.setSyncStatus(
-                    SyncStatus.SYNC_FAILED);
+                syncLog.setStatus(SyncLogStatus.FAILED);
+                syncLog.setErrorCode(extractErrorCode(exception));
+                syncLog.setErrorMessage(safeErrorMessage(exception));
+                syncLog.setCompletedAt(Instant.now());
+                syncLogRepository.save(syncLog);
 
-            taskRepository.save(task);
-
-            syncLog.setStatus(
-                    SyncLogStatus.FAILED);
-
-            syncLog.setErrorCode(
-                    extractErrorCode(exception));
-
-            syncLog.setErrorMessage(
-                    safeErrorMessage(exception));
-
-            syncLog.setCompletedAt(
-                    Instant.now());
-
-            syncLogRepository.save(syncLog);
-
-            return new JiraTaskSyncResponse(
-                    taskId,
-                    SyncStatus.SYNC_FAILED,
-                    null,
-                    null,
-                    null,
-                    retry ? 2 : 1,
-                    isRetryable(exception),
-                    null,
-                    extractErrorCode(exception),
-                    safeErrorMessage(exception));
+                return new JiraTaskSyncResponse(
+                        taskId,
+                        SyncStatus.SYNC_FAILED,
+                        null,
+                        null,
+                        null,
+                        retry ? 2 : 1,
+                        isRetryable(exception),
+                        null,
+                        extractErrorCode(exception),
+                        safeErrorMessage(exception));
+            }
         }
+    }
+
+    private IntegrationConfig getConfig(Long projectId) {
+        return configRepository
+                .findByProjectIdAndProvider(
+                        projectId, IntegrationProvider.JIRA)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Jira integration chưa được cấu hình cho Project: " + projectId));
+    }
+
+    private String requireProjectKey(Long projectId) {
+        String key = getSavedJiraProjectKey(projectId);
+        if (key == null || key.isBlank()) {
+            throw new JiraClientException("Jira project key chưa được cấu hình");
+        }
+        return key;
+    }
+
+    private JiraCreateIssueRequest buildCreateRequest(Task task, Long taskId) {
+        return new JiraCreateIssueRequest(
+                task.getTitle(),
+                task.getDescription(),
+                task.getIssueType().name(),
+                task.getPriority().name(),
+                List.of("cnpm-local-task-" + taskId));
+    }
+
+    private Map<String, Object> snapshot(Task task) {
+        return Map.of(
+                "title", task.getTitle() == null ? "" : task.getTitle(),
+                "description", task.getDescription() == null ? "" : task.getDescription(),
+                "issueType", task.getIssueType() == null ? "" : task.getIssueType().name(),
+                "priority", task.getPriority() == null ? "" : task.getPriority().name());
+    }
+
+    private String requestFingerprint(Task task, boolean retry) {
+        String value = String.join("|",
+                retry ? "RETRY" : "SYNC",
+                "mapping-v1",
+                task.getTitle() == null ? "" : task.getTitle(),
+                task.getDescription() == null ? "" : task.getDescription(),
+                task.getAcceptanceCriteria() == null ? "" : task.getAcceptanceCriteria(),
+                task.getIssueType() == null ? "" : task.getIssueType().name(),
+                task.getPriority() == null ? "" : task.getPriority().name(),
+                task.getAssigneeUserId() == null ? "" : task.getAssigneeUserId().toString(),
+                task.getDeadline() == null ? "" : task.getDeadline().toString(),
+                task.getSprintId() == null ? "" : task.getSprintId().toString(),
+                task.getFeatureId() == null ? "" : task.getFeatureId().toString());
+
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (Exception e) {
+            throw new JiraClientException("Không thể tạo request fingerprint", e);
+        }
+    }
+
+    private JiraTaskSyncResponse responseFromSyncLog(
+            SyncLog log,
+            Long taskId) {
+
+        if (log.getStatus() == SyncLogStatus.SUCCESS) {
+            var issue = jiraIssueRepository.findByTaskId(taskId);
+            if (issue.isPresent()) {
+                return buildSyncedResponse(
+                        taskId,
+                        issue.get(),
+                        "Kết quả idempotent cũ");
+            }
+        }
+
+        SyncStatus status =
+                log.getStatus() == SyncLogStatus.SUCCESS
+                        ? SyncStatus.SYNCED
+                        : SyncStatus.SYNC_FAILED;
+
+        return new JiraTaskSyncResponse(
+                taskId,
+                status,
+                null,
+                null,
+                null,
+                log.getRetryCount() + 1,
+                status == SyncStatus.SYNC_FAILED,
+                log.getCompletedAt(),
+                log.getErrorCode(),
+                log.getErrorMessage() == null
+                        ? "Kết quả idempotent cũ"
+                        : log.getErrorMessage());
     }
 
     private void validateIds(
@@ -691,6 +829,34 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                 "Task đã ở trạng thái SYNCED");
     }
 
+    private JiraApiException idempotencyKeyReusedException() {
+        return new JiraApiException(
+                org.springframework.http.HttpStatus.CONFLICT,
+                "IDEMPOTENCY_KEY_REUSED",
+                false,
+                null,
+                "Idempotency-Key đã được sử dụng cho request khác",
+                null);
+    }
+
+    private JiraApiException duplicateRemoteIssueException(String label) {
+        return new JiraApiException(
+                org.springframework.http.HttpStatus.CONFLICT,
+                "DUPLICATE_REMOTE_ISSUE",
+                false,
+                null,
+                "Có nhiều Jira Issue cùng label " + label,
+                null);
+    }
+
+    private String requireIdempotencyKey(String idempotencyKey) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Idempotency-Key là bắt buộc");
+        }
+        return normalizeIdempotencyKey(idempotencyKey);
+    }
+
     private String normalizeIdempotencyKey(
             String idempotencyKey) {
 
@@ -703,10 +869,9 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
         String normalized =
                 idempotencyKey.trim();
 
-        if (normalized.length() > 100) {
-
+        if (normalized.length() < 8 || normalized.length() > 100) {
             throw new JiraClientException(
-                    "Idempotency key không được vượt quá 100 ký tự");
+                    "Idempotency key phải có độ dài từ 8 đến 100 ký tự");
         }
 
         return normalized;

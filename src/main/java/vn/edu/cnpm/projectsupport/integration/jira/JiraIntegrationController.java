@@ -83,7 +83,7 @@ public class JiraIntegrationController {
     public ResponseEntity<ApiResponse<JiraTaskSyncResponse>> syncTaskToJira(
             @PathVariable Long projectId,
             @PathVariable Long taskId,
-            @RequestHeader(value = "Idempotency-Key", required = false)
+            @RequestHeader(value = "Idempotency-Key", required = true)
             String idempotencyKey) {
 
         JiraTaskSyncResponse response =
@@ -103,12 +103,12 @@ public class JiraIntegrationController {
      * ============================================================
      */
 
-    @PostMapping("/tasks/{taskId}/sync/retry")
+    @PostMapping("/tasks/{taskId}/retry")
     @PreAuthorize("hasRole('ADMIN') or (hasRole('TEAM_LEADER') and @projectAuthorization.isCurrentUserLeader(#projectId))")
     public ResponseEntity<ApiResponse<JiraTaskSyncResponse>> retryTaskSync(
             @PathVariable Long projectId,
             @PathVariable Long taskId,
-            @RequestHeader(value = "Idempotency-Key", required = false)
+            @RequestHeader(value = "Idempotency-Key", required = true)
             String idempotencyKey) {
 
         JiraTaskSyncResponse response =

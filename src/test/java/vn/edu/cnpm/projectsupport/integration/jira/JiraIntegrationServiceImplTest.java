@@ -119,7 +119,7 @@ class JiraIntegrationServiceImplTest {
         config.setAccountIdentifier(
                 "integration@example.com");
 
-        when(taskRepository.findById(TASK_ID))
+        when(taskRepository.findByIdForUpdate(TASK_ID))
                 .thenReturn(Optional.of(task));
 
         when(configRepository
@@ -418,7 +418,7 @@ class JiraIntegrationServiceImplTest {
                         SyncStatus.SYNC_FAILED);
 
         
-        verify(taskRepository, times(3))
+        verify(taskRepository, times(2))
                 .save(any(Task.class));
     }
 
@@ -440,7 +440,7 @@ class JiraIntegrationServiceImplTest {
         service.syncTask(
                 PROJECT_ID,
                 TASK_ID,
-                "log-key");
+                "log-key-1");
 
         ArgumentCaptor<SyncLog> captor =
                 ArgumentCaptor.forClass(
@@ -614,23 +614,14 @@ class JiraIntegrationServiceImplTest {
 
     
     @Test
-    void generatesStableIdempotencyKeyFromTaskId() {
+    void rejectsMissingIdempotencyKey() {
 
-        when(jiraClient.createIssue(
-                eq(PROJECT_ID),
-                eq(PROJECT_KEY),
-                any(JiraCreateIssueRequest.class)))
-                .thenThrow(
-                        new JiraConnectionException(
-                                "Jira unavailable"));
-
-        service.syncTask(
-                PROJECT_ID,
-                TASK_ID,
-                null);
-
-        assertThat(task.getIdempotencyKey())
-                .isEqualTo(
-                        "task-" + TASK_ID + "-jira");
+        assertThatThrownBy(() ->
+                service.syncTask(
+                        PROJECT_ID,
+                        TASK_ID,
+                        null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Idempotency-Key là bắt buộc");
     }
 }

@@ -18,4 +18,11 @@ public interface JiraHttpTransport {
             String body,
             Duration timeout)
             throws IOException, InterruptedException;
+
+    JiraHttpResponse put(
+            String url,
+            Map<String, String> headers,
+            String body,
+            Duration timeout)
+            throws IOException, InterruptedException;
 }

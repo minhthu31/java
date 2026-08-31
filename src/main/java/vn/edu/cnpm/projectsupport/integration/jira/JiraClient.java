@@ -13,8 +13,18 @@ public interface JiraClient {
             Long projectId,
             String projectKey);
 
-    JiraCreateIssueResponse createIssue( 
-            Long projectId, 
-            String projectKey, 
+    JiraCreateIssueResponse createIssue(
+            Long projectId,
+            String projectKey,
+            JiraCreateIssueRequest request);
+
+    java.util.List<JiraCreateIssueResponse> findIssuesByLabel(
+            Long projectId,
+            String projectKey,
+            String label);
+
+    void updateIssue(
+            Long projectId,
+            String jiraIssueId,
             JiraCreateIssueRequest request);
 }

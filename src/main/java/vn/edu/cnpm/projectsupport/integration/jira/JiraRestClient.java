@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
+import java.net.URLEncoder;
 
 import org.springframework.stereotype.Service;
 
@@ -188,6 +189,10 @@ public class JiraRestClient implements JiraClient {
                             request.priority()));
         }
 
+        if (request.labels() != null && !request.labels().isEmpty()) {
+            fields.put("labels", request.labels());
+        }
+
         Map<String, Object> payload =
                 Map.of("fields", fields);
 
@@ -216,6 +221,87 @@ public class JiraRestClient implements JiraClient {
                 text(response, "id"),
                 text(response, "key"),
                 text(response, "self"));
+    }
+
+    @Override
+    public List<JiraCreateIssueResponse> findIssuesByLabel(
+            Long projectId,
+            String projectKey,
+            String label) {
+
+        validateProjectKey(projectKey);
+        if (label == null || label.isBlank()) {
+            throw new JiraClientException("Jira label không được để trống");
+        }
+
+        String encodedJql = URLEncoder.encode(
+                "project = " + projectKey + " AND labels = \"" + label.trim() + "\"",
+                StandardCharsets.UTF_8);
+
+        IntegrationConfig config = getIntegrationConfig(projectId);
+        JsonNode response = get(
+                config,
+                "/rest/api/3/search/jql?jql=" + encodedJql
+                        + "&maxResults=2&fields=summary,status");
+
+        JsonNode issues = response.get("issues");
+        if (issues == null || !issues.isArray() || issues.isEmpty()) {
+            return List.of();
+        }
+
+        List<JiraCreateIssueResponse> result = new java.util.ArrayList<>();
+        for (JsonNode issue : issues) {
+            result.add(new JiraCreateIssueResponse(
+                    text(issue, "id"),
+                    text(issue, "key"),
+                    text(issue, "self")));
+        }
+        return result;
+    }
+
+    @Override
+    public void updateIssue(
+            Long projectId,
+            String jiraIssueId,
+            JiraCreateIssueRequest request) {
+
+        if (jiraIssueId == null || jiraIssueId.isBlank()) {
+            throw new JiraClientException("Jira issue id không được để trống");
+        }
+        if (request == null) {
+            throw new JiraClientException("Jira update request không được null");
+        }
+
+        IntegrationConfig config = getIntegrationConfig(projectId);
+        Map<String, Object> fields = new HashMap<>();
+        fields.put("summary", request.summary());
+
+        if (request.description() != null) {
+            fields.put("description", Map.of(
+                    "type", "doc",
+                    "version", 1,
+                    "content", List.of(Map.of(
+                            "type", "paragraph",
+                            "content", List.of(Map.of(
+                                    "type", "text",
+                                    "text", request.description()))))));
+        }
+
+        if (request.priority() != null && !request.priority().isBlank()) {
+            fields.put("priority", Map.of("name", request.priority()));
+        }
+        if (request.labels() != null && !request.labels().isEmpty()) {
+            fields.put("labels", request.labels());
+        }
+
+        try {
+            String body = objectMapper.writeValueAsString(Map.of("fields", fields));
+            put(config, "/rest/api/3/issue/" + jiraIssueId, body);
+        } catch (JiraApiException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new JiraClientException("Không thể cập nhật Jira issue", e);
+        }
     }
 
     private IntegrationConfig getIntegrationConfig(
@@ -429,6 +515,48 @@ public class JiraRestClient implements JiraClient {
             throw new JiraClientException(
                     "Không thể gọi Jira",
                     exception);
+        }
+    }
+
+    private JsonNode put(
+            IntegrationConfig config,
+            String path,
+            String body) {
+
+        String baseUrl = normalizeBaseUrl(config.getBaseUrl());
+        validateResolvedHost(baseUrl);
+
+        String encryptedSecret = config.getEncryptedSecret();
+        if (encryptedSecret == null || encryptedSecret.isBlank()) {
+            throw new JiraClientException("Jira secret chưa được cấu hình");
+        }
+
+        String token = secretService.decrypt(encryptedSecret);
+        String accountIdentifier = config.getAccountIdentifier();
+        if (token == null || token.isBlank()
+                || accountIdentifier == null || accountIdentifier.isBlank()) {
+            throw new JiraClientException("Jira credentials chưa được cấu hình");
+        }
+
+        String basicAuth = Base64.getEncoder().encodeToString(
+                (accountIdentifier + ":" + token).getBytes(StandardCharsets.UTF_8));
+
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Authorization", "Basic " + basicAuth);
+        headers.put("Accept", "application/json");
+        headers.put("Content-Type", "application/json");
+
+        try {
+            JiraHttpResponse response =
+                    transport.put(baseUrl + path, headers, body, safeTimeout());
+            return handleResponse(response);
+        } catch (JiraApiException e) {
+            throw e;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new JiraConnectionException("Không thể kết nối Jira", e);
+        } catch (IOException e) {
+            throw new JiraConnectionException("Không thể kết nối Jira", e);
         }
     }
 

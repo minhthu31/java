@@ -162,6 +162,78 @@ public class JdkJiraHttpTransport implements JiraHttpTransport {
         }
     }
 
+    @Override
+    public JiraHttpResponse put(
+            String url,
+            Map<String, String> headers,
+            String body,
+            java.time.Duration timeout)
+            throws IOException, InterruptedException {
+
+        URI uri = URI.create(url);
+        validateUri(uri);
+        InetAddress address = resolveAndValidateHost(uri.getHost());
+        int port = uri.getPort() == -1 ? HTTPS_DEFAULT_PORT : uri.getPort();
+        int timeoutMillis = toTimeoutMillis(timeout);
+
+        try (SSLSocket socket =
+                     (SSLSocket) sslSocketFactory.createSocket()) {
+            socket.setSoTimeout(timeoutMillis);
+            socket.connect(new InetSocketAddress(address, port), timeoutMillis);
+            configureTls(socket, uri.getHost());
+            socket.startHandshake();
+            sendBodyRequest(socket, uri, headers, body, port, "PUT");
+            return readResponse(socket);
+        } catch (GeneralSecurityException exception) {
+            throw new IOException("TLS connection tới Jira thất bại", exception);
+        }
+    }
+
+    private void sendBodyRequest(
+            SSLSocket socket,
+            URI uri,
+            Map<String, String> headers,
+            String body,
+            int port,
+            String method) throws IOException {
+
+        OutputStream output = socket.getOutputStream();
+        String hostHeader = uri.getHost();
+        if (port != HTTPS_DEFAULT_PORT) hostHeader += ":" + port;
+
+        byte[] bodyBytes = body == null ? new byte[0] :
+                body.getBytes(StandardCharsets.UTF_8);
+
+        StringBuilder request = new StringBuilder();
+        request.append(method).append(" ")
+                .append(buildRequestTarget(uri))
+                .append(" HTTP/1.1\r\n");
+        request.append("Host: ").append(hostHeader).append("\r\n");
+        request.append("Accept-Encoding: identity\r\n");
+        request.append("Connection: close\r\n");
+        request.append("Content-Type: application/json\r\n");
+        request.append("Content-Length: ").append(bodyBytes.length).append("\r\n");
+
+        if (headers != null) {
+            for (Map.Entry<String, String> entry : headers.entrySet()) {
+                String name = entry.getKey();
+                if (name == null || name.isBlank()) continue;
+                if (name.equalsIgnoreCase("Host")
+                        || name.equalsIgnoreCase("Connection")
+                        || name.equalsIgnoreCase("Content-Length")
+                        || name.equalsIgnoreCase("Transfer-Encoding")
+                        || name.equalsIgnoreCase("Accept-Encoding")
+                        || name.equalsIgnoreCase("Content-Type")) continue;
+                request.append(name).append(": ")
+                        .append(entry.getValue()).append("\r\n");
+            }
+        }
+        request.append("\r\n");
+        output.write(request.toString().getBytes(StandardCharsets.ISO_8859_1));
+        output.write(bodyBytes);
+        output.flush();
+    }
+
     /**
      * Chỉ chấp nhận HTTPS.
      *
