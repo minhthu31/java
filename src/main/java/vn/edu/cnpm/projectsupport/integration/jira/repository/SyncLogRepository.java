@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLog;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLogStatus;
+import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider;
 
 public interface SyncLogRepository extends JpaRepository<SyncLog, Long> {
 
@@ -17,6 +18,10 @@ public interface SyncLogRepository extends JpaRepository<SyncLog, Long> {
             String entityType,
             String entityId,
             String idempotencyKey);
+
+    boolean existsByProjectIdAndProviderAndEntityTypeAndEntityIdAndStatus(
+            Long projectId, IntegrationProvider provider, String entityType,
+            String entityId, SyncLogStatus status);
 
     Page<SyncLog> findByProjectIdOrderByStartedAtDesc(
             Long projectId,

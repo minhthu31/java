@@ -1,6 +1,7 @@
 package vn.edu.cnpm.projectsupport.integration.jira;
 
 import java.time.Instant;
+import java.time.ZoneId;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
@@ -36,6 +37,8 @@ import vn.edu.cnpm.projectsupport.integration.jira.exception.JiraApiException;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.IntegrationConfigRepository;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.JiraIssueRepository;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.SyncLogRepository;
+import vn.edu.cnpm.projectsupport.feature.repository.FeatureRepository;
+import vn.edu.cnpm.projectsupport.sprint.repository.SprintRepository;
 import vn.edu.cnpm.projectsupport.security.IntegrationSecretService;
 import vn.edu.cnpm.projectsupport.task.domain.SyncStatus;
 import vn.edu.cnpm.projectsupport.task.domain.Task;
@@ -55,6 +58,8 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
     private final SyncLogRepository syncLogRepository;
     private final TaskRepository taskRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final SprintRepository sprintRepository;
+    private final FeatureRepository featureRepository;
 
     public JiraIntegrationServiceImpl(
             IntegrationConfigRepository configRepository,
@@ -63,7 +68,9 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
             JiraIssueRepository jiraIssueRepository,
             SyncLogRepository syncLogRepository,
             TaskRepository taskRepository,
-            JdbcTemplate jdbcTemplate) {
+            JdbcTemplate jdbcTemplate,
+            SprintRepository sprintRepository,
+            FeatureRepository featureRepository) {
 
         this.configRepository = configRepository;
         this.secretService = secretService;
@@ -72,6 +79,8 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
         this.syncLogRepository = syncLogRepository;
         this.taskRepository = taskRepository;
         this.jdbcTemplate = jdbcTemplate;
+        this.sprintRepository = sprintRepository;
+        this.featureRepository = featureRepository;
     }
 
     @Override
@@ -306,6 +315,12 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
 
         String fingerprint = requestFingerprint(task, retry);
 
+        if (syncLogRepository.existsByProjectIdAndProviderAndEntityTypeAndEntityIdAndStatus(
+                projectId, IntegrationProvider.JIRA, ENTITY_TYPE_TASK,
+                String.valueOf(taskId), SyncLogStatus.RUNNING)) {
+            throw syncAlreadyRunningException("Task đang có operation đồng bộ RUNNING");
+        }
+
         /*
          * Idempotency được kiểm tra trước mọi remote side-effect.
          */
@@ -328,7 +343,7 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                 return responseFromSyncLog(old, taskId);
             }
 
-            throw new JiraClientException(
+            throw syncAlreadyRunningException(
                     "Request đồng bộ với Idempotency-Key này đang được xử lý");
         }
 
@@ -350,12 +365,18 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                 if (old.getStatus() != SyncLogStatus.RUNNING) {
                     return responseFromSyncLog(old, taskId);
                 }
-                throw new JiraClientException(
-                        org.springframework.http.HttpStatus.CONFLICT,
-                        "SYNC_ALREADY_RUNNING",
-                        true,
+                throw syncAlreadyRunningException(
                         "Request đồng bộ với Idempotency-Key này đang được xử lý");
             }
+
+            if (syncLogRepository.existsByProjectIdAndProviderAndEntityTypeAndEntityIdAndStatus(
+                    projectId, IntegrationProvider.JIRA, ENTITY_TYPE_TASK,
+                    String.valueOf(taskId), SyncLogStatus.RUNNING)) {
+                throw syncAlreadyRunningException("Task đang có operation đồng bộ RUNNING");
+            }
+
+            IntegrationConfig config = getConfig(projectId);
+            String projectKey = requireProjectKey(projectId);
 
             var mapped = jiraIssueRepository.findByTaskId(taskId);
             if (mapped.isPresent()) {
@@ -395,6 +416,7 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
 
                     jiraClient.updateIssue(
                             projectId,
+                            projectKey,
                             issue.getJiraIssueId(),
                             updateRequest);
 
@@ -426,11 +448,7 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
             }
 
             if (task.getSyncStatus() == SyncStatus.SYNCING) {
-                throw new JiraClientException(
-                        org.springframework.http.HttpStatus.CONFLICT,
-                        "SYNC_ALREADY_RUNNING",
-                        true,
-                        "Task đang trong quá trình đồng bộ");
+                throw syncAlreadyRunningException("Task đang trong quá trình đồng bộ");
             }
 
             if (retry
@@ -440,8 +458,6 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                         "Task không ở trạng thái có thể retry");
             }
 
-            IntegrationConfig config = getConfig(projectId);
-            String projectKey = requireProjectKey(projectId);
             String label = "cnpm-local-task-" + taskId;
 
             /*
@@ -483,10 +499,7 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                 if (existing.getStatus() != SyncLogStatus.RUNNING) {
                     return responseFromSyncLog(existing, taskId);
                 }
-                throw new JiraClientException(
-                        org.springframework.http.HttpStatus.CONFLICT,
-                        "SYNC_ALREADY_RUNNING",
-                        true,
+                throw syncAlreadyRunningException(
                         "Request đồng bộ với Idempotency-Key này đang được xử lý");
             }
 
@@ -670,48 +683,60 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
     }
 
     private JiraCreateIssueRequest buildCreateRequest(Task task, Long taskId) {
-        String assigneeEmail = null;
+        String assigneeAccountId = null;
         String sprintId = null;
         String epicKey = null;
 
-        try {
-            if (task.getAssigneeUserId() != null) {
-                var emails = jdbcTemplate.query(
-                        "SELECT email FROM users WHERE id = ?",
-                        (rs, rowNum) -> rs.getString("email"),
-                        task.getAssigneeUserId());
-                if (!emails.isEmpty()) {
-                    assigneeEmail = emails.get(0);
-                }
+        if (task.getAssigneeUserId() != null) {
+            List<String> accountIds = jdbcTemplate.query(
+                    "SELECT external_user_id FROM user_external_accounts "
+                            + "WHERE user_id = ? AND provider = 'JIRA'",
+                    (rs, rowNum) -> rs.getString("external_user_id"),
+                    task.getAssigneeUserId());
+            if (accountIds.size() != 1 || accountIds.get(0) == null
+                    || accountIds.get(0).isBlank()) {
+                throw mappingMissingException(
+                        "ASSIGNEE_MAPPING_MISSING",
+                        "Chưa có Jira accountId mapping cho assignee user "
+                                + task.getAssigneeUserId());
             }
-
-            if (task.getSprintId() != null) {
-                var sprintIds = jdbcTemplate.query(
-                        "SELECT jira_sprint_id FROM sprints WHERE id = ? AND project_id = ?",
-                        (rs, rowNum) -> {
-                            long value = rs.getLong("jira_sprint_id");
-                            return rs.wasNull() ? null : String.valueOf(value);
-                        },
-                        task.getSprintId(), task.getProjectId());
-                if (!sprintIds.isEmpty()) {
-                    sprintId = sprintIds.get(0);
-                }
-            }
-
-            if (task.getFeatureId() != null) {
-                var epicKeys = jdbcTemplate.query(
-                        "SELECT jira_epic_key FROM features WHERE id = ? AND project_id = ?",
-                        (rs, rowNum) -> rs.getString("jira_epic_key"),
-                        task.getFeatureId(), task.getProjectId());
-                if (!epicKeys.isEmpty()) {
-                    epicKey = epicKeys.get(0);
-                }
-            }
-        } catch (Exception e) {
-            throw new JiraClientException(
-                    "Không thể resolve dữ liệu mapping Task sang Jira",
-                    e);
+            assigneeAccountId = accountIds.get(0).trim();
         }
+
+        if (task.getSprintId() != null) {
+            var sprint = sprintRepository
+                    .findByIdAndProjectId(task.getSprintId(), task.getProjectId())
+                    .orElseThrow(() -> mappingMissingException(
+                            "SPRINT_MAPPING_MISSING",
+                            "Không tìm thấy Sprint của Task trong Project"));
+            if (sprint.getJiraSprintId() == null) {
+                throw mappingMissingException(
+                        "SPRINT_MAPPING_MISSING",
+                        "Sprint " + task.getSprintId() + " chưa có Jira sprint mapping");
+            }
+            sprintId = String.valueOf(sprint.getJiraSprintId());
+        }
+
+        if (task.getFeatureId() != null) {
+            var feature = featureRepository
+                    .findByIdAndProjectId(task.getFeatureId(), task.getProjectId())
+                    .orElseThrow(() -> mappingMissingException(
+                            "EPIC_MAPPING_MISSING",
+                            "Không tìm thấy Feature của Task trong Project"));
+            if (feature.getJiraEpicKey() == null || feature.getJiraEpicKey().isBlank()) {
+                throw mappingMissingException(
+                        "EPIC_MAPPING_MISSING",
+                        "Feature " + task.getFeatureId() + " chưa có Jira Epic mapping");
+            }
+            epicKey = feature.getJiraEpicKey().trim();
+        }
+
+        String dueDate = task.getDeadline() == null
+                ? null
+                : task.getDeadline()
+                        .atZone(ZoneId.of("Asia/Ho_Chi_Minh"))
+                        .toLocalDate()
+                        .toString();
 
         return new JiraCreateIssueRequest(
                 task.getTitle(),
@@ -719,8 +744,8 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                 task.getIssueType() == null ? null : task.getIssueType().name(),
                 task.getPriority() == null ? null : task.getPriority().name(),
                 List.of("cnpm-local-task-" + taskId),
-                assigneeEmail,
-                task.getDeadline() == null ? null : task.getDeadline().toString(),
+                assigneeAccountId,
+                dueDate,
                 sprintId,
                 epicKey);
     }
@@ -885,6 +910,24 @@ public class JiraIntegrationServiceImpl implements JiraIntegrationService {
                 null,
                 null,
                 "Task đã ở trạng thái SYNCED");
+    }
+
+    private JiraClientException syncAlreadyRunningException(String message) {
+        return new JiraClientException(
+               org.springframework.http.HttpStatus.CONFLICT,
+               "SYNC_ALREADY_RUNNING",
+                true,
+                message);
+    }
+
+    private JiraApiException mappingMissingException(String code, String message) {
+        return new JiraApiException(
+                org.springframework.http.HttpStatus.BAD_REQUEST,
+                code,
+                false,
+                null,
+                message,
+                null);
     }
 
     private JiraApiException idempotencyKeyReusedException() {

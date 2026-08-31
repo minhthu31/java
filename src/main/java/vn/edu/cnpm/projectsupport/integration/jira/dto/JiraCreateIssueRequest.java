@@ -8,7 +8,7 @@ public record JiraCreateIssueRequest(
         String issueType,
         String priority,
         List<String> labels,
-        String assigneeEmail,
+        String assigneeAccountId,
         String dueDate,
         String sprintId,
         String epicKey) {

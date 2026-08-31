@@ -40,6 +40,8 @@ import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraCreateIssueResponse;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.IntegrationConfigRepository;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.JiraIssueRepository;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.SyncLogRepository;
+import vn.edu.cnpm.projectsupport.sprint.repository.SprintRepository;
+import vn.edu.cnpm.projectsupport.feature.repository.FeatureRepository;
 import vn.edu.cnpm.projectsupport.security.IntegrationSecretService;
 import vn.edu.cnpm.projectsupport.task.domain.SyncStatus;
 import vn.edu.cnpm.projectsupport.task.domain.Task;
@@ -80,6 +82,12 @@ class JiraIntegrationServiceImplTest {
     @Mock
     private JdbcTemplate jdbcTemplate;
 
+    @Mock
+    private SprintRepository sprintRepository;
+
+    @Mock
+    private FeatureRepository featureRepository;
+
     private JiraIntegrationServiceImpl service;
 
     private Task task;
@@ -97,7 +105,9 @@ class JiraIntegrationServiceImplTest {
                         jiraIssueRepository,
                         syncLogRepository,
                         taskRepository,
-                        jdbcTemplate);
+                        jdbcTemplate,
+                        sprintRepository,
+                        featureRepository);
 
         task =
                 new Task(
@@ -134,8 +144,13 @@ class JiraIntegrationServiceImplTest {
                 anyString(),
                 ArgumentMatchers.<RowMapper<String>>any(),
                 eq(PROJECT_ID)))
-                .thenReturn(
-                        java.util.List.of(PROJECT_KEY));
+                .thenReturn(java.util.List.of(PROJECT_KEY));
+
+        when(jdbcTemplate.query(
+                org.mockito.ArgumentMatchers.contains("user_external_accounts"),
+                ArgumentMatchers.<RowMapper<String>>any(),
+                any(Long.class)))
+                .thenReturn(java.util.List.of("jira-account-1"));
 
         when(taskRepository.save(any(Task.class)))
                 .thenAnswer(invocation ->
@@ -648,6 +663,76 @@ class JiraIntegrationServiceImplTest {
     }
 
     @Test
+    void createRequestUsesLinkedJiraAccountIdAndLocalTimezoneDate() {
+        task.setAssigneeUserId(50L);
+        task.setDeadline(Instant.parse("2026-09-10T23:30:00Z"));
+
+        when(jdbcTemplate.query(
+                ArgumentMatchers.contains("user_external_accounts"),
+                ArgumentMatchers.<RowMapper<String>>any(),
+                eq(50L)))
+                .thenReturn(java.util.List.of("jira-account-1"));
+
+        when(jiraClient.createIssue(
+                eq(PROJECT_ID), eq(PROJECT_KEY), any(JiraCreateIssueRequest.class)))
+                .thenReturn(new JiraCreateIssueResponse("10001", "CNPM-100", BASE_URL + "/browse/CNPM-100"));
+
+        service.syncTask(PROJECT_ID, TASK_ID, "account-map-1");
+
+        ArgumentCaptor<JiraCreateIssueRequest> captor =
+                ArgumentCaptor.forClass(JiraCreateIssueRequest.class);
+        verify(jiraClient).createIssue(eq(PROJECT_ID), eq(PROJECT_KEY), captor.capture());
+
+        assertThat(captor.getValue().assigneeAccountId()).isEqualTo("jira-account-1");
+        assertThat(captor.getValue().dueDate()).isEqualTo("2026-09-11");
+    }
+
+    @Test
+    void missingAssigneeMappingReturnsExpectedErrorCode() {
+        task.setAssigneeUserId(50L);
+        when(jdbcTemplate.query(
+                ArgumentMatchers.contains("user_external_accounts"),
+                ArgumentMatchers.<RowMapper<String>>any(),
+                eq(50L)))
+                .thenReturn(java.util.List.of());
+
+        assertThatThrownBy(() -> service.syncTask(PROJECT_ID, TASK_ID, "missing-assignee-1"))
+                .isInstanceOf(vn.edu.cnpm.projectsupport.integration.jira.exception.JiraApiException.class)
+                .satisfies(ex -> {
+                    var jiraEx = (vn.edu.cnpm.projectsupport.integration.jira.exception.JiraApiException) ex;
+                    assertThat(jiraEx.getErrorCode()).isEqualTo("ASSIGNEE_MAPPING_MISSING");
+                });
+    }
+
+    @Test
+    void missingSprintMappingReturnsExpectedErrorCode() {
+        task.setSprintId(60L);
+        when(sprintRepository.findByIdAndProjectId(60L, PROJECT_ID))
+                .thenReturn(Optional.of(new vn.edu.cnpm.projectsupport.sprint.domain.Sprint(PROJECT_ID, "Sprint 1", "ACTIVE")));
+
+        assertThatThrownBy(() -> service.syncTask(PROJECT_ID, TASK_ID, "missing-sprint-1"))
+                .isInstanceOf(vn.edu.cnpm.projectsupport.integration.jira.exception.JiraApiException.class)
+                .satisfies(ex -> {
+                    var jiraEx = (vn.edu.cnpm.projectsupport.integration.jira.exception.JiraApiException) ex;
+                    assertThat(jiraEx.getErrorCode()).isEqualTo("SPRINT_MAPPING_MISSING");
+                });
+    }
+
+    @Test
+    void missingEpicMappingReturnsExpectedErrorCode() {
+        task.setFeatureId(70L);
+        when(featureRepository.findByIdAndProjectId(70L, PROJECT_ID))
+                .thenReturn(Optional.of(new vn.edu.cnpm.projectsupport.feature.domain.Feature(PROJECT_ID, "Epic 1")));
+
+        assertThatThrownBy(() -> service.syncTask(PROJECT_ID, TASK_ID, "missing-epic-1"))
+                .isInstanceOf(vn.edu.cnpm.projectsupport.integration.jira.exception.JiraApiException.class)
+                .satisfies(ex -> {
+                    var jiraEx = (vn.edu.cnpm.projectsupport.integration.jira.exception.JiraApiException) ex;
+                    assertThat(jiraEx.getErrorCode()).isEqualTo("EPIC_MAPPING_MISSING");
+                });
+    }
+
+    @Test
     void createRequestContainsTaskMappingFields() {
 
         task.setAssigneeUserId(50L);
@@ -661,29 +746,22 @@ class JiraIntegrationServiceImplTest {
         task.setFeatureId(70L);
 
         when(jdbcTemplate.query(
-                ArgumentMatchers.contains("FROM users"),
+                ArgumentMatchers.contains("user_external_accounts"),
                 ArgumentMatchers.<RowMapper<String>>any(),
                 eq(50L)))
-                .thenReturn(
-                        java.util.List.of(
-                                "assignee@example.com"));
+                .thenReturn(java.util.List.of("jira-account-1"));
 
-        when(jdbcTemplate.query(
-                ArgumentMatchers.contains("FROM sprints"),
-                ArgumentMatchers.<RowMapper<String>>any(),
-                eq(60L),
-                eq(PROJECT_ID)))
-                .thenReturn(
-                        java.util.List.of("9001"));
+        vn.edu.cnpm.projectsupport.sprint.domain.Sprint sprint =
+                new vn.edu.cnpm.projectsupport.sprint.domain.Sprint(PROJECT_ID, "Sprint 1", "ACTIVE");
+        sprint.setJiraSprintId(9001L);
+        when(sprintRepository.findByIdAndProjectId(60L, PROJECT_ID))
+                .thenReturn(Optional.of(sprint));
 
-        when(jdbcTemplate.query(
-                ArgumentMatchers.contains("FROM features"),
-                ArgumentMatchers.<RowMapper<String>>any(),
-                eq(70L),
-                eq(PROJECT_ID)))
-                .thenReturn(
-                        java.util.List.of(
-                                "CNPM-EPIC-1"));
+        vn.edu.cnpm.projectsupport.feature.domain.Feature feature =
+                new vn.edu.cnpm.projectsupport.feature.domain.Feature(PROJECT_ID, "Epic 1");
+        feature.setJiraEpicKey("CNPM-EPIC-1");
+        when(featureRepository.findByIdAndProjectId(70L, PROJECT_ID))
+                .thenReturn(Optional.of(feature));
 
         when(jiraClient.createIssue(
                 eq(PROJECT_ID),
@@ -714,9 +792,9 @@ class JiraIntegrationServiceImplTest {
         JiraCreateIssueRequest request =
                 captor.getValue();
 
-        assertThat(request.assigneeEmail())
+        assertThat(request.assigneeAccountId())
                 .isEqualTo(
-                        "assignee@example.com");
+                        "jira-account-1");
 
         assertThat(request.dueDate())
                 .startsWith(

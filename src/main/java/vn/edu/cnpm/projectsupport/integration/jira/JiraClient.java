@@ -25,6 +25,7 @@ public interface JiraClient {
 
     void updateIssue(
             Long projectId,
+            String projectKey,
             String jiraIssueId,
             JiraCreateIssueRequest request);
 }

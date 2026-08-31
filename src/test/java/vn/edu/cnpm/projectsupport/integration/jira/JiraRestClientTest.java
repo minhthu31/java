@@ -1408,25 +1408,6 @@ class JiraRestClientTest {
                                 """,
                                 Map.of()));
 
-        when(transport.get(
-                eq(BASE_URL
-                        + "/rest/api/3/user/assignable/search"
-                        + "?query=assignee%40example.com&project=PROJ"),
-                any(),
-                eq(Duration.ofSeconds(10))))
-                .thenReturn(
-                        new JiraHttpResponse(
-                                200,
-                                """
-                                [
-                                  {
-                                    "accountId":"jira-account-1",
-                                    "emailAddress":"assignee@example.com"
-                                  }
-                                ]
-                                """,
-                                Map.of()));
-
         when(transport.post(
                 eq(BASE_URL
                         + "/rest/api/3/issue"),
@@ -1453,7 +1434,7 @@ class JiraRestClientTest {
                         "Medium",
                         List.of(
                                 "cnpm-local-task-200"),
-                        "assignee@example.com",
+                        "jira-account-1",
                         "2026-09-10T15:30:00Z",
                         "9001",
                         "PROJ-EPIC-1");

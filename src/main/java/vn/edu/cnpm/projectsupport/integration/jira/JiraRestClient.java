@@ -267,6 +267,7 @@ public class JiraRestClient implements JiraClient {
     @Override
     public void updateIssue(
             Long projectId,
+            String projectKey,
             String jiraIssueId,
             JiraCreateIssueRequest request) {
 
@@ -277,9 +278,15 @@ public class JiraRestClient implements JiraClient {
             throw new JiraClientException("Jira update request không được null");
         }
 
+        validateProjectKey(projectKey);
         IntegrationConfig config = getIntegrationConfig(projectId);
         Map<String, Object> fields = new HashMap<>();
         fields.put("summary", request.summary());
+
+        if (request.issueType() != null && !request.issueType().isBlank()) {
+            fields.put("issuetype", Map.of("id",
+                    resolveIssueTypeId(config, projectKey, request.issueType())));
+        }
 
         if (request.description() != null) {
             fields.put("description", Map.of(
@@ -293,15 +300,10 @@ public class JiraRestClient implements JiraClient {
         }
 
         if (request.priority() != null && !request.priority().isBlank()) {
-            fields.put("priority", Map.of("name", request.priority()));
+            fields.put("priority", Map.of("id",
+                    resolvePriorityId(config, projectKey, request.issueType(), request.priority())));
         }
-        if (request.assigneeEmail() != null && !request.assigneeEmail().isBlank()) {
-            String accountId = resolveAssigneeAccountId(config, request.assigneeEmail(), null);
-            fields.put("assignee", Map.of("accountId", accountId));
-        }
-        if (request.dueDate() != null && !request.dueDate().isBlank()) {
-            fields.put("duedate", request.dueDate().substring(0, Math.min(10, request.dueDate().length())));
-        }
+        addMappingFields(config, projectKey, request, fields);
         if (request.labels() != null && !request.labels().isEmpty()) {
             fields.put("labels", request.labels());
         }
@@ -423,64 +425,30 @@ public class JiraRestClient implements JiraClient {
                 "Không tìm thấy Jira Priority trong metadata: " + priorityName);
     }
 
-    private String resolveAssigneeAccountId(
-            IntegrationConfig config,
-            String email,
-            String projectKey) {
-
-        String query = URLEncoder.encode(email.trim(), StandardCharsets.UTF_8);
-        String path = "/rest/api/3/user/assignable/search?query=" + query;
-        if (projectKey != null && !projectKey.isBlank()) {
-            path += "&project=" + URLEncoder.encode(projectKey, StandardCharsets.UTF_8);
-        }
-
-        JsonNode users = get(config, path);
-        if (users != null && users.isArray()) {
-            for (JsonNode user : users) {
-                String userEmail = text(user, "emailAddress");
-                if (userEmail != null && email.equalsIgnoreCase(userEmail)) {
-                    String accountId = text(user, "accountId");
-                    if (accountId != null && !accountId.isBlank()) {
-                        return accountId;
-                    }
-                }
-            }
-            if (!users.isEmpty()) {
-                String accountId = text(users.get(0), "accountId");
-                if (accountId != null && !accountId.isBlank()) {
-                    return accountId;
-                }
-            }
-        }
-
-        throw new JiraClientException(
-                "Không tìm thấy Jira account cho assignee: " + email);
-    }
-
     private void addMappingFields(
             IntegrationConfig config,
             String projectKey,
             JiraCreateIssueRequest request,
             Map<String, Object> fields) {
 
-        if (request.assigneeEmail() != null && !request.assigneeEmail().isBlank()) {
+        if (request.assigneeAccountId() != null && !request.assigneeAccountId().isBlank()) {
             fields.put(
                     "assignee",
-                    Map.of("accountId",
-                            resolveAssigneeAccountId(config, request.assigneeEmail(), projectKey)));
+                    Map.of("accountId", request.assigneeAccountId().trim()));
         }
 
         if (request.dueDate() != null && !request.dueDate().isBlank()) {
             fields.put(
                     "duedate",
-                    request.dueDate().substring(0, Math.min(10, request.dueDate().length())));
+                    normalizeDueDate(request.dueDate()));
         }
 
         if (request.sprintId() != null && !request.sprintId().isBlank()) {
             String sprintField = resolveCustomFieldId(config, "Sprint");
-            if (sprintField != null) {
-                fields.put(sprintField, List.of(request.sprintId()));
+            if (sprintField == null) {
+                throw new JiraClientException("Không tìm thấy Jira Sprint custom field trong metadata");
             }
+            fields.put(sprintField, List.of(request.sprintId()));
         }
 
         if (request.epicKey() != null && !request.epicKey().isBlank()) {
@@ -490,6 +458,28 @@ public class JiraRestClient implements JiraClient {
             } else {
                 // Modern Jira Cloud projects use parent for an Epic relationship.
                 fields.put("parent", Map.of("key", request.epicKey()));
+            }
+        }
+    }
+
+    private String normalizeDueDate(String dueDate) {
+        try {
+            return java.time.Instant.parse(dueDate.trim())
+                    .atZone(java.time.ZoneId.of("Asia/Ho_Chi_Minh"))
+                    .toLocalDate()
+                    .toString();
+        } catch (Exception ignored) {
+            try {
+                return java.time.OffsetDateTime.parse(dueDate.trim())
+                        .atZoneSameInstant(java.time.ZoneId.of("Asia/Ho_Chi_Minh"))
+                        .toLocalDate()
+                        .toString();
+            } catch (Exception e) {
+                try {
+                    return java.time.LocalDate.parse(dueDate.trim()).toString();
+                } catch (Exception ignoredAgain) {
+                    throw new JiraClientException("Deadline không hợp lệ: " + dueDate);
+                }
             }
         }
     }
