@@ -15,11 +15,14 @@ const CLASSIFICATIONS = [
 
 const sanitizeErrorMessage = (msg) => {
     if (!msg || typeof msg !== "string") return "Đồng bộ Jira thất bại.";
-    const cleanMsg = msg.split(/\n\s*at /)[0];
-    return cleanMsg.replace(
-        /(Bearer\s+[A-Za-z0-9-_.]+)|(token=[A-Za-z0-9-_]+)/gi,
-        "[REDACTED]",
-    );
+    let cleanMsg = msg.split(/\s+at\s+[a-zA-Z0-9_$.:]+/)[0];
+    cleanMsg = cleanMsg.split(/\n\s*at /)[0];
+    return cleanMsg
+        .replace(
+            /(Bearer\s+[A-Za-z0-9_\-\.]+)|(token=[A-Za-z0-9_\-\.]+)|(secret_[A-Za-z0-9_]+)/gi,
+            "[REDACTED]",
+        )
+        .trim();
 };
 
 export default function TaskComponent({ projectId }) {
@@ -153,11 +156,12 @@ export default function TaskComponent({ projectId }) {
                         "Không tìm thấy dữ liệu dự án hoặc danh sách Task.",
                     );
                 } else {
-                    setError(
+                    const parsed =
                         err.response?.data?.message ||
-                            err.message ||
-                            "Hệ thống gặp lỗi ngoài dự kiến",
-                    );
+                        err.response?.data?.error ||
+                        err.message ||
+                        "Hệ thống gặp lỗi ngoài dự kiến";
+                    setError(sanitizeErrorMessage(parsed));
                 }
             } finally {
                 setLoading(false);
@@ -179,9 +183,10 @@ export default function TaskComponent({ projectId }) {
         } catch (err) {
             const msg =
                 err.response?.data?.message ||
+                err.response?.data?.error ||
                 err.message ||
                 "Không thể tải thông tin chi tiết của task từ máy chủ.";
-            setDetailError(msg);
+            setDetailError(sanitizeErrorMessage(msg));
         }
     };
 
@@ -289,6 +294,7 @@ export default function TaskComponent({ projectId }) {
             } else {
                 setFormError(
                     err.response?.data?.message ||
+                        err.response?.data?.error ||
                         err.message ||
                         "Có lỗi xảy ra khi tạo Task.",
                 );
@@ -316,6 +322,11 @@ export default function TaskComponent({ projectId }) {
                 taskId,
             );
             const data = result?.data || result;
+            const updatedLastSyncedAt =
+                data?.syncedAt ||
+                data?.lastSyncedAt ||
+                new Date().toISOString();
+
             setSyncNotification({
                 type: "success",
                 message: `Đồng bộ task #${taskId} lên Jira thành công!`,
@@ -326,14 +337,13 @@ export default function TaskComponent({ projectId }) {
                     t.id === taskId
                         ? {
                               ...t,
-                              syncStatus: "SYNCED",
+                              syncStatus: data?.syncStatus || "SYNCED",
                               jiraIssueKey:
                                   data?.jiraIssueKey || t.jiraIssueKey,
                               jiraIssueUrl:
                                   data?.jiraIssueUrl || t.jiraIssueUrl,
-                              lastSyncedAt:
-                                  data?.lastSyncedAt ||
-                                  new Date().toISOString(),
+                              lastSyncedAt: updatedLastSyncedAt,
+                              syncedAt: updatedLastSyncedAt,
                               syncErrorMessage: null,
                           }
                         : t,
@@ -342,18 +352,21 @@ export default function TaskComponent({ projectId }) {
             if (selectedTask && selectedTask.id === taskId) {
                 setSelectedTask((prev) => ({
                     ...prev,
-                    syncStatus: "SYNCED",
+                    syncStatus: data?.syncStatus || "SYNCED",
                     jiraIssueKey: data?.jiraIssueKey || prev.jiraIssueKey,
                     jiraIssueUrl: data?.jiraIssueUrl || prev.jiraIssueUrl,
-                    lastSyncedAt:
-                        data?.lastSyncedAt || new Date().toISOString(),
+                    lastSyncedAt: updatedLastSyncedAt,
+                    syncedAt: updatedLastSyncedAt,
                     syncErrorMessage: null,
                 }));
             }
         } catch (err) {
-            const safeMsg = sanitizeErrorMessage(
-                err.message || err.response?.data?.message,
-            );
+            const rawMsg =
+                err.response?.data?.message ||
+                err.response?.data?.error ||
+                err.message;
+            const safeMsg = sanitizeErrorMessage(rawMsg);
+
             setSyncNotification({
                 type: "error",
                 message: `Lỗi đồng bộ task #${taskId}: ${safeMsg}`,
@@ -480,7 +493,10 @@ export default function TaskComponent({ projectId }) {
             setStatusReason("");
         } catch (err) {
             alert(
-                err.response?.data?.message || "Không thể cập nhật trạng thái.",
+                err.response?.data?.message ||
+                    err.response?.data?.error ||
+                    err.message ||
+                    "Không thể cập nhật trạng thái.",
             );
         }
     };
@@ -1243,6 +1259,9 @@ export default function TaskComponent({ projectId }) {
                                             const isSyncing =
                                                 syncStatus === "SYNCING" ||
                                                 retryingTaskId === task.id;
+                                            const displaySyncTime =
+                                                task.syncedAt ||
+                                                task.lastSyncedAt;
 
                                             return (
                                                 <tr
@@ -1293,26 +1312,35 @@ export default function TaskComponent({ projectId }) {
                                                             }}
                                                         >
                                                             {task.jiraIssueKey ? (
-                                                                <a
-                                                                    href={
-                                                                        task.jiraIssueUrl ||
-                                                                        `https://jira.atlassian.net/browse/${task.jiraIssueKey}`
-                                                                    }
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    data-testid={`jira-link-${task.id}`}
-                                                                    style={{
-                                                                        color: "#0284c7",
-                                                                        textDecoration:
-                                                                            "none",
-                                                                        fontWeight: 600,
-                                                                    }}
-                                                                >
-                                                                    {
-                                                                        task.jiraIssueKey
-                                                                    }{" "}
-                                                                    ↗
-                                                                </a>
+                                                                task.jiraIssueUrl ? (
+                                                                    <a
+                                                                        href={
+                                                                            task.jiraIssueUrl
+                                                                        }
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        data-testid={`jira-link-${task.id}`}
+                                                                        style={{
+                                                                            color: "#0284c7",
+                                                                            textDecoration:
+                                                                                "none",
+                                                                            fontWeight: 600,
+                                                                        }}
+                                                                    >
+                                                                        {
+                                                                            task.jiraIssueKey
+                                                                        }{" "}
+                                                                        ↗
+                                                                    </a>
+                                                                ) : (
+                                                                    <span
+                                                                        data-testid={`jira-key-${task.id}`}
+                                                                    >
+                                                                        {
+                                                                            task.jiraIssueKey
+                                                                        }
+                                                                    </span>
+                                                                )
                                                             ) : (
                                                                 "Chưa gắn Jira Key"
                                                             )}
@@ -1381,7 +1409,7 @@ export default function TaskComponent({ projectId }) {
                                                             {renderSyncBadge(
                                                                 syncStatus,
                                                             )}
-                                                            {task.lastSyncedAt && (
+                                                            {displaySyncTime && (
                                                                 <span
                                                                     data-testid={`last-synced-at-${task.id}`}
                                                                     style={{
@@ -1391,7 +1419,7 @@ export default function TaskComponent({ projectId }) {
                                                                     }}
                                                                 >
                                                                     {new Date(
-                                                                        task.lastSyncedAt,
+                                                                        displaySyncTime,
                                                                     ).toLocaleString(
                                                                         "vi-VN",
                                                                     )}
@@ -1409,14 +1437,14 @@ export default function TaskComponent({ projectId }) {
                                                                             maxWidth:
                                                                                 "160px",
                                                                         }}
-                                                                        title={
-                                                                            task.syncErrorMessage
-                                                                        }
+                                                                        title={sanitizeErrorMessage(
+                                                                            task.syncErrorMessage,
+                                                                        )}
                                                                     >
                                                                         ⚠️{" "}
-                                                                        {
-                                                                            task.syncErrorMessage
-                                                                        }
+                                                                        {sanitizeErrorMessage(
+                                                                            task.syncErrorMessage,
+                                                                        )}
                                                                     </span>
                                                                 )}
                                                         </div>
@@ -1763,22 +1791,23 @@ export default function TaskComponent({ projectId }) {
                         >
                             Jira Key:{" "}
                             {selectedTask.jiraIssueKey ? (
-                                <a
-                                    href={
-                                        selectedTask.jiraIssueUrl ||
-                                        `https://jira.atlassian.net/browse/${selectedTask.jiraIssueKey}`
-                                    }
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    data-testid="modal-jira-link"
-                                    style={{
-                                        color: "#0284c7",
-                                        textDecoration: "none",
-                                        fontWeight: 600,
-                                    }}
-                                >
-                                    {selectedTask.jiraIssueKey} ↗
-                                </a>
+                                selectedTask.jiraIssueUrl ? (
+                                    <a
+                                        href={selectedTask.jiraIssueUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        data-testid="modal-jira-link"
+                                        style={{
+                                            color: "#0284c7",
+                                            textDecoration: "none",
+                                            fontWeight: 600,
+                                        }}
+                                    >
+                                        {selectedTask.jiraIssueKey} ↗
+                                    </a>
+                                ) : (
+                                    <span>{selectedTask.jiraIssueKey}</span>
+                                )
                             ) : (
                                 "Chưa liên kết"
                             )}
@@ -1895,7 +1924,9 @@ export default function TaskComponent({ projectId }) {
                                     }}
                                 >
                                     <strong>Lỗi đồng bộ Jira:</strong>{" "}
-                                    {selectedTask.syncErrorMessage}
+                                    {sanitizeErrorMessage(
+                                        selectedTask.syncErrorMessage,
+                                    )}
                                 </div>
                             )}
 
@@ -1958,7 +1989,6 @@ export default function TaskComponent({ projectId }) {
                 </div>
             )}
 
-            {/* REASON MODAL CHO BLOCKED HOẶC CANCELLED */}
             {pendingStatusChange && (
                 <div
                     data-testid="reason-modal"
