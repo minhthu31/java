@@ -17,6 +17,8 @@ import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
 import vn.edu.cnpm.projectsupport.feature.repository.FeatureRepository;
 import vn.edu.cnpm.projectsupport.feature.domain.Feature;
 import vn.edu.cnpm.projectsupport.identity.repository.UserRepository;
+import vn.edu.cnpm.projectsupport.integration.jira.JiraClient;
+import vn.edu.cnpm.projectsupport.integration.jira.repository.SyncLogRepository;
 import vn.edu.cnpm.projectsupport.project.domain.Project;
 import vn.edu.cnpm.projectsupport.project.repository.ProjectRepository;
 import vn.edu.cnpm.projectsupport.requirement.RequirementRepository;
@@ -44,7 +46,8 @@ class TaskServiceTest {
     @Mock private SprintRepository sprintRepository;
     @Mock private UserRepository userRepository;
     @Mock private ProjectAuthorizationService projectAuthorization;
-
+    @Mock private JiraClient jiraClient;
+    @Mock private SyncLogRepository syncLogRepository;
     private TaskServiceImpl taskService;
 
     private CreateTaskRequest createReq;
@@ -52,7 +55,7 @@ class TaskServiceTest {
 
     @BeforeEach
     void setUp() {
-        taskService = new TaskServiceImpl(
+ taskService = new TaskServiceImpl(
                 taskRepository,
                 activityLogRepository,
                 projectRepository,
@@ -60,7 +63,9 @@ class TaskServiceTest {
                 featureRepository,
                 sprintRepository,
                 userRepository,
-                projectAuthorization);
+                projectAuthorization,
+                jiraClient,
+                syncLogRepository);
         createReq = new CreateTaskRequest();
         createReq.setTitle("Phát triển API Task");
         createReq.setAcceptanceCriteria("Hoàn tất giao diện và API");
