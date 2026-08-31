@@ -30,4 +30,19 @@ public class JiraClientException
                 message,
                 cause);
     }
+
+    public JiraClientException(
+            HttpStatus status,
+            String errorCode,
+            boolean retryable,
+            String message) {
+
+        super(
+                status,
+                errorCode,
+                retryable,
+                null,
+                message,
+                null);
+    }
 }
