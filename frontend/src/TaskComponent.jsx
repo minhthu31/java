@@ -33,7 +33,7 @@ export default function TaskComponent({ projectId }) {
 
     const isLeader = userRole === "TEAM_LEADER";
     const isLecturer = userRole === "LECTURER";
-    const isMember = userRole === "TEAM_MEMBER" || userRole === "STUDENT";
+    const isMember = userRole === "TEAM_MEMBER";
     const isValidRole = isLeader || isLecturer || isMember;
 
     const [currentView, setCurrentView] = useState("list");
@@ -99,8 +99,9 @@ export default function TaskComponent({ projectId }) {
                     page,
                     size: 20,
                 });
+                let rawList = [];
                 if (Array.isArray(res)) {
-                    setTasks(res);
+                    rawList = res;
                     setPageInfo({
                         page: 0,
                         size: res.length,
@@ -110,7 +111,7 @@ export default function TaskComponent({ projectId }) {
                         last: true,
                     });
                 } else if (res && Array.isArray(res.content)) {
-                    setTasks(res.content);
+                    rawList = res.content;
                     setPageInfo({
                         page: res.page ?? page,
                         size: res.size ?? 20,
@@ -124,8 +125,53 @@ export default function TaskComponent({ projectId }) {
                                 : true),
                     });
                 } else {
-                    setTasks([]);
+                    rawList = [];
                 }
+
+                // Contract Hướng 2: Bổ sung Jira URL và thời điểm đồng bộ từ Jira Issue API
+                const enrichedTasks = await Promise.all(
+                    rawList.map(async (task) => {
+                        if (
+                            task.jiraIssueKey &&
+                            (!task.jiraIssueUrl || !task.lastSyncedAt)
+                        ) {
+                            try {
+                                const issueData =
+                                    await JiraIntegrationService.getIssue(
+                                        projectId,
+                                        task.jiraIssueKey,
+                                    );
+                                const issue =
+                                    issueData?.data || issueData || {};
+                                return {
+                                    ...task,
+                                    jiraIssueUrl:
+                                        issue.url ||
+                                        issue.jiraIssueUrl ||
+                                        task.jiraIssueUrl ||
+                                        null,
+                                    lastSyncedAt:
+                                        issue.lastSyncedAt ||
+                                        issue.syncedAt ||
+                                        task.lastSyncedAt ||
+                                        task.syncedAt ||
+                                        null,
+                                    syncedAt:
+                                        issue.syncedAt ||
+                                        issue.lastSyncedAt ||
+                                        task.syncedAt ||
+                                        task.lastSyncedAt ||
+                                        null,
+                                };
+                            } catch {
+                                return task;
+                            }
+                        }
+                        return task;
+                    }),
+                );
+
+                setTasks(enrichedTasks);
 
                 if (isLeader) {
                     setMembersLoading(true);
@@ -179,7 +225,40 @@ export default function TaskComponent({ projectId }) {
         setSelectedTask(task);
         try {
             const fullTask = await TaskService.getTaskById(projectId, task.id);
-            setSelectedTask(fullTask || task);
+            let detail = fullTask || task;
+            if (
+                detail.jiraIssueKey &&
+                (!detail.jiraIssueUrl || !detail.lastSyncedAt)
+            ) {
+                try {
+                    const issueData = await JiraIntegrationService.getIssue(
+                        projectId,
+                        detail.jiraIssueKey,
+                    );
+                    const issue = issueData?.data || issueData || {};
+                    detail = {
+                        ...detail,
+                        jiraIssueUrl:
+                            issue.url ||
+                            issue.jiraIssueUrl ||
+                            detail.jiraIssueUrl ||
+                            null,
+                        lastSyncedAt:
+                            issue.lastSyncedAt ||
+                            issue.syncedAt ||
+                            detail.lastSyncedAt ||
+                            null,
+                        syncedAt:
+                            issue.syncedAt ||
+                            issue.lastSyncedAt ||
+                            detail.syncedAt ||
+                            null,
+                    };
+                } catch {
+                    // Giữ nguyên detail nếu getIssue lỗi
+                }
+            }
+            setSelectedTask(detail);
         } catch (err) {
             const msg =
                 err.response?.data?.message ||
@@ -323,9 +402,7 @@ export default function TaskComponent({ projectId }) {
             );
             const data = result?.data || result;
             const updatedLastSyncedAt =
-                data?.syncedAt ||
-                data?.lastSyncedAt ||
-                new Date().toISOString();
+                data?.syncedAt ?? data?.lastSyncedAt ?? null;
 
             setSyncNotification({
                 type: "success",
@@ -396,19 +473,29 @@ export default function TaskComponent({ projectId }) {
     };
 
     const isTaskAssignedToCurrentMember = (task) => {
-        if (!isMember) return false;
-        if (!task) return false;
-        if (task.assigneeUserId && user.id && task.assigneeUserId === user.id)
+        if (!isMember || !task) return false;
+        if (
+            task.assigneeUserId != null &&
+            user.id != null &&
+            Number(task.assigneeUserId) === Number(user.id)
+        ) {
             return true;
+        }
         if (task.assignee && typeof task.assignee === "object") {
-            if (task.assignee.id && user.id && task.assignee.id === user.id)
+            if (
+                task.assignee.id != null &&
+                user.id != null &&
+                Number(task.assignee.id) === Number(user.id)
+            ) {
                 return true;
+            }
             if (
                 task.assignee.username &&
                 user.username &&
                 task.assignee.username === user.username
-            )
+            ) {
                 return true;
+            }
         }
         return false;
     };
@@ -1426,27 +1513,26 @@ export default function TaskComponent({ projectId }) {
                                                                 </span>
                                                             )}
                                                             {syncStatus ===
-                                                                "SYNC_FAILED" &&
-                                                                task.syncErrorMessage && (
-                                                                    <span
-                                                                        data-testid={`sync-error-${task.id}`}
-                                                                        style={{
-                                                                            fontSize:
-                                                                                "11px",
-                                                                            color: "#dc2626",
-                                                                            maxWidth:
-                                                                                "160px",
-                                                                        }}
-                                                                        title={sanitizeErrorMessage(
-                                                                            task.syncErrorMessage,
-                                                                        )}
-                                                                    >
-                                                                        ⚠️{" "}
-                                                                        {sanitizeErrorMessage(
-                                                                            task.syncErrorMessage,
-                                                                        )}
-                                                                    </span>
-                                                                )}
+                                                                "SYNC_FAILED" && (
+                                                                <span
+                                                                    data-testid={`sync-error-${task.id}`}
+                                                                    style={{
+                                                                        fontSize:
+                                                                            "11px",
+                                                                        color: "#dc2626",
+                                                                        maxWidth:
+                                                                            "160px",
+                                                                    }}
+                                                                    title={sanitizeErrorMessage(
+                                                                        task.syncErrorMessage,
+                                                                    )}
+                                                                >
+                                                                    ⚠️{" "}
+                                                                    {sanitizeErrorMessage(
+                                                                        task.syncErrorMessage,
+                                                                    )}
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </td>
                                                     <td
@@ -1909,26 +1995,25 @@ export default function TaskComponent({ projectId }) {
                             </div>
                         </div>
 
-                        {selectedTask.syncStatus === "SYNC_FAILED" &&
-                            selectedTask.syncErrorMessage && (
-                                <div
-                                    data-testid="modal-sync-error"
-                                    style={{
-                                        padding: "10px 14px",
-                                        background: "#fee2e2",
-                                        color: "#991b1b",
-                                        border: "1px solid #fca5a5",
-                                        borderRadius: "6px",
-                                        fontSize: "12px",
-                                        marginBottom: "16px",
-                                    }}
-                                >
-                                    <strong>Lỗi đồng bộ Jira:</strong>{" "}
-                                    {sanitizeErrorMessage(
-                                        selectedTask.syncErrorMessage,
-                                    )}
-                                </div>
-                            )}
+                        {selectedTask.syncStatus === "SYNC_FAILED" && (
+                            <div
+                                data-testid="modal-sync-error"
+                                style={{
+                                    padding: "10px 14px",
+                                    background: "#fee2e2",
+                                    color: "#991b1b",
+                                    border: "1px solid #fca5a5",
+                                    borderRadius: "6px",
+                                    fontSize: "12px",
+                                    marginBottom: "16px",
+                                }}
+                            >
+                                <strong>Lỗi đồng bộ Jira:</strong>{" "}
+                                {sanitizeErrorMessage(
+                                    selectedTask.syncErrorMessage,
+                                )}
+                            </div>
+                        )}
 
                         <div
                             style={{

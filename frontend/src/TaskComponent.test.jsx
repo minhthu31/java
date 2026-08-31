@@ -17,6 +17,7 @@ jest.mock("./TaskService");
 jest.mock("./JiraIntegrationService");
 jest.mock("./authService");
 
+// Backend contract thật của Task: chỉ có jiraIssueKey, syncStatus
 const mockComprehensiveTasks = {
     content: [
         {
@@ -30,7 +31,6 @@ const mockComprehensiveTasks = {
             deadline: "2026-09-01T23:59:59.000Z",
             syncStatus: "NOT_SYNCED",
             jiraIssueKey: null,
-            jiraIssueUrl: null,
             acceptanceCriteria: "Tiêu chí nghiệm thu 1",
             description: "Mô tả kỹ thuật 1",
         },
@@ -45,9 +45,6 @@ const mockComprehensiveTasks = {
             deadline: "2026-09-05T23:59:59.000Z",
             syncStatus: "SYNCED",
             jiraIssueKey: "CNPM-65",
-            jiraIssueUrl: "https://jira.example.com/browse/CNPM-65",
-            syncedAt: "2026-08-30T10:00:00Z",
-            lastSyncedAt: "2026-08-30T10:00:00Z",
             acceptanceCriteria: "Tiêu chí nghiệm thu 2",
             description: "Mô tả kỹ thuật 2",
         },
@@ -62,9 +59,6 @@ const mockComprehensiveTasks = {
             deadline: null,
             syncStatus: "SYNCED",
             jiraIssueKey: "CNPM-66",
-            jiraIssueUrl: "https://jira.example.com/browse/CNPM-66",
-            syncedAt: "2026-08-30T11:00:00Z",
-            lastSyncedAt: "2026-08-30T11:00:00Z",
             acceptanceCriteria: "Tiêu chí nghiệm thu 3",
             description: "",
         },
@@ -78,9 +72,7 @@ const mockComprehensiveTasks = {
             assignee: { id: 11, username: "dev2", displayName: "Dev Two" },
             deadline: null,
             syncStatus: "SYNC_FAILED",
-            syncErrorMessage: "Không thể kết nối tới Jira Cloud (Timeout)",
             jiraIssueKey: null,
-            jiraIssueUrl: null,
             acceptanceCriteria: "Tiêu chí nghiệm thu 4",
             description: "",
         },
@@ -95,7 +87,6 @@ const mockComprehensiveTasks = {
             deadline: null,
             syncStatus: "NOT_SYNCED",
             jiraIssueKey: null,
-            jiraIssueUrl: null,
             acceptanceCriteria: "Tiêu chí nghiệm thu 5",
             description: "",
         },
@@ -110,9 +101,6 @@ const mockComprehensiveTasks = {
             deadline: null,
             syncStatus: "SYNCED",
             jiraIssueKey: "CNPM-67",
-            jiraIssueUrl: "https://jira.example.com/browse/CNPM-67",
-            syncedAt: "2026-08-30T12:00:00Z",
-            lastSyncedAt: "2026-08-30T12:00:00Z",
             acceptanceCriteria: "Tiêu chí nghiệm thu 6",
             description: "",
         },
@@ -143,6 +131,18 @@ describe("TaskComponent Full Scope Tests (CNPM-65 & CNPM-84)", () => {
             );
             return Promise.resolve(found);
         });
+
+        // Mock API Jira Issue contract thật
+        JiraIntegrationService.getIssue.mockImplementation(
+            (projId, issueKey) => {
+                return Promise.resolve({
+                    jiraIssueKey: issueKey,
+                    url: `https://jira.example.com/browse/${issueKey}`,
+                    syncedAt: "2026-08-30T10:00:00Z",
+                    lastSyncedAt: "2026-08-30T10:00:00Z",
+                });
+            },
+        );
     });
 
     test("1. Hiển thị danh sách task thành công khi tải trang", async () => {
@@ -737,10 +737,8 @@ describe("TaskComponent Full Scope Tests (CNPM-65 & CNPM-84)", () => {
 
         await waitFor(() => {
             const errorElement = screen.getByTestId("sync-error-4");
-            expect(errorElement).toHaveTextContent(
-                "Không thể kết nối tới Jira Cloud (Timeout)",
-            );
-            expect(errorElement).not.toHaveTextContent("at ");
+            expect(errorElement).toBeInTheDocument();
+            expect(errorElement).toHaveTextContent("Đồng bộ Jira thất bại.");
         });
     });
 
@@ -806,7 +804,7 @@ describe("TaskComponent Full Scope Tests (CNPM-65 & CNPM-84)", () => {
         });
     });
 
-    test("24. Contract Flow Test: Kích hoạt Retry trên UI -> Sync thành công (với syncedAt) -> Reload trang vẫn giữ Jira Issue URL động", async () => {
+    test("24. Contract Flow Test: Kích hoạt Retry trên UI -> Sync thành công -> Reload trang với TaskResponse thật (chỉ có jiraIssueKey, syncStatus) vẫn fetch được Jira Issue URL động", async () => {
         const initialFailedTasks = {
             content: [
                 {
@@ -817,9 +815,6 @@ describe("TaskComponent Full Scope Tests (CNPM-65 & CNPM-84)", () => {
                     status: "IN_PROGRESS",
                     syncStatus: "SYNC_FAILED",
                     jiraIssueKey: null,
-                    jiraIssueUrl: null,
-                    lastSyncedAt: null,
-                    syncErrorMessage: "Lỗi kết nối Jira",
                 },
             ],
             page: 0,
@@ -830,6 +825,7 @@ describe("TaskComponent Full Scope Tests (CNPM-65 & CNPM-84)", () => {
             last: true,
         };
 
+        // TaskResponse thật sau reload: chỉ có jiraIssueKey và syncStatus
         const reloadedSyncedTasks = {
             content: [
                 {
@@ -840,11 +836,6 @@ describe("TaskComponent Full Scope Tests (CNPM-65 & CNPM-84)", () => {
                     status: "IN_PROGRESS",
                     syncStatus: "SYNCED",
                     jiraIssueKey: "CNPM-88",
-                    jiraIssueUrl:
-                        "https://custom-jira-domain.atlassian.net/browse/CNPM-88",
-                    syncedAt: "2026-08-31T08:00:00.000Z",
-                    lastSyncedAt: "2026-08-31T08:00:00.000Z",
-                    syncErrorMessage: null,
                 },
             ],
             page: 0,
@@ -863,6 +854,19 @@ describe("TaskComponent Full Scope Tests (CNPM-65 & CNPM-84)", () => {
             syncedAt: "2026-08-31T08:00:00.000Z",
             lastSyncedAt: "2026-08-31T08:00:00.000Z",
             syncStatus: "SYNCED",
+        });
+
+        // Mock API Jira Issue tương ứng với key CNPM-88
+        JiraIntegrationService.getIssue.mockImplementation((projId, key) => {
+            if (key === "CNPM-88") {
+                return Promise.resolve({
+                    jiraIssueKey: "CNPM-88",
+                    url: "https://custom-jira-domain.atlassian.net/browse/CNPM-88",
+                    lastSyncedAt: "2026-08-31T08:00:00.000Z",
+                    syncedAt: "2026-08-31T08:00:00.000Z",
+                });
+            }
+            return Promise.resolve({});
         });
 
         const { unmount } = render(<TaskComponent projectId={1} />);
@@ -903,7 +907,7 @@ describe("TaskComponent Full Scope Tests (CNPM-65 & CNPM-84)", () => {
         });
     });
 
-    test("25. Contract Flow Test: Tải lại trang (Reload) sau khi Sync thất bại vẫn giữ nút Retry và che giấu lỗi nhạy cảm", async () => {
+    test("25. Contract Flow Test: Tải lại trang (Reload) sau khi Sync thất bại với đúng Contract thật (không có syncErrorMessage) vẫn giữ nút Retry và che giấu lỗi nhạy cảm khi Retry", async () => {
         const initialTasks = {
             content: [
                 {
@@ -914,9 +918,6 @@ describe("TaskComponent Full Scope Tests (CNPM-65 & CNPM-84)", () => {
                     status: "TO_DO",
                     syncStatus: "SYNCING",
                     jiraIssueKey: null,
-                    jiraIssueUrl: null,
-                    lastSyncedAt: null,
-                    syncErrorMessage: null,
                 },
             ],
             page: 0,
@@ -927,6 +928,7 @@ describe("TaskComponent Full Scope Tests (CNPM-65 & CNPM-84)", () => {
             last: true,
         };
 
+        // Đúng backend TaskResponse thật: Không trả syncErrorMessage hay URL
         const reloadedFailedTasks = {
             content: [
                 {
@@ -937,10 +939,6 @@ describe("TaskComponent Full Scope Tests (CNPM-65 & CNPM-84)", () => {
                     status: "TO_DO",
                     syncStatus: "SYNC_FAILED",
                     jiraIssueKey: null,
-                    jiraIssueUrl: null,
-                    lastSyncedAt: "2026-08-31T08:15:00.000Z",
-                    syncErrorMessage:
-                        "Bearer secret_token_xyz error at com.jira.Transport:12",
                 },
             ],
             page: 0,
@@ -968,7 +966,23 @@ describe("TaskComponent Full Scope Tests (CNPM-65 & CNPM-84)", () => {
         await waitFor(() => {
             expect(screen.getByText("SYNC_FAILED")).toBeInTheDocument();
             expect(screen.getByTestId("retry-sync-btn-5")).toBeInTheDocument();
+        });
 
+        // Kích hoạt Retry và API trả lỗi chứa secret token & stack trace
+        JiraIntegrationService.retryTaskSync.mockRejectedValueOnce({
+            response: {
+                data: {
+                    message:
+                        "Bearer secret_token_xyz error at com.jira.Transport:12",
+                },
+            },
+        });
+
+        await act(async () => {
+            fireEvent.click(screen.getByTestId("retry-sync-btn-5"));
+        });
+
+        await waitFor(() => {
             const errElement = screen.getByTestId("sync-error-5");
             expect(errElement).not.toHaveTextContent("secret_token_xyz");
             expect(errElement).not.toHaveTextContent("at com.jira.Transport");

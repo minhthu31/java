@@ -29,7 +29,8 @@ export const JiraIntegrationService = {
             const response = await api.get(
                 `/projects/${projectId}/integrations/jira/issues/${issueKey}`,
             );
-            return response.data;
+            const resData = response.data || {};
+            return resData.data !== undefined ? resData.data : resData;
         } catch (err) {
             const message =
                 err.response?.data?.message ||
