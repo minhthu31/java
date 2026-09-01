@@ -1,6 +1,5 @@
 package vn.edu.cnpm.projectsupport.integration.jira;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -38,6 +37,7 @@ class JiraSyncControllerTest {
 
     private static final Long PROJECT_ID = 1L;
     private static final Long TASK_ID = 100L;
+    private static final String IDEMPOTENCY_KEY = "idemp-key-test-123456";
 
     @BeforeEach
     void setUp() {
@@ -45,12 +45,12 @@ class JiraSyncControllerTest {
     }
 
     @Nested
-    @DisplayName("Jira Sync API Endpoint Tests")
+    @DisplayName("Tests for Sync & Retry Task to Jira Endpoints")
     class SyncEndpointTests {
 
         @Test
-        @DisplayName("Gửi request sync thành công -> Trả về 200 OK kèm dữ liệu đồng bộ")
-        void syncTask_WhenValidRequest_ReturnsOk() throws Exception {
+        @DisplayName("POST /sync thành công -> Trả về 200 OK cùng dữ liệu ApiResponse")
+        void syncTaskToJira_WhenSuccess_ReturnsOk() throws Exception {
             JiraTaskSyncResponse successResponse = new JiraTaskSyncResponse(
                     TASK_ID,
                     SyncStatus.SYNCED,
@@ -64,20 +64,21 @@ class JiraSyncControllerTest {
                     "Đồng bộ Task lên Jira thành công"
             );
 
-            when(jiraIntegrationService.syncTask(eq(PROJECT_ID), eq(TASK_ID), eq("idemp-key-12345")))
+            when(jiraIntegrationService.syncTask(eq(PROJECT_ID), eq(TASK_ID), eq(IDEMPOTENCY_KEY)))
                     .thenReturn(successResponse);
 
-            mockMvc.perform(post("/api/v1/projects/{projectId}/tasks/{taskId}/jira/sync", PROJECT_ID, TASK_ID)
-                            .header("Idempotency-Key", "idemp-key-12345")
+            mockMvc.perform(post("/api/v1/projects/{projectId}/integrations/jira/tasks/{taskId}/sync", PROJECT_ID, TASK_ID)
+                            .header("Idempotency-Key", IDEMPOTENCY_KEY)
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.syncStatus").value("SYNCED"))
-                    .andExpect(jsonPath("$.jiraIssueKey").value("CNPM-100"));
+                    .andExpect(jsonPath("$.data.taskId").value(TASK_ID))
+                    .andExpect(jsonPath("$.data.syncStatus").value("SYNCED"))
+                    .andExpect(jsonPath("$.data.jiraIssueKey").value("CNPM-100"));
         }
 
         @Test
-        @DisplayName("Gửi request retry sync thành công -> Trả về 200 OK")
-        void retryTaskSync_WhenValidRequest_ReturnsOk() throws Exception {
+        @DisplayName("POST /retry thành công -> Trả về 200 OK cùng dữ liệu ApiResponse")
+        void retryTaskSync_WhenSuccess_ReturnsOk() throws Exception {
             JiraTaskSyncResponse retryResponse = new JiraTaskSyncResponse(
                     TASK_ID,
                     SyncStatus.SYNCED,
@@ -91,15 +92,16 @@ class JiraSyncControllerTest {
                     "Retry đồng bộ Jira thành công"
             );
 
-            when(jiraIntegrationService.retryTaskSync(eq(PROJECT_ID), eq(TASK_ID), eq("idemp-retry-12345")))
+            when(jiraIntegrationService.retryTaskSync(eq(PROJECT_ID), eq(TASK_ID), eq(IDEMPOTENCY_KEY)))
                     .thenReturn(retryResponse);
 
-            mockMvc.perform(post("/api/v1/projects/{projectId}/tasks/{taskId}/jira/retry", PROJECT_ID, TASK_ID)
-                            .header("Idempotency-Key", "idemp-retry-12345")
+            mockMvc.perform(post("/api/v1/projects/{projectId}/integrations/jira/tasks/{taskId}/retry", PROJECT_ID, TASK_ID)
+                            .header("Idempotency-Key", IDEMPOTENCY_KEY)
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.syncStatus").value("SYNCED"))
-                    .andExpect(jsonPath("$.jiraIssueKey").value("CNPM-100"));
+                    .andExpect(jsonPath("$.data.taskId").value(TASK_ID))
+                    .andExpect(jsonPath("$.data.syncStatus").value("SYNCED"))
+                    .andExpect(jsonPath("$.data.jiraIssueKey").value("CNPM-100"));
         }
     }
 }
