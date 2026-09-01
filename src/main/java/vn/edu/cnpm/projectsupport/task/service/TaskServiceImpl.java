@@ -11,7 +11,10 @@ import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import vn.edu.cnpm.projectsupport.audit.domain.ActivityLog;
 import vn.edu.cnpm.projectsupport.audit.repository.ActivityLogRepository;
@@ -26,11 +29,6 @@ import vn.edu.cnpm.projectsupport.identity.domain.User;
 import vn.edu.cnpm.projectsupport.identity.repository.UserRepository;
 import vn.edu.cnpm.projectsupport.integration.jira.JiraClient;
 import vn.edu.cnpm.projectsupport.integration.jira.JiraClientException;
-import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider;
-import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncDirection;
-import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLog;
-import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLogStatus;
-import vn.edu.cnpm.projectsupport.integration.jira.repository.SyncLogRepository;
 import vn.edu.cnpm.projectsupport.project.domain.Project;
 import vn.edu.cnpm.projectsupport.project.repository.ProjectRepository;
 import vn.edu.cnpm.projectsupport.requirement.RequirementRepository;
@@ -57,8 +55,8 @@ public class TaskServiceImpl implements TaskService {
     private final UserRepository userRepository;
     private final ProjectAuthorizationService projectAuthorization;
     private final JiraClient jiraClient;
-    private final SyncLogRepository syncLogRepository;
     private final JdbcClient jdbcClient;
+    private final PlatformTransactionManager transactionManager;
 
     public TaskServiceImpl(
             TaskRepository taskRepository,
@@ -70,8 +68,8 @@ public class TaskServiceImpl implements TaskService {
             UserRepository userRepository,
             ProjectAuthorizationService projectAuthorization,
             JiraClient jiraClient,
-            SyncLogRepository syncLogRepository,
-            JdbcClient jdbcClient) {
+            JdbcClient jdbcClient,
+            PlatformTransactionManager transactionManager) {
         this.taskRepository = taskRepository;
         this.activityLogRepository = activityLogRepository;
         this.projectRepository = projectRepository;
@@ -81,8 +79,8 @@ public class TaskServiceImpl implements TaskService {
         this.userRepository = userRepository;
         this.projectAuthorization = projectAuthorization;
         this.jiraClient = jiraClient;
-        this.syncLogRepository = syncLogRepository;
         this.jdbcClient = jdbcClient;
+        this.transactionManager = transactionManager;
     }
 
     @Override
@@ -226,7 +224,7 @@ public class TaskServiceImpl implements TaskService {
         return toResponse(saved);
     }
 
-@Override
+    @Override
     @Transactional
     @PreAuthorize("@projectAuthorization.canUpdateTask(#projectId, #taskId)")
     public TaskResponse updateTaskStatus(
@@ -321,7 +319,7 @@ public class TaskServiceImpl implements TaskService {
                 newAssigneeUserId));
         return toResponse(saved);
     }
-    
+
     @Override
     @Transactional(readOnly = true)
     @PreAuthorize("@projectAuthorization.canViewTask(#projectId, #taskId)")
@@ -378,40 +376,21 @@ public class TaskServiceImpl implements TaskService {
                 .optional();
     }
 
-    private void syncStatusWithJira(Project project, Task task, String jiraIssueKey, TaskStatus status) {
+private void syncStatusWithJira(Project project, Task task, String jiraIssueKey, TaskStatus status) {
         if (status == null) {
             throw new JiraClientException("JIRA_TRANSITION_MAPPING_MISSING");
         }
 
         String correlationId = UUID.randomUUID().toString();
-        SyncLog syncLog = new SyncLog(
-                project.getId(),
-                IntegrationProvider.JIRA,
-                "TASK_STATUS",
-                jiraIssueKey,
-                SyncDirection.EXPORT,
-                correlationId,
-                Instant.now()
-        );
-        task.setSyncStatus(SyncStatus.SYNCING);
-        syncLogRepository.save(syncLog);
+        Instant startedAt = Instant.now();
 
         try {
             jiraClient.transitionIssueStatus(project.getId(), project.getJiraProjectKey(), jiraIssueKey, status.name());
-
             task.setSyncStatus(SyncStatus.SYNCED);
-            syncLog.setStatus(SyncLogStatus.SUCCESS);
-            syncLog.setCompletedAt(Instant.now());
-            syncLogRepository.save(syncLog);
+            saveSyncLog(project.getId(), "TASK_STATUS", jiraIssueKey, correlationId, "SUCCESS", null, null, startedAt, Instant.now());
         } catch (Exception e) {
             task.setSyncStatus(SyncStatus.SYNC_FAILED);
-            syncLog.setStatus(SyncLogStatus.FAILED);
-            syncLog.setErrorCode("JIRA_UNAVAILABLE");
-            syncLog.setErrorMessage(e.getMessage());
-            syncLog.setCompletedAt(Instant.now());
-            syncLogRepository.save(syncLog);
-            taskRepository.save(task);
-
+            recordSyncFailureInRequiresNew(task, project.getId(), "TASK_STATUS", jiraIssueKey, correlationId, startedAt, e.getMessage());
             if (e instanceof RuntimeException re) {
                 throw re;
             }
@@ -421,38 +400,72 @@ public class TaskServiceImpl implements TaskService {
 
     private void syncAssigneeWithJira(Project project, Task task, String jiraIssueKey, String jiraAccountId) {
         String correlationId = UUID.randomUUID().toString();
-        SyncLog syncLog = new SyncLog(
-                project.getId(),
-                IntegrationProvider.JIRA,
-                "TASK_ASSIGNEE",
-                jiraIssueKey,
-                SyncDirection.EXPORT,
-                correlationId,
-                Instant.now()
-        );
-        task.setSyncStatus(SyncStatus.SYNCING);
-        syncLogRepository.save(syncLog);
+        Instant startedAt = Instant.now();
 
         try {
             jiraClient.updateIssueAssignee(project.getId(), project.getJiraProjectKey(), jiraIssueKey, jiraAccountId);
-
             task.setSyncStatus(SyncStatus.SYNCED);
-            syncLog.setStatus(SyncLogStatus.SUCCESS);
-            syncLog.setCompletedAt(Instant.now());
-            syncLogRepository.save(syncLog);
+            saveSyncLog(project.getId(), "TASK_ASSIGNEE", jiraIssueKey, correlationId, "SUCCESS", null, null, startedAt, Instant.now());
         } catch (Exception e) {
             task.setSyncStatus(SyncStatus.SYNC_FAILED);
-            syncLog.setStatus(SyncLogStatus.FAILED);
-            syncLog.setErrorCode("JIRA_UNAVAILABLE");
-            syncLog.setErrorMessage(e.getMessage());
-            syncLog.setCompletedAt(Instant.now());
-            syncLogRepository.save(syncLog);
-            taskRepository.save(task);
-
+            recordSyncFailureInRequiresNew(task, project.getId(), "TASK_ASSIGNEE", jiraIssueKey, correlationId, startedAt, e.getMessage());
             if (e instanceof RuntimeException re) {
                 throw re;
             }
             throw new RuntimeException(e.getMessage(), e);
+        }
+    }
+
+private void recordSyncFailureInRequiresNew(
+            Task task, Long projectId, String entityType, String jiraIssueKey,
+            String correlationId, Instant startedAt, String errorMsg) {
+        if (task != null) {
+            task.setSyncStatus(SyncStatus.SYNC_FAILED);
+        }
+        String errorCode = (errorMsg != null && !errorMsg.isBlank()) ? errorMsg : "JIRA_UNAVAILABLE";
+        Instant completedAt = Instant.now();
+
+        if (transactionManager != null) {
+            TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
+            txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+            txTemplate.executeWithoutResult(status -> {
+                saveSyncLog(projectId, entityType, jiraIssueKey, correlationId, "FAILED", errorCode, errorMsg, startedAt, completedAt);
+                if (task != null && task.getId() != null) {
+                    taskRepository.findById(task.getId()).ifPresent(t -> {
+                        t.setSyncStatus(SyncStatus.SYNC_FAILED);
+                        taskRepository.save(t);
+                    });
+                }
+            });
+        } else {
+            saveSyncLog(projectId, entityType, jiraIssueKey, correlationId, "FAILED", errorCode, errorMsg, startedAt, completedAt);
+            if (task != null && task.getId() != null) {
+                taskRepository.findById(task.getId()).ifPresent(t -> {
+                    t.setSyncStatus(SyncStatus.SYNC_FAILED);
+                    taskRepository.save(t);
+                });
+            }
+        }
+    }
+    private void saveSyncLog(
+            Long projectId, String entityType, String issueKey, String correlationId,
+            String status, String errorCode, String errorMessage, Instant startedAt, Instant completedAt) {
+        try {
+            jdbcClient.sql("""
+                INSERT INTO sync_logs (project_id, provider, entity_type, issue_key, direction, correlation_id, status, error_code, error_message, started_at, completed_at)
+                VALUES (:projectId, 'JIRA', :entityType, :issueKey, 'EXPORT', :correlationId, :status, :errorCode, :errorMessage, :startedAt, :completedAt)
+            """)
+            .param("projectId", projectId)
+            .param("entityType", entityType)
+            .param("issueKey", issueKey)
+            .param("correlationId", correlationId)
+            .param("status", status)
+            .param("errorCode", errorCode)
+            .param("errorMessage", errorMessage)
+            .param("startedAt", startedAt)
+            .param("completedAt", completedAt)
+            .update();
+        } catch (Exception ignored) {
         }
     }
 

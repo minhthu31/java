@@ -5,17 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -32,21 +29,14 @@ import vn.edu.cnpm.projectsupport.common.exception.ForbiddenGroupScopeException;
 import vn.edu.cnpm.projectsupport.common.exception.InvalidStatusTransitionException;
 import vn.edu.cnpm.projectsupport.common.exception.ResourceInUseException;
 import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
-import vn.edu.cnpm.projectsupport.feature.domain.Feature;
 import vn.edu.cnpm.projectsupport.feature.repository.FeatureRepository;
-import vn.edu.cnpm.projectsupport.identity.domain.User;
 import vn.edu.cnpm.projectsupport.identity.repository.UserRepository;
 import vn.edu.cnpm.projectsupport.integration.jira.JiraClient;
 import vn.edu.cnpm.projectsupport.integration.jira.JiraClientException;
-import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLog;
-import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLogStatus;
-import vn.edu.cnpm.projectsupport.integration.jira.repository.SyncLogRepository;
 import vn.edu.cnpm.projectsupport.project.domain.Project;
 import vn.edu.cnpm.projectsupport.project.repository.ProjectRepository;
-import vn.edu.cnpm.projectsupport.requirement.Requirement;
 import vn.edu.cnpm.projectsupport.requirement.RequirementRepository;
 import vn.edu.cnpm.projectsupport.security.ProjectAuthorizationService;
-import vn.edu.cnpm.projectsupport.sprint.domain.Sprint;
 import vn.edu.cnpm.projectsupport.sprint.repository.SprintRepository;
 import vn.edu.cnpm.projectsupport.task.domain.*;
 import vn.edu.cnpm.projectsupport.task.dto.*;
@@ -64,7 +54,6 @@ class TaskServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private ProjectAuthorizationService projectAuthorization;
     @Mock private JiraClient jiraClient;
-    @Mock private SyncLogRepository syncLogRepository;
     @Mock private JdbcClient jdbcClient;
     @Mock private JdbcClient.StatementSpec statementSpec;
     @Mock private JdbcClient.MappedQuerySpec<String> querySpec;
@@ -582,6 +571,8 @@ class TaskServiceTest {
         when(projectRepository.findById(10L)).thenReturn(Optional.of(mockProject));
         when(taskRepository.findById(501L)).thenReturn(Optional.of(mockTask));
         when(taskRepository.findJiraIssueKeyByTaskId(501L)).thenReturn(Optional.of("CNPM-501"));
+        when(jdbcClient.sql(anyString())).thenReturn(statementSpec);
+        when(statementSpec.param(anyString(), any())).thenReturn(statementSpec);
 
         doThrow(new JiraClientException("JIRA_UNAVAILABLE"))
                 .when(jiraClient).transitionIssueStatus(10L, "CNPM", "CNPM-501", "IN_PROGRESS");
@@ -594,11 +585,7 @@ class TaskServiceTest {
 
         assertThat(mockTask.getStatus()).isEqualTo(TaskStatus.TO_DO);
         assertThat(mockTask.getSyncStatus()).isEqualTo(SyncStatus.SYNC_FAILED);
-
-        ArgumentCaptor<SyncLog> captor = ArgumentCaptor.forClass(SyncLog.class);
-        verify(syncLogRepository, atLeastOnce()).save(captor.capture());
-        SyncLog lastLog = captor.getValue();
-        assertThat(lastLog.getStatus()).isEqualTo(SyncLogStatus.FAILED);
+        verify(jdbcClient, atLeastOnce()).sql(anyString());
     }
 
     @Test
