@@ -390,7 +390,7 @@ private void syncStatusWithJira(Project project, Task task, String jiraIssueKey,
             saveSyncLog(project.getId(), "TASK_STATUS", jiraIssueKey, correlationId, "SUCCESS", null, null, startedAt, Instant.now());
         } catch (Exception e) {
             task.setSyncStatus(SyncStatus.SYNC_FAILED);
-            recordSyncFailureInRequiresNew(task, project.getId(), "TASK_STATUS", jiraIssueKey, correlationId, startedAt, e.getMessage());
+            recordSyncFailureInRequiresNew(task, project.getId(), "TASK_STATUS", jiraIssueKey, correlationId, startedAt, e);
             if (e instanceof RuntimeException re) {
                 throw re;
             }
@@ -408,7 +408,7 @@ private void syncStatusWithJira(Project project, Task task, String jiraIssueKey,
             saveSyncLog(project.getId(), "TASK_ASSIGNEE", jiraIssueKey, correlationId, "SUCCESS", null, null, startedAt, Instant.now());
         } catch (Exception e) {
             task.setSyncStatus(SyncStatus.SYNC_FAILED);
-            recordSyncFailureInRequiresNew(task, project.getId(), "TASK_ASSIGNEE", jiraIssueKey, correlationId, startedAt, e.getMessage());
+            recordSyncFailureInRequiresNew(task, project.getId(), "TASK_ASSIGNEE", jiraIssueKey, correlationId, startedAt, e);
             if (e instanceof RuntimeException re) {
                 throw re;
             }
@@ -416,20 +416,18 @@ private void syncStatusWithJira(Project project, Task task, String jiraIssueKey,
         }
     }
 
-private void recordSyncFailureInRequiresNew(
+    private void recordSyncFailureInRequiresNew(
             Task task, Long projectId, String entityType, String jiraIssueKey,
-            String correlationId, Instant startedAt, String errorMsg) {
-        if (task != null) {
-            task.setSyncStatus(SyncStatus.SYNC_FAILED);
-        }
-        String errorCode = (errorMsg != null && !errorMsg.isBlank()) ? errorMsg : "JIRA_UNAVAILABLE";
+            String correlationId, Instant startedAt, Exception exception) {
+        String errorCode = resolveErrorCode(exception);
+        String errorMessage = exception != null ? exception.getMessage() : null;
         Instant completedAt = Instant.now();
 
         if (transactionManager != null) {
             TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
             txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
             txTemplate.executeWithoutResult(status -> {
-                saveSyncLog(projectId, entityType, jiraIssueKey, correlationId, "FAILED", errorCode, errorMsg, startedAt, completedAt);
+                saveSyncLog(projectId, entityType, jiraIssueKey, correlationId, "FAILED", errorCode, errorMessage, startedAt, completedAt);
                 if (task != null && task.getId() != null) {
                     taskRepository.findById(task.getId()).ifPresent(t -> {
                         t.setSyncStatus(SyncStatus.SYNC_FAILED);
@@ -438,7 +436,7 @@ private void recordSyncFailureInRequiresNew(
                 }
             });
         } else {
-            saveSyncLog(projectId, entityType, jiraIssueKey, correlationId, "FAILED", errorCode, errorMsg, startedAt, completedAt);
+            saveSyncLog(projectId, entityType, jiraIssueKey, correlationId, "FAILED", errorCode, errorMessage, startedAt, completedAt);
             if (task != null && task.getId() != null) {
                 taskRepository.findById(task.getId()).ifPresent(t -> {
                     t.setSyncStatus(SyncStatus.SYNC_FAILED);
@@ -447,28 +445,35 @@ private void recordSyncFailureInRequiresNew(
             }
         }
     }
-    private void saveSyncLog(
-            Long projectId, String entityType, String issueKey, String correlationId,
-            String status, String errorCode, String errorMessage, Instant startedAt, Instant completedAt) {
-        try {
-            jdbcClient.sql("""
-                INSERT INTO sync_logs (project_id, provider, entity_type, issue_key, direction, correlation_id, status, error_code, error_message, started_at, completed_at)
-                VALUES (:projectId, 'JIRA', :entityType, :issueKey, 'EXPORT', :correlationId, :status, :errorCode, :errorMessage, :startedAt, :completedAt)
-            """)
-            .param("projectId", projectId)
-            .param("entityType", entityType)
-            .param("issueKey", issueKey)
-            .param("correlationId", correlationId)
-            .param("status", status)
-            .param("errorCode", errorCode)
-            .param("errorMessage", errorMessage)
-            .param("startedAt", startedAt)
-            .param("completedAt", completedAt)
-            .update();
-        } catch (Exception ignored) {
+
+    private String resolveErrorCode(Exception exception) {
+        if (exception instanceof JiraClientException jce) {
+            String msg = jce.getMessage();
+            if (msg != null && !msg.isBlank()) {
+                return msg.trim();
+            }
         }
+        return "JIRA_UNAVAILABLE";
     }
 
+    private void saveSyncLog(
+            Long projectId, String entityType, String entityId, String correlationId,
+            String status, String errorCode, String errorMessage, Instant startedAt, Instant completedAt) {
+        jdbcClient.sql("""
+            INSERT INTO sync_logs (project_id, provider, entity_type, entity_id, direction, correlation_id, status, error_code, error_message, started_at, completed_at)
+            VALUES (:projectId, 'JIRA', :entityType, :entityId, 'EXPORT', :correlationId, :status, :errorCode, :errorMessage, :startedAt, :completedAt)
+        """)
+        .param("projectId", projectId)
+        .param("entityType", entityType)
+        .param("entityId", entityId)
+        .param("correlationId", correlationId)
+        .param("status", status)
+        .param("errorCode", errorCode)
+        .param("errorMessage", errorMessage)
+        .param("startedAt", startedAt)
+        .param("completedAt", completedAt)
+        .update();
+    }
     private void validateTransition(TaskStatus from, TaskStatus to, boolean isLeader) {
         if (from == TaskStatus.DONE || from == TaskStatus.CANCELLED) {
             throw new InvalidStatusTransitionException("Không thể chuyển trạng thái từ trạng thái kết thúc: " + from);

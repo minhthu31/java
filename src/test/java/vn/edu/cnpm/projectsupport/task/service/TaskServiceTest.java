@@ -70,12 +70,15 @@ class TaskServiceTest {
         lenient().when(mockProject.getGroupId()).thenReturn(100L);
         lenient().when(mockProject.getJiraProjectKey()).thenReturn("CNPM");
 
+        lenient().when(jdbcClient.sql(anyString())).thenReturn(statementSpec);
+        lenient().when(statementSpec.param(anyString(), any())).thenReturn(statementSpec);
+        lenient().when(statementSpec.update()).thenReturn(1);
+
         mockTask = new Task(10L, "Sample Task", "Acceptance Criteria", TaskIssueType.TASK, TaskPriority.MEDIUM);
         mockTask.setStatus(TaskStatus.TO_DO);
         mockTask.setSyncStatus(SyncStatus.NOT_SYNCED);
         mockTask.setAssigneeUserId(20L);
     }
-
     private void mockJdbcForExternalUser(Optional<String> externalUserIdOpt) {
         when(jdbcClient.sql(anyString())).thenReturn(statementSpec);
         when(statementSpec.param(anyString(), any())).thenReturn(statementSpec);
@@ -573,6 +576,7 @@ class TaskServiceTest {
         when(taskRepository.findJiraIssueKeyByTaskId(501L)).thenReturn(Optional.of("CNPM-501"));
         when(jdbcClient.sql(anyString())).thenReturn(statementSpec);
         when(statementSpec.param(anyString(), any())).thenReturn(statementSpec);
+        when(statementSpec.update()).thenReturn(1);
 
         doThrow(new JiraClientException("JIRA_UNAVAILABLE"))
                 .when(jiraClient).transitionIssueStatus(10L, "CNPM", "CNPM-501", "IN_PROGRESS");
@@ -586,6 +590,7 @@ class TaskServiceTest {
         assertThat(mockTask.getStatus()).isEqualTo(TaskStatus.TO_DO);
         assertThat(mockTask.getSyncStatus()).isEqualTo(SyncStatus.SYNC_FAILED);
         verify(jdbcClient, atLeastOnce()).sql(anyString());
+        verify(statementSpec, atLeastOnce()).update();
     }
 
     @Test
