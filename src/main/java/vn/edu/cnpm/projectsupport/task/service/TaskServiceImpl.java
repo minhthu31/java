@@ -376,7 +376,7 @@ public class TaskServiceImpl implements TaskService {
                 .optional();
     }
 
-private void syncStatusWithJira(Project project, Task task, String jiraIssueKey, TaskStatus status) {
+    private void syncStatusWithJira(Project project, Task task, String jiraIssueKey, TaskStatus status) {
         if (status == null) {
             throw new JiraClientException("JIRA_TRANSITION_MAPPING_MISSING");
         }
@@ -449,19 +449,28 @@ private void syncStatusWithJira(Project project, Task task, String jiraIssueKey,
     private String resolveErrorCode(Exception exception) {
         if (exception instanceof JiraClientException jce) {
             String msg = jce.getMessage();
-            if (msg != null && !msg.isBlank()) {
-                return msg.trim();
+            if (msg != null) {
+                String trimmed = msg.trim();
+                if (trimmed.matches("^[A-Z0-9_]+$")) {
+                    return trimmed;
+                }
             }
         }
         return "JIRA_UNAVAILABLE";
     }
 
-    private void saveSyncLog(
+private void saveSyncLog(
             Long projectId, String entityType, String entityId, String correlationId,
             String status, String errorCode, String errorMessage, Instant startedAt, Instant completedAt) {
         jdbcClient.sql("""
-            INSERT INTO sync_logs (project_id, provider, entity_type, entity_id, direction, correlation_id, status, error_code, error_message, started_at, completed_at)
-            VALUES (:projectId, 'JIRA', :entityType, :entityId, 'EXPORT', :correlationId, :status, :errorCode, :errorMessage, :startedAt, :completedAt)
+            INSERT INTO sync_logs (
+                project_id, provider, entity_type, entity_id, direction,
+                correlation_id, status, retry_count, error_code, error_message, started_at, completed_at
+            )
+            VALUES (
+                :projectId, 'JIRA', :entityType, :entityId, 'EXPORT',
+                :correlationId, :status, 0, :errorCode, :errorMessage, :startedAt, :completedAt
+            )
         """)
         .param("projectId", projectId)
         .param("entityType", entityType)

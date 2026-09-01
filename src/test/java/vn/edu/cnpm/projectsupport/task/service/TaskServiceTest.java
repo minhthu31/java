@@ -567,7 +567,7 @@ class TaskServiceTest {
     }
 
     @Test
-    @DisplayName("CNPM-82: 5. Jira loi tao Task SYNC_FAILED va SyncLog FAILED thuc su duoc commit")
+    @DisplayName("CNPM-82: 5. Jira loi tao Task SYNC_FAILED va thuc hien ghi nhan SyncLog FAILED")
     void updateTaskStatus_jiraFails_savesSyncFailedAndLogFailed() {
         when(projectAuthorization.currentUserId()).thenReturn(1L);
         when(projectAuthorization.isCurrentUserLeader(10L)).thenReturn(true);
@@ -630,4 +630,5 @@ class TaskServiceTest {
         assertThat(mockTask.getAssigneeUserId()).isNull();
         assertThat(mockTask.getSyncStatus()).isEqualTo(SyncStatus.SYNCED);
     }
+    
 }
