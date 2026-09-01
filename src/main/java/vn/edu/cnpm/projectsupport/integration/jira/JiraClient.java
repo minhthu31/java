@@ -1,11 +1,11 @@
 package vn.edu.cnpm.projectsupport.integration.jira;
 
-import java.util.List;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraPageDto;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraIssueDto;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraSprintDto;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraSprintPageDto;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraCreateIssueRequest;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraCreateIssueResponse;
-import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraIssueDto;
-import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraPageDto;
-import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraSprintPageDto;
 
 public interface JiraClient {
 
@@ -24,7 +24,7 @@ public interface JiraClient {
             String projectKey,
             JiraCreateIssueRequest request);
 
-    List<JiraCreateIssueResponse> findIssuesByLabel(
+    java.util.List<JiraCreateIssueResponse> findIssuesByLabel(
             Long projectId,
             String projectKey,
             String label);
@@ -39,8 +39,7 @@ public interface JiraClient {
             Long projectId,
             String jiraSprintId,
             String jiraIssueId);
-
-    void updateIssueAssignee(
+            void updateIssueAssignee(
             Long projectId,
             String projectKey,
             String jiraIssueKey,

@@ -25,6 +25,7 @@ import vn.edu.cnpm.projectsupport.integration.jira.JiraClient;
 import vn.edu.cnpm.projectsupport.integration.jira.JiraClientException;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLog;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLogStatus;
+import vn.edu.cnpm.projectsupport.integration.jira.exception.JiraApiException;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.SyncLogRepository;
 import vn.edu.cnpm.projectsupport.project.domain.Project;
 import vn.edu.cnpm.projectsupport.project.repository.ProjectRepository;
@@ -163,7 +164,7 @@ class TaskServiceTest {
                 .hasMessageContaining("JIRA_TRANSITION_MAPPING_MISSING");
     }
 
-    @Test
+ @Test
     @DisplayName("5. Jira loi tao Task SYNC_FAILED va SyncLog FAILED thuc su duoc commit")
     void updateTaskStatus_jiraFails_savesSyncFailedAndLogFailed() {
         when(projectAuthorization.currentUserId()).thenReturn(1L);
@@ -189,7 +190,6 @@ class TaskServiceTest {
         assertThat(lastLog.getStatus()).isEqualTo(SyncLogStatus.FAILED);
         assertThat(lastLog.getErrorCode()).isEqualTo("JIRA_UNAVAILABLE");
     }
-
     @Test
     @DisplayName("6. Task chua lien ket Jira chi cap nhat local va khong goi Jira")
     void updateTaskStatus_noJiraMapping_updatesLocalOnly() {

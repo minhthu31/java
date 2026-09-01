@@ -1211,4 +1211,37 @@ public class JiraRestClient implements JiraClient {
                 ? null
                 : value.asText();
     }
+    @Override
+    public void updateIssueAssignee(Long projectId, String projectKey, String jiraIssueKey, String assigneeAccountId) {
+        IntegrationConfig config = getIntegrationConfig(projectId);
+        String path = "/rest/api/3/issue/" + jiraIssueKey + "/assignee";
+        String body = assigneeAccountId == null
+                ? "{\"accountId\": null}"
+                : "{\"accountId\": \"" + assigneeAccountId + "\"}";
+        put(config, path, body);
+    }
+
+    @Override
+    public void transitionIssueStatus(Long projectId, String projectKey, String jiraIssueKey, String targetStatusName) {
+        IntegrationConfig config = getIntegrationConfig(projectId);
+        String transitionId = resolveTransitionId(config, jiraIssueKey, targetStatusName);
+        String path = "/rest/api/3/issue/" + jiraIssueKey + "/transitions";
+        String body = "{\"transition\": {\"id\": \"" + transitionId + "\"}}";
+        post(config, path, body);
+    }
+
+    private String resolveTransitionId(IntegrationConfig config, String jiraIssueKey, String targetStatusName) {
+        String path = "/rest/api/3/issue/" + jiraIssueKey + "/transitions";
+        JsonNode node = get(config, path);
+        if (node.has("transitions") && node.get("transitions").isArray()) {
+            for (JsonNode t : node.get("transitions")) {
+                String name = t.path("name").asText();
+                String toName = t.path("to").path("name").asText();
+                if (targetStatusName.equalsIgnoreCase(name) || targetStatusName.equalsIgnoreCase(toName)) {
+                    return t.path("id").asText();
+                }
+            }
+        }
+        throw new JiraClientException("JIRA_TRANSITION_MAPPING_MISSING");
+    }
 }
