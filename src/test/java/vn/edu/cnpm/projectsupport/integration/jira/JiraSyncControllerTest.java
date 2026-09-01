@@ -45,7 +45,7 @@ class JiraSyncControllerTest {
     }
 
     @Nested
-    @DisplayName("RBAC and Jira Sync API Endpoint Tests")
+    @DisplayName("Jira Sync API Endpoint Tests")
     class SyncEndpointTests {
 
         @Test
@@ -67,7 +67,7 @@ class JiraSyncControllerTest {
             when(jiraIntegrationService.syncTask(eq(PROJECT_ID), eq(TASK_ID), eq("idemp-key-12345")))
                     .thenReturn(successResponse);
 
-            mockMvc.perform(post("/api/projects/{projectId}/tasks/{taskId}/jira/sync", PROJECT_ID, TASK_ID)
+            mockMvc.perform(post("/api/v1/projects/{projectId}/tasks/{taskId}/jira/sync", PROJECT_ID, TASK_ID)
                             .header("Idempotency-Key", "idemp-key-12345")
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isOk())
@@ -94,7 +94,7 @@ class JiraSyncControllerTest {
             when(jiraIntegrationService.retryTaskSync(eq(PROJECT_ID), eq(TASK_ID), eq("idemp-retry-12345")))
                     .thenReturn(retryResponse);
 
-            mockMvc.perform(post("/api/projects/{projectId}/tasks/{taskId}/jira/sync/retry", PROJECT_ID, TASK_ID)
+            mockMvc.perform(post("/api/v1/projects/{projectId}/tasks/{taskId}/jira/retry", PROJECT_ID, TASK_ID)
                             .header("Idempotency-Key", "idemp-retry-12345")
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isOk())
