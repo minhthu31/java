@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,11 +25,11 @@ import vn.edu.cnpm.projectsupport.feature.repository.FeatureRepository;
 import vn.edu.cnpm.projectsupport.identity.domain.User;
 import vn.edu.cnpm.projectsupport.identity.repository.UserRepository;
 import vn.edu.cnpm.projectsupport.integration.jira.JiraClient;
+import vn.edu.cnpm.projectsupport.integration.jira.JiraClientException;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncDirection;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLog;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLogStatus;
-import vn.edu.cnpm.projectsupport.integration.jira.exception.JiraApiException;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.SyncLogRepository;
 import vn.edu.cnpm.projectsupport.project.domain.Project;
 import vn.edu.cnpm.projectsupport.project.repository.ProjectRepository;
@@ -57,6 +58,7 @@ public class TaskServiceImpl implements TaskService {
     private final ProjectAuthorizationService projectAuthorization;
     private final JiraClient jiraClient;
     private final SyncLogRepository syncLogRepository;
+    private final JdbcClient jdbcClient;
 
     public TaskServiceImpl(
             TaskRepository taskRepository,
@@ -68,7 +70,8 @@ public class TaskServiceImpl implements TaskService {
             UserRepository userRepository,
             ProjectAuthorizationService projectAuthorization,
             JiraClient jiraClient,
-            SyncLogRepository syncLogRepository) {
+            SyncLogRepository syncLogRepository,
+            JdbcClient jdbcClient) {
         this.taskRepository = taskRepository;
         this.activityLogRepository = activityLogRepository;
         this.projectRepository = projectRepository;
@@ -79,6 +82,7 @@ public class TaskServiceImpl implements TaskService {
         this.projectAuthorization = projectAuthorization;
         this.jiraClient = jiraClient;
         this.syncLogRepository = syncLogRepository;
+        this.jdbcClient = jdbcClient;
     }
 
     @Override
@@ -108,15 +112,8 @@ public class TaskServiceImpl implements TaskService {
     @Override
     @Transactional
     @PreAuthorize("@projectAuthorization.canManageTasks(#projectId)")
-    public TaskResponse createTask(
-            Long projectId,
-            CreateTaskRequest request,
-            String idempotencyKey) {
-        return createTaskInternal(
-                projectId,
-                projectAuthorization.currentUserId(),
-                request,
-                idempotencyKey);
+    public TaskResponse createTask(Long projectId, CreateTaskRequest request, String idempotencyKey) {
+        return createTaskInternal(projectId, projectAuthorization.currentUserId(), request, idempotencyKey);
     }
 
     @Override
@@ -127,10 +124,7 @@ public class TaskServiceImpl implements TaskService {
     }
 
     private TaskResponse createTaskInternal(
-            Long projectId,
-            Long leaderUserId,
-            CreateTaskRequest request,
-            String idempotencyKey) {
+            Long projectId, Long leaderUserId, CreateTaskRequest request, String idempotencyKey) {
         Project project = requireProject(projectId);
         if (leaderUserId == null || projectRepository.countActiveLeader(projectId, leaderUserId) == 0) {
             throw new ForbiddenGroupScopeException("Chỉ Team Leader của group sở hữu Project được tạo Task");
@@ -233,7 +227,7 @@ public class TaskServiceImpl implements TaskService {
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = {Exception.class})
     @PreAuthorize("@projectAuthorization.canUpdateTask(#projectId, #taskId)")
     public TaskResponse updateTaskStatus(
             Long projectId, Long taskId, TaskStatusUpdateRequest request) {
@@ -243,7 +237,7 @@ public class TaskServiceImpl implements TaskService {
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = {Exception.class})
     @PreAuthorize("@projectAuthorization.canUpdateTask(#projectId, #taskId) and @projectAuthorization.isCurrentUser(#memberUserId)")
     public TaskResponse updateTaskStatusByMember(
             Long projectId, Long memberUserId, Long taskId, TaskStatusUpdateRequest request) {
@@ -259,7 +253,6 @@ public class TaskServiceImpl implements TaskService {
         Project project = requireProject(projectId);
         Task task = requireTask(projectId, taskId);
 
-        // Bắt buộc Task phải được gán và đúng Assignee
         if (!leader && (actorUserId == null
                 || task.getAssigneeUserId() == null
                 || !actorUserId.equals(task.getAssigneeUserId()))) {
@@ -272,10 +265,8 @@ public class TaskServiceImpl implements TaskService {
         TaskStatus currentStatus = task.getStatus();
         TaskStatus targetStatus = request.getStatus();
 
-        // Kiểm tra Ma trận Trạng thái (Transition Matrix)
         validateTransition(currentStatus, targetStatus, leader);
 
-        // Lý do bắt buộc khi BLOCKED hoặc CANCELLED
         if ((targetStatus == TaskStatus.BLOCKED || targetStatus == TaskStatus.CANCELLED)
                 && (request.getReason() == null || request.getReason().isBlank())) {
             throw new IllegalArgumentException("Cần cung cấp lý do khi chuyển trạng thái sang " + targetStatus);
@@ -283,7 +274,6 @@ public class TaskServiceImpl implements TaskService {
 
         task.setStatus(targetStatus);
 
-        // Đồng bộ Jira an toàn
         Optional<String> jiraKeyOpt = taskRepository.findJiraIssueKeyByTaskId(taskId);
         if (jiraKeyOpt != null && jiraKeyOpt.isPresent()) {
             syncStatusWithJira(project, task, jiraKeyOpt.get(), targetStatus);
@@ -299,7 +289,7 @@ public class TaskServiceImpl implements TaskService {
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = {Exception.class})
     @PreAuthorize("@projectAuthorization.canManageTasks(#projectId)")
     public TaskResponse updateTaskAssignee(
             Long projectId,
@@ -313,15 +303,12 @@ public class TaskServiceImpl implements TaskService {
         Long oldAssigneeUserId = task.getAssigneeUserId();
         task.setAssigneeUserId(newAssigneeUserId);
 
-        // Đồng bộ Jira an toàn
         Optional<String> jiraKeyOpt = taskRepository.findJiraIssueKeyByTaskId(taskId);
         if (jiraKeyOpt != null && jiraKeyOpt.isPresent()) {
             String jiraAccountId = null;
             if (newAssigneeUserId != null) {
-                User assignee = userRepository.findById(newAssigneeUserId).orElse(null);
-                if (assignee != null) {
-                    jiraAccountId = assignee.getUsername();
-                }
+                jiraAccountId = findExternalUserId(newAssigneeUserId, "JIRA")
+                        .orElseThrow(() -> new JiraClientException("ASSIGNEE_MAPPING_MISSING"));
             }
             syncAssigneeWithJira(project, task, jiraKeyOpt.get(), jiraAccountId);
         }
@@ -384,7 +371,19 @@ public class TaskServiceImpl implements TaskService {
         taskRepository.delete(task);
     }
 
+    private Optional<String> findExternalUserId(Long userId, String provider) {
+        return jdbcClient.sql("SELECT external_user_id FROM user_external_accounts WHERE user_id = :userId AND provider = :provider LIMIT 1")
+                .param("userId", userId)
+                .param("provider", provider)
+                .query(String.class)
+                .optional();
+    }
+
     private void syncStatusWithJira(Project project, Task task, String jiraIssueKey, TaskStatus status) {
+        if (status == null) {
+            throw new JiraClientException("JIRA_TRANSITION_MAPPING_MISSING");
+        }
+
         String correlationId = UUID.randomUUID().toString();
         SyncLog syncLog = new SyncLog(
                 project.getId(),
@@ -399,21 +398,25 @@ public class TaskServiceImpl implements TaskService {
         syncLogRepository.save(syncLog);
 
         try {
-            String jiraStatusName = mapToJiraStatusName(status);
-            jiraClient.transitionIssueStatus(project.getId(), project.getJiraProjectKey(), jiraIssueKey, jiraStatusName);
+            jiraClient.transitionIssueStatus(project.getId(), project.getJiraProjectKey(), jiraIssueKey, status.name());
 
             task.setSyncStatus(SyncStatus.SYNCED);
             syncLog.setStatus(SyncLogStatus.SUCCESS);
             syncLog.setCompletedAt(Instant.now());
+            syncLogRepository.save(syncLog);
         } catch (Exception e) {
             task.setSyncStatus(SyncStatus.SYNC_FAILED);
             syncLog.setStatus(SyncLogStatus.FAILED);
-            syncLog.setErrorCode(e instanceof JiraApiException jae ? jae.getErrorCode() : "JIRA_SYNC_FAILED");
+            syncLog.setErrorCode("JIRA_UNAVAILABLE");
             syncLog.setErrorMessage(e.getMessage());
             syncLog.setCompletedAt(Instant.now());
-            throw e;
-        } finally {
             syncLogRepository.save(syncLog);
+            taskRepository.save(task);
+
+            if (e instanceof RuntimeException re) {
+                throw re;
+            }
+            throw new RuntimeException(e.getMessage(), e);
         }
     }
 
@@ -437,28 +440,21 @@ public class TaskServiceImpl implements TaskService {
             task.setSyncStatus(SyncStatus.SYNCED);
             syncLog.setStatus(SyncLogStatus.SUCCESS);
             syncLog.setCompletedAt(Instant.now());
+            syncLogRepository.save(syncLog);
         } catch (Exception e) {
             task.setSyncStatus(SyncStatus.SYNC_FAILED);
             syncLog.setStatus(SyncLogStatus.FAILED);
-            syncLog.setErrorCode(e instanceof JiraApiException jae ? jae.getErrorCode() : "JIRA_SYNC_FAILED");
+            syncLog.setErrorCode("JIRA_UNAVAILABLE");
             syncLog.setErrorMessage(e.getMessage());
             syncLog.setCompletedAt(Instant.now());
-            throw e;
-        } finally {
             syncLogRepository.save(syncLog);
-        }
-    }
+            taskRepository.save(task);
 
-    private String mapToJiraStatusName(TaskStatus status) {
-        return switch (status) {
-            case TO_DO -> "To Do";
-            case IN_PROGRESS -> "In Progress";
-            case IN_REVIEW -> "In Review";
-            case DONE -> "Done";
-            case BLOCKED -> "Blocked";
-            case CANCELLED -> "Cancelled";
-            default -> status.name();
-        };
+            if (e instanceof RuntimeException re) {
+                throw re;
+            }
+            throw new RuntimeException(e.getMessage(), e);
+        }
     }
 
     private void validateTransition(TaskStatus from, TaskStatus to, boolean isLeader) {
@@ -541,7 +537,7 @@ public class TaskServiceImpl implements TaskService {
     }
 
     private void validateAssignee(Long projectId, Long assigneeUserId) {
-        if (assigneeUserId != null && projectRepository.countActiveMember(projectId, assigneeUserId) == 0) {
+        if (assigneeUserId != null && projectRepository.countActiveMember(projectId, assigneeUserId) == 0L) {
             throw new AssigneeOutsideGroupException("Assignee phải là thành viên ACTIVE của group sở hữu Project");
         }
     }

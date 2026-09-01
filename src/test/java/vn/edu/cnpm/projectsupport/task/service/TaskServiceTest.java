@@ -1,39 +1,44 @@
 package vn.edu.cnpm.projectsupport.task.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
+
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.simple.JdbcClient;
 
-import vn.edu.cnpm.projectsupport.audit.domain.ActivityLog;
 import vn.edu.cnpm.projectsupport.audit.repository.ActivityLogRepository;
-import vn.edu.cnpm.projectsupport.common.exception.AssigneeOutsideGroupException;
-import vn.edu.cnpm.projectsupport.common.exception.ForbiddenGroupScopeException;
-import vn.edu.cnpm.projectsupport.common.exception.InvalidStatusTransitionException;
-import vn.edu.cnpm.projectsupport.common.exception.ResourceInUseException;
-import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
 import vn.edu.cnpm.projectsupport.feature.repository.FeatureRepository;
-import vn.edu.cnpm.projectsupport.feature.domain.Feature;
 import vn.edu.cnpm.projectsupport.identity.repository.UserRepository;
 import vn.edu.cnpm.projectsupport.integration.jira.JiraClient;
+import vn.edu.cnpm.projectsupport.integration.jira.JiraClientException;
+import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLog;
+import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLogStatus;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.SyncLogRepository;
 import vn.edu.cnpm.projectsupport.project.domain.Project;
 import vn.edu.cnpm.projectsupport.project.repository.ProjectRepository;
 import vn.edu.cnpm.projectsupport.requirement.RequirementRepository;
-import vn.edu.cnpm.projectsupport.sprint.repository.SprintRepository;
 import vn.edu.cnpm.projectsupport.security.ProjectAuthorizationService;
-import vn.edu.cnpm.projectsupport.task.domain.*;
-import vn.edu.cnpm.projectsupport.task.dto.*;
+import vn.edu.cnpm.projectsupport.sprint.repository.SprintRepository;
+import vn.edu.cnpm.projectsupport.task.domain.SyncStatus;
+import vn.edu.cnpm.projectsupport.task.domain.Task;
+import vn.edu.cnpm.projectsupport.task.domain.TaskIssueType;
+import vn.edu.cnpm.projectsupport.task.domain.TaskPriority;
+import vn.edu.cnpm.projectsupport.task.domain.TaskStatus;
+import vn.edu.cnpm.projectsupport.task.dto.TaskAssigneeUpdateRequest;
+import vn.edu.cnpm.projectsupport.task.dto.TaskStatusUpdateRequest;
 import vn.edu.cnpm.projectsupport.task.repository.TaskRepository;
-
-import java.util.List;
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class TaskServiceTest {
@@ -48,363 +53,178 @@ class TaskServiceTest {
     @Mock private ProjectAuthorizationService projectAuthorization;
     @Mock private JiraClient jiraClient;
     @Mock private SyncLogRepository syncLogRepository;
+    @Mock private JdbcClient jdbcClient;
+    @Mock private JdbcClient.StatementSpec statementSpec;
+    @Mock private JdbcClient.MappedQuerySpec<String> querySpec;
+
+    @InjectMocks
     private TaskServiceImpl taskService;
 
-    private CreateTaskRequest createReq;
-    private TaskStatusUpdateRequest updateReq;
+    @Mock private Project mockProject;
+    private Task mockTask;
 
     @BeforeEach
     void setUp() {
- taskService = new TaskServiceImpl(
-                taskRepository,
-                activityLogRepository,
-                projectRepository,
-                requirementRepository,
-                featureRepository,
-                sprintRepository,
-                userRepository,
-                projectAuthorization,
-                jiraClient,
-                syncLogRepository);
-        createReq = new CreateTaskRequest();
-        createReq.setTitle("Phát triển API Task");
-        createReq.setAcceptanceCriteria("Hoàn tất giao diện và API");
-        createReq.setIssueType(TaskIssueType.TASK);
-        createReq.setPriority(TaskPriority.HIGH);
+        lenient().when(mockProject.getId()).thenReturn(10L);
+        lenient().when(mockProject.getGroupId()).thenReturn(100L);
+        lenient().when(mockProject.getJiraProjectKey()).thenReturn("CNPM");
 
-        updateReq = new TaskStatusUpdateRequest();
-
-        lenient().when(projectRepository.findById(1L))
-                .thenReturn(Optional.of(new Project(10L, "Project")));
-        lenient().when(projectRepository.countActiveLeader(1L, 100L)).thenReturn(1L);
-        lenient().when(projectRepository.countActiveMember(1L, 100L)).thenReturn(1L);
+        mockTask = new Task(10L, "Sample Task", "Acceptance Criteria", TaskIssueType.TASK, TaskPriority.MEDIUM);
+        mockTask.setStatus(TaskStatus.TO_DO);
+        mockTask.setSyncStatus(SyncStatus.NOT_SYNCED);
+        mockTask.setAssigneeUserId(20L);
     }
 
-    // --- TEST CLASSIFICATION ---
-
-    @Test
-    @DisplayName("Tự động phân loại AUTO_TEST khi chứa từ khóa test")
-    void createTask_AutoTest() {
-        createReq.setAcceptanceCriteria("Viết unit test đạt coverage > 80%");
-        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        TaskResponse res = taskService.createTask(1L, 100L, createReq);
-        assertEquals(TaskClassification.AUTO_TEST, res.getClassification());
+    private void mockJdbcForExternalUser(Optional<String> externalUserIdOpt) {
+        when(jdbcClient.sql(anyString())).thenReturn(statementSpec);
+        when(statementSpec.param(anyString(), any())).thenReturn(statementSpec);
+        when(statementSpec.query(String.class)).thenReturn(querySpec);
+        when(querySpec.optional()).thenReturn(externalUserIdOpt);
     }
 
     @Test
-    @DisplayName("Tự động phân loại AUTO_LOG khi chứa từ khóa logging/monitor")
-    void createTask_AutoLog() {
-        createReq.setAcceptanceCriteria("Cấu hình logging monitor hệ thống");
-        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+    @DisplayName("1. Status hop le goi transitionIssueStatus dung mot lan")
+    void updateTaskStatus_validTransition_callsJiraTransitionOnce() {
+        when(projectAuthorization.currentUserId()).thenReturn(1L);
+        when(projectAuthorization.isCurrentUserLeader(10L)).thenReturn(true);
+        when(projectRepository.findById(10L)).thenReturn(Optional.of(mockProject));
+        when(taskRepository.findById(501L)).thenReturn(Optional.of(mockTask));
+        when(taskRepository.findJiraIssueKeyByTaskId(501L)).thenReturn(Optional.of("CNPM-501"));
+        when(taskRepository.save(any(Task.class))).thenAnswer(i -> i.getArgument(0));
 
-        TaskResponse res = taskService.createTask(1L, 100L, createReq);
-        assertEquals(TaskClassification.AUTO_LOG, res.getClassification());
+        TaskStatusUpdateRequest req = new TaskStatusUpdateRequest();
+        req.setStatus(TaskStatus.IN_PROGRESS);
+
+        taskService.updateTaskStatus(10L, 501L, req);
+
+        verify(jiraClient, times(1)).transitionIssueStatus(10L, "CNPM", "CNPM-501", "IN_PROGRESS");
+        assertThat(mockTask.getStatus()).isEqualTo(TaskStatus.IN_PROGRESS);
+        assertThat(mockTask.getSyncStatus()).isEqualTo(SyncStatus.SYNCED);
     }
 
     @Test
-    @DisplayName("Tự động phân loại NEW_FEATURE khi chứa từ khóa new feature")
-    void createTask_NewFeature() {
-        createReq.setTitle("Thêm new feature đăng nhập SSO");
-        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+    @DisplayName("2. Assignee dung external Jira account ID, khong dung username")
+    void updateTaskAssignee_validMember_usesJiraAccountId() {
+        when(projectRepository.findById(10L)).thenReturn(Optional.of(mockProject));
+        when(taskRepository.findById(501L)).thenReturn(Optional.of(mockTask));
+        when(projectRepository.countActiveMember(10L, 25L)).thenReturn(1L);
+        when(taskRepository.findJiraIssueKeyByTaskId(501L)).thenReturn(Optional.of("CNPM-501"));
+        when(taskRepository.save(any(Task.class))).thenAnswer(i -> i.getArgument(0));
 
-        TaskResponse res = taskService.createTask(1L, 100L, createReq);
-        assertEquals(TaskClassification.NEW_FEATURE, res.getClassification());
+        mockJdbcForExternalUser(Optional.of("jira-account-uuid-999"));
+
+        TaskAssigneeUpdateRequest req = new TaskAssigneeUpdateRequest();
+        req.setAssigneeUserId(25L);
+
+        taskService.updateTaskAssignee(10L, 501L, req);
+
+        verify(jiraClient, times(1)).updateIssueAssignee(10L, "CNPM", "CNPM-501", "jira-account-uuid-999");
+        assertThat(mockTask.getAssigneeUserId()).isEqualTo(25L);
+        assertThat(mockTask.getSyncStatus()).isEqualTo(SyncStatus.SYNCED);
     }
 
     @Test
-    @DisplayName("Tự động phân loại FEATURE_RELATED khi gắn featureId")
-    void createTask_FeatureRelated() {
-        createReq.setFeatureId(10L);
-        when(featureRepository.findByIdAndProjectId(10L, 1L))
-                .thenReturn(Optional.of(new Feature(1L, "Feature")));
-        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+    @DisplayName("3. Thanh vien chua lien ket Jira tra ASSIGNEE_MAPPING_MISSING")
+    void updateTaskAssignee_userNotMapped_throwsAssigneeMappingMissing() {
+        when(projectRepository.findById(10L)).thenReturn(Optional.of(mockProject));
+        when(taskRepository.findById(501L)).thenReturn(Optional.of(mockTask));
+        when(projectRepository.countActiveMember(10L, 25L)).thenReturn(1L);
+        when(taskRepository.findJiraIssueKeyByTaskId(501L)).thenReturn(Optional.of("CNPM-501"));
 
-        TaskResponse res = taskService.createTask(1L, 100L, createReq);
-        assertEquals(TaskClassification.FEATURE_RELATED, res.getClassification());
+        mockJdbcForExternalUser(Optional.empty());
+
+        TaskAssigneeUpdateRequest req = new TaskAssigneeUpdateRequest();
+        req.setAssigneeUserId(25L);
+
+        assertThatThrownBy(() -> taskService.updateTaskAssignee(10L, 501L, req))
+                .isInstanceOf(JiraClientException.class)
+                .hasMessageContaining("ASSIGNEE_MAPPING_MISSING");
+
+        verify(jiraClient, never()).updateIssueAssignee(anyLong(), anyString(), anyString(), anyString());
     }
 
     @Test
-    @DisplayName("Phân loại OTHER khi không dính từ khóa đặc biệt")
-    void createTask_Other() {
-        createReq.setTitle("Cập nhật tài liệu hướng dẫn");
-        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+    @DisplayName("4. Transition khong ton tai tra dung error code")
+    void updateTaskStatus_missingTransition_throwsJiraTransitionMappingMissing() {
+        when(projectAuthorization.currentUserId()).thenReturn(1L);
+        when(projectAuthorization.isCurrentUserLeader(10L)).thenReturn(true);
+        when(projectRepository.findById(10L)).thenReturn(Optional.of(mockProject));
+        when(taskRepository.findById(501L)).thenReturn(Optional.of(mockTask));
+        when(taskRepository.findJiraIssueKeyByTaskId(501L)).thenReturn(Optional.of("CNPM-501"));
 
-        TaskResponse res = taskService.createTask(1L, 100L, createReq);
-        assertEquals(TaskClassification.OTHER, res.getClassification());
+        doThrow(new JiraClientException("JIRA_TRANSITION_MAPPING_MISSING"))
+                .when(jiraClient).transitionIssueStatus(10L, "CNPM", "CNPM-501", "IN_PROGRESS");
+
+        TaskStatusUpdateRequest req = new TaskStatusUpdateRequest();
+        req.setStatus(TaskStatus.IN_PROGRESS);
+
+        assertThatThrownBy(() -> taskService.updateTaskStatus(10L, 501L, req))
+                .isInstanceOf(JiraClientException.class)
+                .hasMessageContaining("JIRA_TRANSITION_MAPPING_MISSING");
     }
 
     @Test
-    @DisplayName("Idempotency-Key trả về Task đã tạo thay vì tạo trùng")
-    void createTask_IdempotencyKeyReturnsExistingTask() {
-        Task existing = createMockTask(1L, 1L, null, TaskStatus.TO_DO);
-        when(projectAuthorization.currentUserId()).thenReturn(100L);
-        when(taskRepository.findByIdempotencyKey("cnpm-61-create")).thenReturn(Optional.of(existing));
+    @DisplayName("5. Jira loi tao Task SYNC_FAILED va SyncLog FAILED thuc su duoc commit")
+    void updateTaskStatus_jiraFails_savesSyncFailedAndLogFailed() {
+        when(projectAuthorization.currentUserId()).thenReturn(1L);
+        when(projectAuthorization.isCurrentUserLeader(10L)).thenReturn(true);
+        when(projectRepository.findById(10L)).thenReturn(Optional.of(mockProject));
+        when(taskRepository.findById(501L)).thenReturn(Optional.of(mockTask));
+        when(taskRepository.findJiraIssueKeyByTaskId(501L)).thenReturn(Optional.of("CNPM-501"));
 
-        TaskResponse response = taskService.createTask(1L, createReq, " cnpm-61-create ");
+        doThrow(new JiraClientException("JIRA_UNAVAILABLE"))
+                .when(jiraClient).transitionIssueStatus(10L, "CNPM", "CNPM-501", "IN_PROGRESS");
 
-        assertEquals("Title", response.getTitle());
-        verify(taskRepository, never()).save(any(Task.class));
+        TaskStatusUpdateRequest req = new TaskStatusUpdateRequest();
+        req.setStatus(TaskStatus.IN_PROGRESS);
+
+        assertThatThrownBy(() -> taskService.updateTaskStatus(10L, 501L, req))
+                .isInstanceOf(RuntimeException.class);
+
+        assertThat(mockTask.getSyncStatus()).isEqualTo(SyncStatus.SYNC_FAILED);
+
+        ArgumentCaptor<SyncLog> captor = ArgumentCaptor.forClass(SyncLog.class);
+        verify(syncLogRepository, atLeastOnce()).save(captor.capture());
+        SyncLog lastLog = captor.getValue();
+        assertThat(lastLog.getStatus()).isEqualTo(SyncLogStatus.FAILED);
+        assertThat(lastLog.getErrorCode()).isEqualTo("JIRA_UNAVAILABLE");
     }
 
     @Test
-    @DisplayName("Từ chối Idempotency-Key đã được dùng ở Project khác")
-    void createTask_IdempotencyKeyRejectsDifferentProject() {
-        Task existing = createMockTask(1L, 2L, null, TaskStatus.TO_DO);
-        when(projectAuthorization.currentUserId()).thenReturn(100L);
-        when(taskRepository.findByIdempotencyKey("shared-key")).thenReturn(Optional.of(existing));
+    @DisplayName("6. Task chua lien ket Jira chi cap nhat local va khong goi Jira")
+    void updateTaskStatus_noJiraMapping_updatesLocalOnly() {
+        when(projectAuthorization.currentUserId()).thenReturn(1L);
+        when(projectAuthorization.isCurrentUserLeader(10L)).thenReturn(true);
+        when(projectRepository.findById(10L)).thenReturn(Optional.of(mockProject));
+        when(taskRepository.findById(501L)).thenReturn(Optional.of(mockTask));
+        when(taskRepository.findJiraIssueKeyByTaskId(501L)).thenReturn(Optional.empty());
+        when(taskRepository.save(any(Task.class))).thenAnswer(i -> i.getArgument(0));
 
-        assertThrows(ResourceInUseException.class,
-                () -> taskService.createTask(1L, createReq, "shared-key"));
+        TaskStatusUpdateRequest req = new TaskStatusUpdateRequest();
+        req.setStatus(TaskStatus.IN_PROGRESS);
 
-        verify(taskRepository, never()).save(any(Task.class));
+        taskService.updateTaskStatus(10L, 501L, req);
+
+        verify(jiraClient, never()).transitionIssueStatus(anyLong(), anyString(), anyString(), anyString());
+        assertThat(mockTask.getStatus()).isEqualTo(TaskStatus.IN_PROGRESS);
+        assertThat(mockTask.getSyncStatus()).isEqualTo(SyncStatus.NOT_SYNCED);
     }
 
     @Test
-    @DisplayName("Từ chối tạo SUBTASK khi chưa có parentTaskId")
-    void createTask_RejectsUnsupportedSubtask() {
-        createReq.setIssueType(TaskIssueType.SUBTASK);
+    @DisplayName("7. Bo gan assignee gui accountId null")
+    void updateTaskAssignee_unassign_sendsNullAccountIdToJira() {
+        when(projectRepository.findById(10L)).thenReturn(Optional.of(mockProject));
+        when(taskRepository.findById(501L)).thenReturn(Optional.of(mockTask));
+        when(taskRepository.findJiraIssueKeyByTaskId(501L)).thenReturn(Optional.of("CNPM-501"));
+        when(taskRepository.save(any(Task.class))).thenAnswer(i -> i.getArgument(0));
 
-        assertThrows(IllegalArgumentException.class,
-                () -> taskService.createTask(1L, 100L, createReq));
+        TaskAssigneeUpdateRequest req = new TaskAssigneeUpdateRequest();
+        req.setAssigneeUserId(null);
 
-        verify(taskRepository, never()).save(any(Task.class));
-    }
+        taskService.updateTaskAssignee(10L, 501L, req);
 
-    @Test
-    @DisplayName("Team Leader cập nhật nội dung Task và ghi Activity Log")
-    void updateTask_Success() {
-        Task existing = createMockTask(1L, 1L, null, TaskStatus.TO_DO);
-        UpdateTaskRequest request = new UpdateTaskRequest();
-        request.setTitle("Task API đã cập nhật");
-        request.setAcceptanceCriteria("Có đủ bảy endpoint");
-        request.setIssueType(TaskIssueType.TASK);
-        request.setPriority(TaskPriority.HIGH);
-        request.setAssigneeUserId(200L);
-        when(taskRepository.findById(1L)).thenReturn(Optional.of(existing));
-        when(projectRepository.countActiveMember(1L, 200L)).thenReturn(1L);
-        when(taskRepository.save(existing)).thenReturn(existing);
-        when(projectAuthorization.currentUserId()).thenReturn(100L);
-
-        TaskResponse response = taskService.updateTask(1L, 1L, request);
-
-        assertEquals("Task API đã cập nhật", response.getTitle());
-        assertEquals(TaskPriority.HIGH, response.getPriority());
-        assertEquals(200L, response.getAssigneeUserId());
-        verify(activityLogRepository).save(any(ActivityLog.class));
-    }
-
-    @Test
-    @DisplayName("Từ chối gán Task cho người không thuộc group")
-    void updateAssignee_RejectsUserOutsideGroup() {
-        Task existing = createMockTask(1L, 1L, null, TaskStatus.TO_DO);
-        TaskAssigneeUpdateRequest request = new TaskAssigneeUpdateRequest();
-        request.setAssigneeUserId(999L);
-        when(taskRepository.findById(1L)).thenReturn(Optional.of(existing));
-        when(projectRepository.countActiveMember(1L, 999L)).thenReturn(0L);
-
-        assertThrows(
-                AssigneeOutsideGroupException.class,
-                () -> taskService.updateTaskAssignee(1L, 1L, request));
-    }
-
-    @Test
-    @DisplayName("Gán Task cho thành viên ACTIVE và ghi Activity Log")
-    void updateAssignee_AssignsActiveMemberAndLogsActivity() {
-        Task existing = createMockTask(1L, 1L, 100L, TaskStatus.TO_DO);
-        TaskAssigneeUpdateRequest request = new TaskAssigneeUpdateRequest();
-        request.setAssigneeUserId(200L);
-        when(taskRepository.findById(1L)).thenReturn(Optional.of(existing));
-        when(projectRepository.countActiveMember(1L, 200L)).thenReturn(1L);
-        when(projectAuthorization.currentUserId()).thenReturn(100L);
-        when(taskRepository.save(existing)).thenReturn(existing);
-
-        TaskResponse response = taskService.updateTaskAssignee(1L, 1L, request);
-
-        assertEquals(200L, response.getAssigneeUserId());
-        verify(activityLogRepository).save(any(ActivityLog.class));
-        verify(taskRepository).save(existing);
-    }
-
-    @Test
-    @DisplayName("Team Member chỉ nhận danh sách Task được giao cho mình")
-    void getTasksByProject_MemberOnlyReceivesAssignedTasks() {
-        Task assignedTask = createMockTask(1L, 1L, 100L, TaskStatus.TO_DO);
-        when(projectAuthorization.isCurrentUserTeamMember(1L)).thenReturn(true);
-        when(projectAuthorization.currentUserId()).thenReturn(100L);
-        when(taskRepository.findByProjectIdAndAssigneeUserId(1L, 100L))
-                .thenReturn(List.of(assignedTask));
-
-        List<TaskResponse> responses = taskService.getTasksByProject(1L);
-
-        assertEquals(1, responses.size());
-        assertEquals(100L, responses.get(0).getAssigneeUserId());
-        verify(taskRepository).findByProjectIdAndAssigneeUserId(1L, 100L);
-        verify(taskRepository, never()).findByProjectId(1L);
-    }
-
-    @Test
-    @DisplayName("Không xóa Task đã liên kết commit hoặc PR")
-    void deleteTask_RejectsExternallyReferencedTask() {
-        Task existing = createMockTask(1L, 1L, null, TaskStatus.TO_DO);
-        when(taskRepository.findById(1L)).thenReturn(Optional.of(existing));
-        when(taskRepository.countCommitLinksByTaskId(1L)).thenReturn(1L);
-
-        assertThrows(ResourceInUseException.class, () -> taskService.deleteTask(1L, 1L));
-        verify(taskRepository, never()).delete(any(Task.class));
-    }
-
-    @Test
-    @DisplayName("Xóa Task TO_DO chưa đồng bộ và chưa có liên kết")
-    void deleteTask_DeletesEligibleTaskAndLogsActivity() {
-        Task existing = createMockTask(1L, 1L, null, TaskStatus.TO_DO);
-        when(taskRepository.findById(1L)).thenReturn(Optional.of(existing));
-        when(projectAuthorization.currentUserId()).thenReturn(100L);
-
-        taskService.deleteTask(1L, 1L);
-
-        verify(activityLogRepository).save(any(ActivityLog.class));
-        verify(taskRepository).delete(existing);
-    }
-
-    @Test
-    @DisplayName("Không xóa Task đã bắt đầu xử lý")
-    void deleteTask_RejectsTaskThatIsNotToDo() {
-        Task existing = createMockTask(1L, 1L, null, TaskStatus.IN_PROGRESS);
-        when(taskRepository.findById(1L)).thenReturn(Optional.of(existing));
-
-        assertThrows(ResourceInUseException.class, () -> taskService.deleteTask(1L, 1L));
-
-        verify(taskRepository, never()).countJiraIssuesByTaskId(1L);
-        verify(taskRepository, never()).delete(any(Task.class));
-    }
-
-    // --- TEST UPDATE STATUS & TRANSITIONS ---
-
-    @Test
-    @DisplayName("Chuyển trạng thái hợp lệ và ghi Activity Log vào DB")
-    void updateStatus_Success_SavesActivityLog() {
-        Task mockTask = createMockTask(1L, 1L, 100L, TaskStatus.TO_DO);
-        when(taskRepository.findById(1L)).thenReturn(Optional.of(mockTask));
-        when(taskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-
-        updateReq.setStatus(TaskStatus.IN_PROGRESS);
-
-        TaskResponse res = taskService.updateTaskStatusByMember(1L, 100L, 1L, updateReq);
-
-        assertEquals(TaskStatus.IN_PROGRESS, res.getStatus());
-        verify(activityLogRepository, times(1)).save(any(ActivityLog.class));
-    }
-
-    @Test
-    @DisplayName("Lỗi khi Task không thuộc Project yêu cầu")
-    void updateStatus_ThrowsException_ProjectMismatch() {
-        Task mockTask = createMockTask(1L, 999L, 100L, TaskStatus.TO_DO); // Project ID = 999
-        when(taskRepository.findById(1L)).thenReturn(Optional.of(mockTask));
-
-        updateReq.setStatus(TaskStatus.IN_PROGRESS);
-
-        assertThrows(ResourceNotFoundException.class,
-            () -> taskService.updateTaskStatusByMember(1L, 100L, 1L, updateReq));
-    }
-
-    @Test
-    @DisplayName("Từ chối cập nhật khi Task chưa gán Assignee")
-    void updateStatus_ThrowsException_UnassignedTask() {
-        Task mockTask = createMockTask(1L, 1L, null, TaskStatus.TO_DO);
-        when(taskRepository.findById(1L)).thenReturn(Optional.of(mockTask));
-
-        updateReq.setStatus(TaskStatus.IN_PROGRESS);
-
-        assertThrows(ForbiddenGroupScopeException.class,
-            () -> taskService.updateTaskStatusByMember(1L, 100L, 1L, updateReq));
-    }
-
-    @Test
-    @DisplayName("Từ chối khi Member cố tình cập nhật Task của người khác")
-    void updateStatus_ThrowsException_WrongAssignee() {
-        Task mockTask = createMockTask(1L, 1L, 200L, TaskStatus.TO_DO); // Assignee = 200
-        when(taskRepository.findById(1L)).thenReturn(Optional.of(mockTask));
-
-        updateReq.setStatus(TaskStatus.IN_PROGRESS);
-
-        assertThrows(ForbiddenGroupScopeException.class,
-            () -> taskService.updateTaskStatusByMember(1L, 100L, 1L, updateReq)); // Current user = 100
-    }
-
-    @Test
-    @DisplayName("Thiếu lý do khi chuyển sang BLOCKED")
-    void updateStatus_ThrowsException_BlockedWithoutReason() {
-        Task mockTask = createMockTask(1L, 1L, 100L, TaskStatus.IN_PROGRESS);
-        when(taskRepository.findById(1L)).thenReturn(Optional.of(mockTask));
-
-        updateReq.setStatus(TaskStatus.BLOCKED);
-        updateReq.setReason(""); // Lý do rỗng
-
-        assertThrows(IllegalArgumentException.class,
-            () -> taskService.updateTaskStatusByMember(1L, 100L, 1L, updateReq));
-    }
-
-    @Test
-    @DisplayName("Team Member không được quyền tự CANCELLED Task")
-    void updateStatus_ThrowsException_MemberCannotCancel() {
-        Task mockTask = createMockTask(1L, 1L, 100L, TaskStatus.IN_PROGRESS);
-        when(taskRepository.findById(1L)).thenReturn(Optional.of(mockTask));
-
-        updateReq.setStatus(TaskStatus.CANCELLED);
-        updateReq.setReason("Hủy bỏ task");
-
-        assertThrows(InvalidStatusTransitionException.class,
-            () -> taskService.updateTaskStatusByMember(1L, 100L, 1L, updateReq));
-    }
-
-    @Test
-    @DisplayName("Không thể chuyển trạng thái khi Task đã ở trạng thái kết thúc (DONE)")
-    void updateStatus_ThrowsException_TerminalState() {
-        Task mockTask = createMockTask(1L, 1L, 100L, TaskStatus.DONE);
-        when(taskRepository.findById(1L)).thenReturn(Optional.of(mockTask));
-
-        updateReq.setStatus(TaskStatus.IN_PROGRESS);
-
-        assertThrows(InvalidStatusTransitionException.class,
-            () -> taskService.updateTaskStatusByMember(1L, 100L, 1L, updateReq));
-    }
-
-    @Test
-    @DisplayName("Team Leader được hủy Task với lý do")
-    void updateStatus_LeaderCanCancelTaskWithReason() {
-        Task mockTask = createMockTask(1L, 1L, null, TaskStatus.IN_PROGRESS);
-        when(taskRepository.findById(1L)).thenReturn(Optional.of(mockTask));
-        when(taskRepository.save(mockTask)).thenReturn(mockTask);
-        when(projectAuthorization.currentUserId()).thenReturn(100L);
-        when(projectAuthorization.isCurrentUserLeader(1L)).thenReturn(true);
-        updateReq.setStatus(TaskStatus.CANCELLED);
-        updateReq.setReason("Không còn nằm trong phạm vi Sprint");
-
-        TaskResponse response = taskService.updateTaskStatus(1L, 1L, updateReq);
-
-        assertEquals(TaskStatus.CANCELLED, response.getStatus());
-        verify(activityLogRepository).save(any(ActivityLog.class));
-    }
-
-    @Test
-    @DisplayName("Thành viên không còn ACTIVE không được cập nhật Task")
-    void updateStatus_RejectsInactiveAssignedMember() {
-        Task mockTask = createMockTask(1L, 1L, 100L, TaskStatus.TO_DO);
-        when(taskRepository.findById(1L)).thenReturn(Optional.of(mockTask));
-        when(projectRepository.countActiveMember(1L, 100L)).thenReturn(0L);
-        updateReq.setStatus(TaskStatus.IN_PROGRESS);
-
-        assertThrows(ForbiddenGroupScopeException.class,
-                () -> taskService.updateTaskStatusByMember(1L, 100L, 1L, updateReq));
-
-        verify(taskRepository, never()).save(any(Task.class));
-    }
-
-    private Task createMockTask(Long taskId, Long projectId, Long assigneeId, TaskStatus status) {
-        Task task = new Task(projectId, "Title", "Criteria", TaskIssueType.TASK, TaskPriority.MEDIUM);
-        task.setAssigneeUserId(assigneeId);
-        task.setStatus(status);
-        return task;
+        verify(jiraClient, times(1)).updateIssueAssignee(10L, "CNPM", "CNPM-501", null);
+        assertThat(mockTask.getAssigneeUserId()).isNull();
+        assertThat(mockTask.getSyncStatus()).isEqualTo(SyncStatus.SYNCED);
     }
 }

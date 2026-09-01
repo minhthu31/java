@@ -299,6 +299,7 @@ public class JiraRestClient implements JiraClient {
         JsonNode value = node.get(field);
         return value == null || value.isNull() ? fallback : value.asInt();
     }
+
     @Override
     public JiraCreateIssueResponse createIssue(
             Long projectId,
@@ -766,8 +767,7 @@ public class JiraRestClient implements JiraClient {
             throw new JiraClientException("Jira secret chưa được cấu hình");
         }
 
-        String accountIdentifier =
-                config.getAccountIdentifier();
+        String accountIdentifier = config.getAccountIdentifier();
 
         if (accountIdentifier == null || accountIdentifier.isBlank()) {
             throw new JiraClientException("Jira account identifier chưa được cấu hình");
@@ -798,7 +798,8 @@ public class JiraRestClient implements JiraClient {
         } catch (IOException exception) {
             throw new JiraConnectionException("Không thể kết nối Jira", exception);
 
-        }catch (RuntimeException exception) {
+        } catch (RuntimeException exception) {
+
             throw new JiraClientException("Không thể gọi Jira", exception);
         }
     }
@@ -1209,80 +1210,5 @@ public class JiraRestClient implements JiraClient {
         return value == null || value.isNull()
                 ? null
                 : value.asText();
-    }
-    @Override
-    public void updateIssueAssignee(
-            Long projectId,
-            String projectKey,
-            String jiraIssueKey,
-            String assigneeAccountId) {
-        validateProjectKey(projectKey);
-        if (jiraIssueKey == null || jiraIssueKey.isBlank()) {
-            throw new JiraClientException("Jira issue key không được để trống");
-        }
-
-        IntegrationConfig config = getIntegrationConfig(projectId);
-        String path = "/rest/api/3/issue/" + jiraIssueKey + "/assignee";
-        String body = String.format("{\"accountId\":%s}",
-                assigneeAccountId == null || assigneeAccountId.isBlank() ? "null" : "\"" + assigneeAccountId.trim() + "\"");
-
-        try {
-            put(config, path, body);
-        } catch (JiraApiException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new JiraClientException("Không thể cập nhật Jira assignee", e);
-        }
-    }
-
-    @Override
-    public void transitionIssueStatus(
-            Long projectId,
-            String projectKey,
-            String jiraIssueKey,
-            String targetStatusName) {
-        validateProjectKey(projectKey);
-        if (jiraIssueKey == null || jiraIssueKey.isBlank()) {
-            throw new JiraClientException("Jira issue key không được để trống");
-        }
-        if (targetStatusName == null || targetStatusName.isBlank()) {
-            throw new JiraClientException("Target status name không được để trống");
-        }
-
-        IntegrationConfig config = getIntegrationConfig(projectId);
-        JsonNode transNode = get(config, "/rest/api/3/issue/" + jiraIssueKey + "/transitions");
-        JsonNode transitions = transNode.get("transitions");
-        String targetTransitionId = null;
-
-        if (transitions != null && transitions.isArray()) {
-            for (JsonNode t : transitions) {
-                String name = text(t, "name");
-                JsonNode toStatus = t.get("to");
-                String toName = toStatus != null ? text(toStatus, "name") : null;
-                if (targetStatusName.equalsIgnoreCase(name) || targetStatusName.equalsIgnoreCase(toName)) {
-                    targetTransitionId = text(t, "id");
-                    break;
-                }
-            }
-        }
-
-        if (targetTransitionId == null) {
-            throw new JiraApiException(
-                    HttpStatus.UNPROCESSABLE_ENTITY,
-                    "JIRA_TRANSITION_NOT_FOUND",
-                    false,
-                    null,
-                    "Không tìm thấy transition phù hợp cho trạng thái: " + targetStatusName,
-                    null);
-        }
-
-        String body = String.format("{\"transition\":{\"id\":\"%s\"}}", targetTransitionId);
-        try {
-            post(config, "/rest/api/3/issue/" + jiraIssueKey + "/transitions", body);
-        } catch (JiraApiException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new JiraClientException("Không thể chuyển trạng thái Jira issue", e);
-        }
     }
 }
