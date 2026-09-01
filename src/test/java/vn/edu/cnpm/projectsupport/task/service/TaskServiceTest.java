@@ -630,5 +630,4 @@ class TaskServiceTest {
         assertThat(mockTask.getAssigneeUserId()).isNull();
         assertThat(mockTask.getSyncStatus()).isEqualTo(SyncStatus.SYNCED);
     }
-    
 }
