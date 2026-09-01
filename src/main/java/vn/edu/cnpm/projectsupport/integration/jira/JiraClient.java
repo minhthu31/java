@@ -18,10 +18,6 @@ public interface JiraClient {
     JiraPageDto<JiraIssueDto> getBacklog(Long projectId, String projectKey, int startAt, int maxResults);
 
     JiraSprintPageDto getSprints(Long projectId, String projectKey, int startAt, int maxResults);
-}
-    JiraProject getProject(
-            Long projectId,
-            String projectKey);
 
     JiraCreateIssueResponse createIssue(
             Long projectId,
