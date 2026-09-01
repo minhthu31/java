@@ -226,8 +226,8 @@ public class TaskServiceImpl implements TaskService {
         return toResponse(saved);
     }
 
-    @Override
-    @Transactional(noRollbackFor = {Exception.class})
+@Override
+    @Transactional
     @PreAuthorize("@projectAuthorization.canUpdateTask(#projectId, #taskId)")
     public TaskResponse updateTaskStatus(
             Long projectId, Long taskId, TaskStatusUpdateRequest request) {
@@ -237,7 +237,7 @@ public class TaskServiceImpl implements TaskService {
     }
 
     @Override
-    @Transactional(noRollbackFor = {Exception.class})
+    @Transactional
     @PreAuthorize("@projectAuthorization.canUpdateTask(#projectId, #taskId) and @projectAuthorization.isCurrentUser(#memberUserId)")
     public TaskResponse updateTaskStatusByMember(
             Long projectId, Long memberUserId, Long taskId, TaskStatusUpdateRequest request) {
@@ -272,13 +272,12 @@ public class TaskServiceImpl implements TaskService {
             throw new IllegalArgumentException("Cần cung cấp lý do khi chuyển trạng thái sang " + targetStatus);
         }
 
-        task.setStatus(targetStatus);
-
         Optional<String> jiraKeyOpt = taskRepository.findJiraIssueKeyByTaskId(taskId);
         if (jiraKeyOpt != null && jiraKeyOpt.isPresent()) {
             syncStatusWithJira(project, task, jiraKeyOpt.get(), targetStatus);
         }
 
+        task.setStatus(targetStatus);
         Task updatedTask = taskRepository.save(task);
 
         activityLogRepository.save(ActivityLog.taskStatusChanged(
@@ -289,7 +288,7 @@ public class TaskServiceImpl implements TaskService {
     }
 
     @Override
-    @Transactional(noRollbackFor = {Exception.class})
+    @Transactional
     @PreAuthorize("@projectAuthorization.canManageTasks(#projectId)")
     public TaskResponse updateTaskAssignee(
             Long projectId,
@@ -301,7 +300,6 @@ public class TaskServiceImpl implements TaskService {
         validateAssignee(projectId, newAssigneeUserId);
 
         Long oldAssigneeUserId = task.getAssigneeUserId();
-        task.setAssigneeUserId(newAssigneeUserId);
 
         Optional<String> jiraKeyOpt = taskRepository.findJiraIssueKeyByTaskId(taskId);
         if (jiraKeyOpt != null && jiraKeyOpt.isPresent()) {
@@ -313,6 +311,7 @@ public class TaskServiceImpl implements TaskService {
             syncAssigneeWithJira(project, task, jiraKeyOpt.get(), jiraAccountId);
         }
 
+        task.setAssigneeUserId(newAssigneeUserId);
         Task saved = taskRepository.save(task);
         activityLogRepository.save(ActivityLog.taskAssigneeChanged(
                 project.getGroupId(),
@@ -322,7 +321,7 @@ public class TaskServiceImpl implements TaskService {
                 newAssigneeUserId));
         return toResponse(saved);
     }
-
+    
     @Override
     @Transactional(readOnly = true)
     @PreAuthorize("@projectAuthorization.canViewTask(#projectId, #taskId)")

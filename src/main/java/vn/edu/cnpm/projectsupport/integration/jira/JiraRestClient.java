@@ -1234,14 +1234,20 @@ public class JiraRestClient implements JiraClient {
         String path = "/rest/api/3/issue/" + jiraIssueKey + "/transitions";
         JsonNode node = get(config, path);
         if (node.has("transitions") && node.get("transitions").isArray()) {
+            String normalizedTarget = normalizeStatus(targetStatusName);
             for (JsonNode t : node.get("transitions")) {
-                String name = t.path("name").asText();
-                String toName = t.path("to").path("name").asText();
-                if (targetStatusName.equalsIgnoreCase(name) || targetStatusName.equalsIgnoreCase(toName)) {
+                String name = normalizeStatus(t.path("name").asText(""));
+                String toName = normalizeStatus(t.path("to").path("name").asText(""));
+                if (normalizedTarget.equals(name) || normalizedTarget.equals(toName)) {
                     return t.path("id").asText();
                 }
             }
         }
         throw new JiraClientException("JIRA_TRANSITION_MAPPING_MISSING");
+    }
+
+    private String normalizeStatus(String status) {
+        if (status == null) return "";
+        return status.replaceAll("[\\s_\\-]+", "").toLowerCase();
     }
 }
