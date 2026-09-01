@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
@@ -61,10 +62,10 @@ class TaskServiceJiraSyncIntegrationTest {
     private ProjectAuthorizationService projectAuthorization;
 
     @Test
-    @DisplayName("Integration: Khi Jira loi, Task update rollback va SyncLog FAILED thuc su duoc persist vao DB that")
+    @DisplayName("Integration: Khi Jira loi, Task syncStatus=SYNC_FAILED va SyncLog FAILED thuc su duoc persist vao DB")
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void updateTaskStatus_jiraFails_persistsSyncLogToDatabase() {
-        // 1. Setup Project & Jira Key
+        // 1. Setup Project va jira_project_key
         List<Project> projects = projectRepository.findAll();
         Project project = !projects.isEmpty() ? projects.get(0) : projectRepository.findById(10L).orElseThrow();
         Long projectId = project.getId();
@@ -73,56 +74,51 @@ class TaskServiceJiraSyncIntegrationTest {
                 .param("id", projectId)
                 .update();
 
-        // 2. Setup Task ban dau o trang thai SYNCED
+        // 2. Tao Task trong DB test
         Task task = new Task(projectId, "Integration Sync Test Task", "AC Test", TaskIssueType.TASK, TaskPriority.MEDIUM);
         task.setStatus(TaskStatus.TO_DO);
         task.setSyncStatus(SyncStatus.SYNCED);
         task = taskRepository.save(task);
         Long taskId = task.getId();
 
-        // 3. Tao JiraIssue mapping cho Task
+        // 3. Tao JiraIssue mapping vao bang jira_issues
         String testIssueKey = "CNPM-IT-" + taskId;
         JiraIssue jiraIssue = new JiraIssue(taskId, "10999", testIssueKey, "https://jira.example.com/browse/" + testIssueKey, Instant.now());
         jiraIssueRepository.saveAndFlush(jiraIssue);
 
-        try {
-            jdbcClient.sql("""
-                INSERT INTO project_jira_issues (project_id, task_id, jira_issue_key)
-                VALUES (:pid, :tid, :key)
-            """)
-            .param("pid", projectId)
-            .param("tid", taskId)
-            .param("key", testIssueKey)
-            .update();
-        } catch (Exception ignored) {}
-
-        // 4. Mock Authorization
+        // 4. Mock quyen Security theo yeu cau: canUpdateTask tra ve true de qua @PreAuthorize
+        when(projectAuthorization.canUpdateTask(projectId, taskId)).thenReturn(true);
         when(projectAuthorization.currentUserId()).thenReturn(1L);
         when(projectAuthorization.isCurrentUserLeader(projectId)).thenReturn(true);
 
-        // 5. Jira nem loi
+        // 5. Gia lap JiraClient nem loi JiraClientException
         doThrow(new JiraClientException("JIRA_UNAVAILABLE"))
                 .when(jiraClient).transitionIssueStatus(anyLong(), anyString(), anyString(), anyString());
 
         TaskStatusUpdateRequest req = new TaskStatusUpdateRequest();
         req.setStatus(TaskStatus.IN_PROGRESS);
 
-        // 6. Goi service cap nhat trang thai
+        // 6. Kiem tra chinh xac ngoai le la JiraClientException (khong bat chung RuntimeException)
         assertThatThrownBy(() -> taskService.updateTaskStatus(projectId, taskId, req))
-                .isInstanceOf(RuntimeException.class);
+                .isInstanceOf(JiraClientException.class);
 
-        // 7. Kiem tra Task status khong bi doi thanh IN_PROGRESS (da rollback)
+        // 7. Verify method transitionIssueStatus da duoc goi
+        verify(jiraClient).transitionIssueStatus(anyLong(), anyString(), anyString(), anyString());
+
+        // 8. Kiem tra Task trong DB: status giu nguyen TO_DO va syncStatus tro thanh SYNC_FAILED
         Task reloadedTask = taskRepository.findById(taskId).orElseThrow();
         assertThat(reloadedTask.getStatus()).isEqualTo(TaskStatus.TO_DO);
+        assertThat(reloadedTask.getSyncStatus()).isEqualTo(SyncStatus.SYNC_FAILED);
 
-        // 8. Kiem tra SyncLog thuc su duoc insert vao DB that bang JdbcClient
+        // 9. Kiem tra ban ghi SyncLog FAILED thuc su duoc insert vao DB that
         List<Map<String, Object>> logs = jdbcClient.sql("""
             SELECT provider, entity_type, entity_id, direction, status, error_code
             FROM sync_logs
-            WHERE project_id = :pid
+            WHERE project_id = :pid AND entity_id = :key
             ORDER BY id DESC
         """)
         .param("pid", projectId)
+        .param("key", testIssueKey)
         .query()
         .listOfRows();
 
