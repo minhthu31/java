@@ -39,4 +39,15 @@ public interface JiraClient {
             Long projectId,
             String jiraSprintId,
             String jiraIssueId);
+            void updateIssueAssignee(
+            Long projectId,
+            String projectKey,
+            String jiraIssueKey,
+            String assigneeAccountId);
+
+    void transitionIssueStatus(
+            Long projectId,
+            String projectKey,
+            String jiraIssueKey,
+            String targetStatusName);
 }
