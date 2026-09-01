@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import vn.edu.cnpm.projectsupport.task.domain.Task;
@@ -16,6 +18,10 @@ public interface TaskRepository extends JpaRepository<Task, Long>, JpaSpecificat
     List<Task> findByAssigneeUserId(Long assigneeUserId);
     List<Task> findByStatus(TaskStatus status);
     List<Task> findByIssueType(TaskIssueType issueType);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select t from Task t where t.id = :taskId")
+    Optional<Task> findByIdForUpdate(@Param("taskId") Long taskId);
+
     Optional<Task> findByIdempotencyKey(String idempotencyKey);
     boolean existsByRequirementId(Long requirementId);
 

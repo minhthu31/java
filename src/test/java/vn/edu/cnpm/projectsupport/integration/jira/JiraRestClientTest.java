@@ -2,6 +2,7 @@ package vn.edu.cnpm.projectsupport.integration.jira;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -13,6 +14,7 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Map;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -23,10 +25,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import tools.jackson.databind.ObjectMapper;
+import org.springframework.http.HttpStatus;
+import vn.edu.cnpm.projectsupport.integration.jira.exception.JiraApiException;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationConfig;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.IntegrationConfigRepository;
 import vn.edu.cnpm.projectsupport.security.IntegrationSecretService;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraCreateIssueRequest;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraCreateIssueResponse;
 
 @ExtendWith(MockitoExtension.class)
 class JiraRestClientTest {
@@ -956,9 +962,10 @@ class JiraRestClientTest {
                 never())
                 .decrypt(any());
     }
+
     @Test
     void shouldRejectSingleCharacterProjectKey()
-             throws Exception {
+            throws Exception {
 
         assertThrows(
                 JiraClientException.class,
@@ -982,7 +989,8 @@ class JiraRestClientTest {
                 secretService,
                 never())
                 .decrypt(any());
-   }
+    }
+
     @Test
     void shouldRejectLowercaseProjectKey()
             throws Exception {
@@ -1337,5 +1345,323 @@ class JiraRestClientTest {
                 () -> client.getProject(
                         PROJECT_ID,
                         PROJECT_KEY));
+    }
+
+    @Test
+    void createIssueResolvesMetadataIdsAndMapsTaskFields()
+            throws Exception {
+
+        stubIntegrationConfig();
+
+        when(secretService.decrypt(
+                ENCRYPTED_SECRET))
+                .thenReturn(SECRET_TOKEN);
+
+        when(transport.get(
+                eq(BASE_URL
+                        + "/rest/api/3/issue/createmeta?projectKeys=PROJ"
+                        + "&expand=projects.issuetypes.fields"),
+                any(),
+                eq(Duration.ofSeconds(10))))
+                .thenReturn(
+                        new JiraHttpResponse(
+                                200,
+                                """
+                                {
+                                  "projects": [{
+                                    "key": "PROJ",
+                                    "issuetypes": [{
+                                      "id": "10001",
+                                      "name": "Task",
+                                      "fields": {
+                                        "priority": {
+                                          "allowedValues": [
+                                            {
+                                              "id": "3",
+                                              "name": "Medium"
+                                            }
+                                          ]
+                                        }
+                                      }
+                                    }]
+                                  }]
+                                }
+                                """,
+                                Map.of()));
+
+        when(transport.post(
+                eq(BASE_URL
+                        + "/rest/api/3/issue"),
+                any(),
+                any(String.class),
+                eq(Duration.ofSeconds(10))))
+                .thenReturn(
+                        new JiraHttpResponse(
+                                201,
+                                """
+                                {
+                                  "id":"10001",
+                                  "key":"PROJ-1",
+                                  "self":"https://example.atlassian.net/rest/api/3/issue/10001"
+                                }
+                                """,
+                                Map.of()));
+
+        JiraCreateIssueRequest request =
+                new JiraCreateIssueRequest(
+                        "Implement mapping",
+                        "Description",
+                        "Task",
+                        "Medium",
+                        List.of(
+                                "cnpm-local-task-200"),
+                        "jira-account-1",
+                        "2026-09-10T15:30:00Z",
+                        "9001",
+                        "PROJ-EPIC-1");
+
+        JiraCreateIssueResponse response =
+                client.createIssue(
+                        PROJECT_ID,
+                        PROJECT_KEY,
+                        request);
+
+        assertEquals(
+                "10001",
+                response.id());
+
+        assertEquals(
+                "PROJ-1",
+                response.key());
+
+        ArgumentCaptor<String> bodyCaptor =
+                ArgumentCaptor.forClass(
+                        String.class);
+
+        verify(transport)
+                .post(
+                        eq(BASE_URL
+                                + "/rest/api/3/issue"),
+                        any(),
+                        bodyCaptor.capture(),
+                        eq(Duration.ofSeconds(10)));
+
+        String body =
+                bodyCaptor.getValue();
+
+        assertTrue(
+                body.contains(
+                        "\"issuetype\":{\"id\":\"10001\"}"));
+
+        assertTrue(
+                body.contains(
+                        "\"priority\":{\"id\":\"3\"}"));
+
+        assertTrue(
+                body.contains(
+                        "\"accountId\":\"jira-account-1\""));
+
+        assertTrue(
+                body.contains(
+                        "\"duedate\":\"2026-09-10\""));
+
+        assertTrue(
+                body.contains(
+                        "\"parent\":{\"key\":\"PROJ-EPIC-1\"}"));
+
+        assertTrue(
+                body.contains(
+                        "cnpm-local-task-200"));
+    }
+
+    @Test
+    void shouldReturn422WhenIssueTypeMappingIsMissing() throws Exception {
+        stubIntegrationConfig();
+
+        when(secretService.decrypt(ENCRYPTED_SECRET))
+                .thenReturn(SECRET_TOKEN);
+
+        when(transport.get(
+                eq(BASE_URL
+                        + "/rest/api/3/issue/createmeta?projectKeys=PROJ"
+                        + "&expand=projects.issuetypes.fields"),
+                any(),
+                eq(Duration.ofSeconds(10))))
+                .thenReturn(
+                        new JiraHttpResponse(
+                                200,
+                                "{\"projects\":[{\"key\":\"PROJ\",\"issuetypes\":[]}]}",
+                                Map.of()));
+
+        JiraApiException exception =
+                assertThrows(
+                        JiraApiException.class,
+                        () -> client.createIssue(
+                                PROJECT_ID,
+                                PROJECT_KEY,
+                                new JiraCreateIssueRequest(
+                                        "Summary",
+                                        "Description",
+                                        "Task",
+                                        "Medium")));
+
+        assertEquals(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                exception.getStatus());
+        assertEquals(
+                "ISSUE_TYPE_MAPPING_MISSING",
+                exception.getErrorCode());
+    }
+
+    @Test
+    void shouldReturn422WhenPriorityMappingIsMissing() throws Exception {
+        stubIntegrationConfig();
+
+        when(secretService.decrypt(ENCRYPTED_SECRET))
+                .thenReturn(SECRET_TOKEN);
+
+        when(transport.get(
+                eq(BASE_URL
+                        + "/rest/api/3/issue/createmeta?projectKeys=PROJ"
+                        + "&expand=projects.issuetypes.fields"),
+                any(),
+                eq(Duration.ofSeconds(10))))
+                .thenReturn(
+                        new JiraHttpResponse(
+                                200,
+                                """
+                                {
+                                  "projects": [{
+                                    "key": "PROJ",
+                                    "issuetypes": [{
+                                      "id": "10001",
+                                      "name": "Task",
+                                      "fields": {}
+                                    }]
+                                  }]
+                                }
+                                """,
+                                Map.of()))
+                .thenReturn(
+                        new JiraHttpResponse(
+                                200,
+                                """
+                                {
+                                  "projects": [{
+                                    "key": "PROJ",
+                                    "issuetypes": [{
+                                      "id": "10001",
+                                      "name": "Task",
+                                      "fields": {}
+                                    }]
+                                  }]
+                                }
+                                """,
+                                Map.of()));
+
+        when(transport.get(
+                eq(BASE_URL + "/rest/api/3/priority"),
+                any(),
+                eq(Duration.ofSeconds(10))))
+                .thenReturn(
+                        new JiraHttpResponse(
+                                200,
+                                "[]",
+                                Map.of()));
+
+        JiraApiException exception =
+                assertThrows(
+                        JiraApiException.class,
+                        () -> client.createIssue(
+                                PROJECT_ID,
+                                PROJECT_KEY,
+                                new JiraCreateIssueRequest(
+                                        "Summary",
+                                        "Description",
+                                        "Task",
+                                        "Medium")));
+
+        assertEquals(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                exception.getStatus());
+        assertEquals(
+                "PRIORITY_MAPPING_MISSING",
+                exception.getErrorCode());
+    }
+
+    @Test
+    void createEpicDoesNotSetParent() throws Exception {
+        stubIntegrationConfig();
+
+        when(secretService.decrypt(ENCRYPTED_SECRET))
+                .thenReturn(SECRET_TOKEN);
+
+        when(transport.get(
+                eq(BASE_URL
+                        + "/rest/api/3/issue/createmeta?projectKeys=PROJ"
+                        + "&expand=projects.issuetypes.fields"),
+                any(),
+                eq(Duration.ofSeconds(10))))
+                .thenReturn(
+                        new JiraHttpResponse(
+                                200,
+                                """
+                                {
+                                  "projects": [{
+                                    "key": "PROJ",
+                                    "issuetypes": [{
+                                      "id": "10002",
+                                      "name": "Epic",
+                                      "fields": {
+                                        "priority": {
+                                          "allowedValues": [{
+                                            "id": "3",
+                                            "name": "Medium"
+                                          }]
+                                        }
+                                      }
+                                    }]
+                                  }]
+                                }
+                                """,
+                                Map.of()));
+
+        when(transport.post(
+                eq(BASE_URL + "/rest/api/3/issue"),
+                any(),
+                any(String.class),
+                eq(Duration.ofSeconds(10))))
+                .thenReturn(
+                        new JiraHttpResponse(
+                                201,
+                                "{\"id\":\"10002\",\"key\":\"PROJ-2\"}",
+                                Map.of()));
+
+        JiraCreateIssueRequest request =
+                new JiraCreateIssueRequest(
+                        "Epic",
+                        "Description",
+                        "Epic",
+                        "Medium",
+                        List.of(),
+                        null,
+                        null,
+                        null,
+                        "PROJ-PARENT");
+
+        client.createIssue(
+                PROJECT_ID,
+                PROJECT_KEY,
+                request);
+
+        ArgumentCaptor<String> bodyCaptor =
+                ArgumentCaptor.forClass(String.class);
+        verify(transport).post(
+                eq(BASE_URL + "/rest/api/3/issue"),
+                any(),
+                bodyCaptor.capture(),
+                eq(Duration.ofSeconds(10)));
+
+        assertTrue(!bodyCaptor.getValue().contains("parent"));
     }
 }
