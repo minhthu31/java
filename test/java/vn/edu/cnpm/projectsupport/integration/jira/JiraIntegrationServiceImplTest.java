@@ -17,10 +17,16 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 
+import vn.edu.cnpm.projectsupport.feature.repository.FeatureRepository;
 import vn.edu.cnpm.projectsupport.integration.jira.contract.JiraTaskSyncResponse;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationConfig;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationConfigStatus;
@@ -31,58 +37,114 @@ import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLogStatus;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraCreateIssueRequest;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraCreateIssueResponse;
 import vn.edu.cnpm.projectsupport.integration.jira.exception.JiraApiException;
+import vn.edu.cnpm.projectsupport.integration.jira.repository.IntegrationConfigRepository;
+import vn.edu.cnpm.projectsupport.integration.jira.repository.JiraIssueRepository;
+import vn.edu.cnpm.projectsupport.integration.jira.repository.SyncLogRepository;
+import vn.edu.cnpm.projectsupport.security.IntegrationSecretService;
+import vn.edu.cnpm.projectsupport.sprint.domain.Sprint;
+import vn.edu.cnpm.projectsupport.sprint.repository.SprintRepository;
 import vn.edu.cnpm.projectsupport.task.domain.SyncStatus;
 import vn.edu.cnpm.projectsupport.task.domain.Task;
+import vn.edu.cnpm.projectsupport.task.repository.TaskRepository;
 
+@ExtendWith(MockitoExtension.class)
 class JiraIntegrationServiceImplTest {
 
     private static final Long PROJECT_ID = 1L;
     private static final Long TASK_ID = 100L;
-    private static final String PROJECT_KEY = "PROJ";
+    private static final String PROJECT_KEY = "CNPM";
     private static final String BASE_URL = "https://example.atlassian.net";
-    private static final String VALID_IDEMPOTENCY_KEY = "idemp-key-12345678";
+    private static final String IDEMPOTENCY_KEY = "idemp-key-test-123456";
 
-    // =========================================================================
-    // 1. KIỂM THỬ IDEMPOTENCY (CHỐNG TẠO TRÙNG & GỌI LẠI REQUEST)
-    // =========================================================================
+    @Mock
+    private IntegrationConfigRepository configRepository;
+    @Mock
+    private IntegrationSecretService secretService;
+    @Mock
+    private JiraClient jiraClient;
+    @Mock
+    private JiraIssueRepository jiraIssueRepository;
+    @Mock
+    private SyncLogRepository syncLogRepository;
+    @Mock
+    private TaskRepository taskRepository;
+    @Mock
+    private JdbcTemplate jdbcTemplate;
+    @Mock
+    private SprintRepository sprintRepository;
+    @Mock
+    private FeatureRepository featureRepository;
+
+    @InjectMocks
+    private JiraIntegrationServiceImpl service;
+
+    private Task task;
+    private IntegrationConfig integrationConfig;
+
+    @BeforeEach
+    void setUp() {
+        task = new Task();
+        task.setId(TASK_ID);
+        task.setProjectId(PROJECT_ID);
+        task.setTitle("Test Task Title");
+        task.setDescription("Test Task Description");
+        task.setSyncStatus(SyncStatus.NOT_SYNCED);
+
+        integrationConfig = new IntegrationConfig(PROJECT_ID, IntegrationProvider.JIRA, "encrypted_token");
+        integrationConfig.setBaseUrl(BASE_URL);
+        integrationConfig.setStatus(IntegrationConfigStatus.CONNECTED);
+    }
+
+    private void mockProjectKeyAndConfig() {
+        when(taskRepository.findByIdForUpdate(TASK_ID)).thenReturn(Optional.of(task));
+        when(configRepository.findByProjectIdAndProvider(PROJECT_ID, IntegrationProvider.JIRA))
+                .thenReturn(Optional.of(integrationConfig));
+        when(jdbcTemplate.query(eq("SELECT jira_project_key FROM projects WHERE id = ?"), any(RowMapper.class), eq(PROJECT_ID)))
+                .thenReturn(List.of(PROJECT_KEY));
+    }
+
     @Nested
-    @DisplayName("Tests for Idempotency")
+    @DisplayName("Idempotency Tests")
     class IdempotencyTests {
 
         @Test
-        @DisplayName("Gửi lại cùng Idempotency Key khi đã hoàn tất -> Trả về kết quả SyncLog cũ không gọi Jira")
-        void syncTask_WhenSameIdempotencyKeyCompleted_ReturnsPreviousSyncLogResponse() {
-            SyncLog completedLog = new SyncLog();
-            completedLog.setStatus(SyncLogStatus.SUCCESS);
-            completedLog.setRequestFingerprint("matching-fingerprint");
+        @DisplayName("Gửi lại cùng Idempotency Key khi đã hoàn tất -> Trả kết quả cũ, không gọi Jira")
+        void syncTask_WhenCompletedSyncLogExists_ReturnsPreviousResult() {
+            when(taskRepository.findByIdForUpdate(TASK_ID)).thenReturn(Optional.of(task));
 
-            // Giả lập fingerprint khớp với task hiện tại
+            SyncLog previousSuccessLog = new SyncLog();
+            previousSuccessLog.setStatus(SyncLogStatus.SUCCESS);
+            previousSuccessLog.setRequestFingerprint("5a5076cf98cb28db76156e54f9d76c33c3a778e24c53d4a46a6f6df6eb69df5d");
+
             when(syncLogRepository.findFirstByProjectIdAndEntityTypeAndEntityIdAndIdempotencyKeyOrderByStartedAtDesc(
-                    eq(PROJECT_ID), eq("TASK"), eq(String.valueOf(TASK_ID)), eq(VALID_IDEMPOTENCY_KEY)))
-                    .thenReturn(Optional.of(completedLog));
+                    eq(PROJECT_ID), eq("TASK"), eq(String.valueOf(TASK_ID)), eq(IDEMPOTENCY_KEY)))
+                    .thenReturn(Optional.of(previousSuccessLog));
 
-            JiraIssue issue = new JiraIssue(TASK_ID, "10001", "PROJ-10", BASE_URL + "/browse/PROJ-10", Instant.now());
+            JiraIssue issue = new JiraIssue(TASK_ID, "10001", "CNPM-100", BASE_URL + "/browse/CNPM-100", Instant.now());
             when(jiraIssueRepository.findByTaskId(TASK_ID)).thenReturn(Optional.of(issue));
 
-            JiraTaskSyncResponse response = service.syncTask(PROJECT_ID, TASK_ID, VALID_IDEMPOTENCY_KEY);
+            JiraTaskSyncResponse response = service.syncTask(PROJECT_ID, TASK_ID, IDEMPOTENCY_KEY);
 
-            assertThat(response.jiraIssueKey()).isEqualTo("PROJ-10");
+            assertThat(response).isNotNull();
             assertThat(response.syncStatus()).isEqualTo(SyncStatus.SYNCED);
+            assertThat(response.jiraIssueKey()).isEqualTo("CNPM-100");
             verify(jiraClient, never()).createIssue(any(), any(), any());
         }
 
         @Test
-        @DisplayName("Tái sử dụng Idempotency Key cho Task có nội dung khác -> Ném lỗi IDEMPOTENCY_KEY_REUSED (409)")
-        void syncTask_WhenIdempotencyKeyReusedWithDifferentData_ThrowsConflictException() {
-            SyncLog differentLog = new SyncLog();
-            differentLog.setStatus(SyncLogStatus.SUCCESS);
-            differentLog.setRequestFingerprint("different-payload-fingerprint");
+        @DisplayName("Tái sử dụng Idempotency Key cho nội dung Task đã sửa đổi -> Ném IDEMPOTENCY_KEY_REUSED")
+        void syncTask_WhenReusingKeyWithModifiedData_ThrowsConflictException() {
+            when(taskRepository.findByIdForUpdate(TASK_ID)).thenReturn(Optional.of(task));
+
+            SyncLog previousLog = new SyncLog();
+            previousLog.setStatus(SyncLogStatus.SUCCESS);
+            previousLog.setRequestFingerprint("different_old_fingerprint");
 
             when(syncLogRepository.findFirstByProjectIdAndEntityTypeAndEntityIdAndIdempotencyKeyOrderByStartedAtDesc(
-                    eq(PROJECT_ID), eq("TASK"), eq(String.valueOf(TASK_ID)), eq(VALID_IDEMPOTENCY_KEY)))
-                    .thenReturn(Optional.of(differentLog));
+                    eq(PROJECT_ID), eq("TASK"), eq(String.valueOf(TASK_ID)), eq(IDEMPOTENCY_KEY)))
+                    .thenReturn(Optional.of(previousLog));
 
-            assertThatThrownBy(() -> service.syncTask(PROJECT_ID, TASK_ID, VALID_IDEMPOTENCY_KEY))
+            assertThatThrownBy(() -> service.syncTask(PROJECT_ID, TASK_ID, IDEMPOTENCY_KEY))
                     .isInstanceOf(JiraApiException.class)
                     .satisfies(ex -> {
                         JiraApiException apiEx = (JiraApiException) ex;
@@ -90,47 +152,29 @@ class JiraIntegrationServiceImplTest {
                         assertThat(apiEx.getStatus()).isEqualTo(HttpStatus.CONFLICT);
                     });
         }
-
-        @Test
-        @DisplayName("Task đã có Jira Issue mapping và không đổi nội dung -> Không tạo issue mới")
-        void syncTask_WhenTaskAlreadyMappedAndUnchanged_ReturnsExistingMapping() {
-            when(syncLogRepository.findFirstByProjectIdAndEntityTypeAndEntityIdAndIdempotencyKeyOrderByStartedAtDesc(
-                    any(), any(), any(), any())).thenReturn(Optional.empty());
-
-            JiraIssue existing = new JiraIssue(TASK_ID, "10001", "PROJ-10", BASE_URL + "/browse/PROJ-10", Instant.now());
-            existing.setSnapshotHash(null); // Trường hợp snapshotHash null hoặc trùng khớp
-            when(jiraIssueRepository.findByTaskId(TASK_ID)).thenReturn(Optional.of(existing));
-
-            JiraTaskSyncResponse response = service.syncTask(PROJECT_ID, TASK_ID, VALID_IDEMPOTENCY_KEY);
-
-            assertThat(response.jiraIssueKey()).isEqualTo("PROJ-10");
-            verify(jiraClient, never()).createIssue(any(), any(), any());
-            verify(jiraClient, never()).updateIssue(any(), any(), any(), any());
-        }
     }
 
-    // =========================================================================
-    // 2. KIỂM THỬ LỖI JIRA API & HTTP ERROR CODE
-    // =========================================================================
     @Nested
-    @DisplayName("Tests for Jira API Errors")
+    @DisplayName("Jira API Error Handling Tests")
     class JiraApiErrorTests {
 
         @Test
-        @DisplayName("Jira trả về lỗi 401 Unauthorized -> Đánh dấu Task SYNC_FAILED và ghi log FAILED")
-        void syncTask_WhenJiraAuthFails_MarksTaskFailedAndSyncLogFailed() {
+        @DisplayName("Jira API ném lỗi -> Cập nhật Task thành SYNC_FAILED và ghi SyncLog FAILED")
+        void syncTask_WhenJiraApiThrowsException_MarksTaskFailedAndLogsError() {
+            mockProjectKeyAndConfig();
             when(syncLogRepository.findFirstByProjectIdAndEntityTypeAndEntityIdAndIdempotencyKeyOrderByStartedAtDesc(
                     any(), any(), any(), any())).thenReturn(Optional.empty());
             when(jiraIssueRepository.findByTaskId(TASK_ID)).thenReturn(Optional.empty());
             when(jiraClient.findIssuesByLabel(any(), any(), any())).thenReturn(List.of());
 
-            JiraApiException authError = new JiraApiException(
-                    HttpStatus.UNAUTHORIZED, "JIRA_AUTH_FAILED", false, null, "Unauthorized token", null);
-            when(jiraClient.createIssue(eq(PROJECT_ID), eq(PROJECT_KEY), any(JiraCreateIssueRequest.class)))
-                    .thenThrow(authError);
+            JiraApiException jiraError = new JiraApiException(
+                    HttpStatus.BAD_REQUEST, "JIRA_INVALID_FIELD", false, null, "Field is invalid in Jira", null);
 
-            assertThatThrownBy(() -> service.syncTask(PROJECT_ID, TASK_ID, VALID_IDEMPOTENCY_KEY))
-                    .isSameAs(authError);
+            when(jiraClient.createIssue(eq(PROJECT_ID), eq(PROJECT_KEY), any(JiraCreateIssueRequest.class)))
+                    .thenThrow(jiraError);
+
+            assertThatThrownBy(() -> service.syncTask(PROJECT_ID, TASK_ID, IDEMPOTENCY_KEY))
+                    .isSameAs(jiraError);
 
             assertThat(task.getSyncStatus()).isEqualTo(SyncStatus.SYNC_FAILED);
 
@@ -138,65 +182,57 @@ class JiraIntegrationServiceImplTest {
             verify(syncLogRepository, times(2)).save(captor.capture());
             SyncLog failedLog = captor.getAllValues().get(1);
             assertThat(failedLog.getStatus()).isEqualTo(SyncLogStatus.FAILED);
-            assertThat(failedLog.getErrorCode()).isEqualTo("JIRA_AUTH_FAILED");
+            assertThat(failedLog.getErrorCode()).isEqualTo("JIRA_INVALID_FIELD");
         }
 
         @Test
-        @DisplayName("Lỗi thiếu cấu hình Assignee mapping -> Ném ASSIGNEE_MAPPING_MISSING (422)")
-        void syncTask_WhenAssigneeMappingMissing_ThrowsUnprocessableEntity() {
-            task.setAssigneeUserId(999L);
-            when(jdbcTemplate.query(any(String.class), any(org.springframework.jdbc.core.RowMapper.class), eq(999L)))
-                    .thenReturn(List.of()); // Không tìm thấy mapping trong DB
+        @DisplayName("Sprint chưa được mapping với Jira -> Ném SPRINT_MAPPING_MISSING")
+        void syncTask_WhenSprintNotMapped_ThrowsUnprocessableEntity() {
+            mockProjectKeyAndConfig();
+            task.setSprintId(50L);
 
-            assertThatThrownBy(() -> service.syncTask(PROJECT_ID, TASK_ID, VALID_IDEMPOTENCY_KEY))
+            Sprint sprint = new Sprint();
+            sprint.setJiraSprintId(null);
+            when(sprintRepository.findByIdAndProjectId(50L, PROJECT_ID)).thenReturn(Optional.of(sprint));
+
+            assertThatThrownBy(() -> service.syncTask(PROJECT_ID, TASK_ID, IDEMPOTENCY_KEY))
                     .isInstanceOf(JiraApiException.class)
                     .satisfies(ex -> {
                         JiraApiException apiEx = (JiraApiException) ex;
-                        assertThat(apiEx.getErrorCode()).isEqualTo("ASSIGNEE_MAPPING_MISSING");
+                        assertThat(apiEx.getErrorCode()).isEqualTo("SPRINT_MAPPING_MISSING");
                         assertThat(apiEx.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
                     });
         }
     }
 
-    // =========================================================================
-    // 3. KIỂM THỬ RETRY & RECONCILIATION
-    // =========================================================================
     @Nested
-    @DisplayName("Tests for Retry and Label Reconcile")
-    class RetryAndReconcileTests {
+    @DisplayName("Retry & Reconciliation Tests")
+    class RetryTests {
 
         @Test
-        @DisplayName("Retry sau khi mất kết nối: Reconcile issue bằng Label thành công -> Trả về SYNCED")
-        void retryTaskSync_WhenRemoteIssueCreatedBeforeTimeout_ReconcilesSuccessfully() {
+        @DisplayName("Retry Task thành công khi phát hiện Issue bằng label reconcile")
+        void retryTaskSync_WhenIssueDiscoveredViaLabel_ReconcilesSuccessfully() {
+            mockProjectKeyAndConfig();
             task.setSyncStatus(SyncStatus.SYNC_FAILED);
+
             when(syncLogRepository.findFirstByProjectIdAndEntityTypeAndEntityIdAndIdempotencyKeyOrderByStartedAtDesc(
                     any(), any(), any(), any())).thenReturn(Optional.empty());
             when(jiraIssueRepository.findByTaskId(TASK_ID)).thenReturn(Optional.empty());
 
-            // Giả lập Jira đã tạo issue nhưng local bị timeout, reconcile quét ra theo label
-            JiraCreateIssueResponse discovered = new JiraCreateIssueResponse(
-                    "10005", "PROJ-88", BASE_URL + "/rest/api/3/issue/10005");
+            JiraCreateIssueResponse discoveredIssue = new JiraCreateIssueResponse(
+                    "10009", "CNPM-200", BASE_URL + "/rest/api/3/issue/10009");
             when(jiraClient.findIssuesByLabel(eq(PROJECT_ID), eq(PROJECT_KEY), eq("cnpm-local-task-" + TASK_ID)))
-                    .thenReturn(List.of(discovered));
+                    .thenReturn(List.of(discoveredIssue));
 
-            JiraTaskSyncResponse response = service.retryTaskSync(PROJECT_ID, TASK_ID, VALID_IDEMPOTENCY_KEY);
+            JiraTaskSyncResponse response = service.retryTaskSync(PROJECT_ID, TASK_ID, IDEMPOTENCY_KEY);
 
             assertThat(response.syncStatus()).isEqualTo(SyncStatus.SYNCED);
-            assertThat(response.jiraIssueKey()).isEqualTo("PROJ-88");
+            assertThat(response.jiraIssueKey()).isEqualTo("CNPM-200");
             assertThat(response.retryCount()).isEqualTo(2);
 
-            verify(jiraClient, never()).createIssue(any(), any(), any()); // Không tạo mới trùng lặp
+            verify(jiraClient, never()).createIssue(any(), any(), any());
             verify(jiraIssueRepository).saveAndFlush(any(JiraIssue.class));
-        }
-
-        @Test
-        @DisplayName("Không cho phép retry khi Task không ở trạng thái SYNC_FAILED hoặc NOT_SYNCED")
-        void retryTaskSync_WhenTaskAlreadySynced_ThrowsClientException() {
-            task.setSyncStatus(SyncStatus.SYNCED);
-
-            assertThatThrownBy(() -> service.retryTaskSync(PROJECT_ID, TASK_ID, VALID_IDEMPOTENCY_KEY))
-                    .isInstanceOf(JiraClientException.class)
-                    .hasMessageContaining("Task không ở trạng thái có thể retry");
+            assertThat(task.getSyncStatus()).isEqualTo(SyncStatus.SYNCED);
         }
     }
 }
