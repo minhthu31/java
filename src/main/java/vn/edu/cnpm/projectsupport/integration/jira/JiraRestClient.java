@@ -298,6 +298,8 @@ public class JiraRestClient implements JiraClient {
     private int number(JsonNode node, String field, int fallback) {
         JsonNode value = node.get(field);
         return value == null || value.isNull() ? fallback : value.asInt();
+    }
+
     @Override
     public JiraCreateIssueResponse createIssue(
             Long projectId,
@@ -760,16 +762,10 @@ public class JiraRestClient implements JiraClient {
         }
 
         String token = secretService.decrypt(encryptedSecret);
-        String token =
-                secretService.decrypt(
-                        encryptedSecret);
 
         if (token == null || token.isBlank()) {
             throw new JiraClientException("Jira secret chưa được cấu hình");
         }
-
-        String accountIdentifier =
-                config.getAccountIdentifier();
 
         String accountIdentifier = config.getAccountIdentifier();
 
@@ -778,8 +774,6 @@ public class JiraRestClient implements JiraClient {
         }
 
         String credentials = accountIdentifier + ":" + token;
-        String credentials =
-                accountIdentifier + ":" + token;
 
         String basicAuth = Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
 
@@ -807,9 +801,6 @@ public class JiraRestClient implements JiraClient {
         } catch (RuntimeException exception) {
 
             throw new JiraClientException("Không thể gọi Jira", exception);
-            throw new JiraClientException(
-                    "Không thể gọi Jira",
-                    exception);
         }
     }
 
