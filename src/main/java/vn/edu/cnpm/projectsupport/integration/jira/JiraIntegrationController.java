@@ -18,6 +18,7 @@ import vn.edu.cnpm.projectsupport.integration.jira.contract.JiraConnectionReques
 import vn.edu.cnpm.projectsupport.integration.jira.contract.JiraConnectionResponse;
 import vn.edu.cnpm.projectsupport.integration.jira.contract.JiraConnectionTestResponse;
 import vn.edu.cnpm.projectsupport.integration.jira.contract.JiraIntegrationService;
+import vn.edu.cnpm.projectsupport.integration.jira.contract.JiraIssueResponse;
 import vn.edu.cnpm.projectsupport.integration.jira.contract.JiraTaskSyncResponse;
 import vn.edu.cnpm.projectsupport.integration.jira.exception.JiraApiException;
 import org.springframework.http.HttpStatus;
@@ -71,6 +72,18 @@ public class JiraIntegrationController {
 
         return ResponseEntity.ok(
                 ApiResponse.success(response));
+    }
+
+    @GetMapping("/issues/{jiraIssueKey}")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEAM_LEADER') and @projectAuthorization.isCurrentUserLeader(#projectId))")
+    public ResponseEntity<ApiResponse<JiraIssueResponse>> getJiraIssue(
+            @PathVariable Long projectId,
+            @PathVariable String jiraIssueKey) {
+
+        JiraIssueResponse response =
+                jiraIntegrationService.getIssue(projectId, jiraIssueKey);
+
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     /*
