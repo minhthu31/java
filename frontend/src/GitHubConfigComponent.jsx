@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { GitHubConfigService } from "./GitHubConfigService";
 
-export const GitHubConfigComponent = ({ currentUserRole }) => {
-    const [owner, setOwner] = useState("");
-    const [repository, setRepository] = useState("");
-    const [token, setToken] = useState("");
-    const [isTokenConfigured, setIsTokenConfigured] = useState(false);
+export const GitHubConfigComponent = ({ currentUserRole, projectId }) => {
+    const [repositoryOwner, setRepositoryOwner] = useState("");
+    const [repositoryName, setRepositoryName] = useState("");
+    const [accessToken, setAccessToken] = useState("");
+    const [apiVersion, setApiVersion] = useState("2026-03-10");
+    const [isConfigured, setIsConfigured] = useState(false);
 
     const [connectionStatus, setConnectionStatus] = useState("NOT_CHECKED");
     const [lastChecked, setLastChecked] = useState(null);
@@ -19,16 +20,23 @@ export const GitHubConfigComponent = ({ currentUserRole }) => {
     useEffect(() => {
         let isMounted = true;
         const fetchExistingConfig = async () => {
+            if (!projectId) {
+                setInitialLoading(false);
+                return;
+            }
             try {
-                const data = await GitHubConfigService.getConfig();
+                const data = await GitHubConfigService.getConfig(projectId);
                 if (data && isMounted) {
-                    setOwner(data.owner || "");
-                    setRepository(data.repository || "");
-                    setIsTokenConfigured(Boolean(data.hasToken));
+                    if (data.repositoryFullName) {
+                        const parts = data.repositoryFullName.split("/");
+                        setRepositoryOwner(parts[0] || "");
+                        setRepositoryName(parts[1] || "");
+                    }
+                    setIsConfigured(Boolean(data.configured));
                     setConnectionStatus(data.status || "NOT_CHECKED");
                     setLastChecked(
-                        data.lastCheckedAt
-                            ? new Date(data.lastCheckedAt).toLocaleString(
+                        data.lastTestedAt
+                            ? new Date(data.lastTestedAt).toLocaleString(
                                   "vi-VN",
                               )
                             : null,
@@ -51,7 +59,7 @@ export const GitHubConfigComponent = ({ currentUserRole }) => {
         return () => {
             isMounted = false;
         };
-    }, [currentUserRole]);
+    }, [currentUserRole, projectId]);
 
     if (currentUserRole !== "ADMIN") {
         return (
@@ -80,19 +88,41 @@ export const GitHubConfigComponent = ({ currentUserRole }) => {
         );
     }
 
+    if (!projectId) {
+        return (
+            <div
+                data-testid="no-project-message"
+                style={{
+                    padding: "40px 24px",
+                    textAlign: "center",
+                    color: "#6b778c",
+                }}
+            >
+                <h3 style={{ color: "#172b4d", marginBottom: "8px" }}>
+                    Chưa chọn dự án
+                </h3>
+                <p style={{ margin: 0, fontSize: "14px" }}>
+                    Vui lòng chọn một project trước khi cấu hình tích hợp
+                    GitHub.
+                </p>
+            </div>
+        );
+    }
+
     const handleSave = async (e) => {
         e.preventDefault();
-        if (!owner.trim() || !repository.trim()) {
+        if (!repositoryOwner.trim() || !repositoryName.trim()) {
             setMessage({
                 type: "error",
                 text: "Vui lòng nhập đầy đủ Repository Owner và Repository Name.",
             });
             return;
         }
-        if (!token && !isTokenConfigured) {
+
+        if (!accessToken.trim() && !isConfigured) {
             setMessage({
                 type: "error",
-                text: "Vui lòng nhập GitHub Personal Access Token (PAT).",
+                text: "Vui lòng nhập Personal Access Token (PAT) cho lần cấu hình đầu tiên.",
             });
             return;
         }
@@ -100,13 +130,21 @@ export const GitHubConfigComponent = ({ currentUserRole }) => {
         try {
             setIsSaving(true);
             setMessage(null);
-            await GitHubConfigService.saveConfig({
-                owner: owner.trim(),
-                repository: repository.trim(),
-                ...(token ? { token: token.trim() } : {}),
-            });
-            setIsTokenConfigured(true);
-            setToken("");
+
+            const payload = {
+                repositoryOwner: repositoryOwner.trim(),
+                repositoryName: repositoryName.trim(),
+                accessToken: accessToken.trim() ? accessToken.trim() : null,
+                apiVersion: apiVersion || "2026-03-10",
+            };
+
+            const result = await GitHubConfigService.saveConfig(
+                projectId,
+                payload,
+            );
+            setIsConfigured(true);
+            setAccessToken("");
+            if (result?.status) setConnectionStatus(result.status);
             setMessage({
                 type: "success",
                 text: "Lưu cấu hình GitHub thành công.",
@@ -116,7 +154,7 @@ export const GitHubConfigComponent = ({ currentUserRole }) => {
                 type: "error",
                 text:
                     err.response?.data?.message ||
-                    "Lưu cấu hình thất bại. Vui lòng kiểm tra lại hệ thống.",
+                    "Lưu cấu hình thất bại. Vui lòng kiểm tra lại thông số.",
             });
         } finally {
             setIsSaving(false);
@@ -124,17 +162,10 @@ export const GitHubConfigComponent = ({ currentUserRole }) => {
     };
 
     const handleTestConnection = async () => {
-        if (!owner.trim() || !repository.trim()) {
+        if (!isConfigured && !accessToken.trim()) {
             setMessage({
                 type: "error",
-                text: "Vui lòng nhập Owner và Repository trước khi kiểm tra kết nối.",
-            });
-            return;
-        }
-        if (!token && !isTokenConfigured) {
-            setMessage({
-                type: "error",
-                text: "Vui lòng nhập Token để kiểm tra kết nối.",
+                text: "Vui lòng lưu cấu hình trước khi kiểm tra kết nối.",
             });
             return;
         }
@@ -144,28 +175,26 @@ export const GitHubConfigComponent = ({ currentUserRole }) => {
             setFailureReason("");
             setMessage(null);
 
-            const result = await GitHubConfigService.testConnection({
-                owner: owner.trim(),
-                repository: repository.trim(),
-                ...(token ? { token: token.trim() } : {}),
-            });
+            const result = await GitHubConfigService.testConnection(projectId);
 
             if (result && result.connected) {
                 setConnectionStatus("CONNECTED");
                 setFailureReason("");
             } else {
-                setConnectionStatus("FAILED");
-                setFailureReason(
-                    result?.message ||
-                        "Không thể kết nối tới GitHub Repository.",
-                );
+                setConnectionStatus("CONNECTION_FAILED");
+                setFailureReason("Không thể thiết lập kết nối tới GitHub.");
             }
-            setLastChecked(new Date().toLocaleString("vi-VN"));
+            setLastChecked(
+                result?.testedAt
+                    ? new Date(result.testedAt).toLocaleString("vi-VN")
+                    : new Date().toLocaleString("vi-VN"),
+            );
         } catch (err) {
-            setConnectionStatus("FAILED");
+            setConnectionStatus("CONNECTION_FAILED");
+            const errResponse = err.response?.data;
             const errDetail =
-                err.response?.data?.message ||
-                "Kết nối thất bại. Vui lòng kiểm tra lại Token hoặc quyền hạn Repository.";
+                errResponse?.message ||
+                "Kết nối thất bại. Token không hợp lệ hoặc không có quyền truy cập repository.";
             setFailureReason(errDetail);
             setLastChecked(new Date().toLocaleString("vi-VN"));
         } finally {
@@ -177,9 +206,18 @@ export const GitHubConfigComponent = ({ currentUserRole }) => {
 
     const statusBadgeStyle = {
         CONNECTED: { bg: "#e3fcef", color: "#006644", text: "Connected" },
-        FAILED: { bg: "#ffebe6", color: "#de350b", text: "Failed" },
+        CONNECTION_FAILED: { bg: "#ffebe6", color: "#de350b", text: "Failed" },
+        NOT_CONFIGURED: {
+            bg: "#ebecf0",
+            color: "#42526e",
+            text: "Not Checked",
+        },
         NOT_CHECKED: { bg: "#ebecf0", color: "#42526e", text: "Not Checked" },
-    }[connectionStatus];
+    }[connectionStatus] || {
+        bg: "#ebecf0",
+        color: "#42526e",
+        text: "Not Checked",
+    };
 
     const labelStyle = {
         display: "block",
@@ -252,8 +290,8 @@ export const GitHubConfigComponent = ({ currentUserRole }) => {
                         type="text"
                         style={inputStyle}
                         placeholder="e.g. github-username hoặc organization-name"
-                        value={owner}
-                        onChange={(e) => setOwner(e.target.value)}
+                        value={repositoryOwner}
+                        onChange={(e) => setRepositoryOwner(e.target.value)}
                         disabled={isBusy}
                     />
                 </div>
@@ -268,8 +306,8 @@ export const GitHubConfigComponent = ({ currentUserRole }) => {
                         type="text"
                         style={inputStyle}
                         placeholder="e.g. cnpm-project-support"
-                        value={repository}
-                        onChange={(e) => setRepository(e.target.value)}
+                        value={repositoryName}
+                        onChange={(e) => setRepositoryName(e.target.value)}
                         disabled={isBusy}
                     />
                 </div>
@@ -277,7 +315,9 @@ export const GitHubConfigComponent = ({ currentUserRole }) => {
                 <div style={{ marginBottom: "20px" }}>
                     <label htmlFor="token-input" style={labelStyle}>
                         Personal Access Token (PAT){" "}
-                        <span style={{ color: "#de350b" }}>*</span>
+                        {!isConfigured && (
+                            <span style={{ color: "#de350b" }}>*</span>
+                        )}
                     </label>
                     <input
                         id="token-input"
@@ -285,12 +325,12 @@ export const GitHubConfigComponent = ({ currentUserRole }) => {
                         autoComplete="new-password"
                         style={inputStyle}
                         placeholder={
-                            isTokenConfigured
-                                ? "•••••••••••••••• (Đã cấu hình, nhập mới để đổi token khác)"
+                            isConfigured
+                                ? "•••••••••••••••• (Đã cấu hình, để trống nếu không muốn đổi)"
                                 : "ghp_xxxxxxxxxxxxxxxxxxxx"
                         }
-                        value={token}
-                        onChange={(e) => setToken(e.target.value)}
+                        value={accessToken}
+                        onChange={(e) => setAccessToken(e.target.value)}
                         disabled={isBusy}
                     />
                     <span
@@ -301,8 +341,8 @@ export const GitHubConfigComponent = ({ currentUserRole }) => {
                             color: "#6b778c",
                         }}
                     >
-                        Token được che và mã hóa an toàn, không hiển thị lại qua
-                        API sau khi lưu.
+                        Token được mã hóa an toàn, không được trả về phía client
+                        qua API sau khi lưu.
                     </span>
                 </div>
 
@@ -358,7 +398,7 @@ export const GitHubConfigComponent = ({ currentUserRole }) => {
                     )}
                 </div>
 
-                {connectionStatus === "FAILED" && (
+                {connectionStatus === "CONNECTION_FAILED" && (
                     <div
                         style={{
                             padding: "14px 16px",
@@ -379,7 +419,7 @@ export const GitHubConfigComponent = ({ currentUserRole }) => {
                         >
                             Lý do thất bại:{" "}
                             {failureReason ||
-                                "Không tìm thấy Repository hoặc Token không hợp lệ."}
+                                "Lỗi xác thực hoặc không tìm thấy Repository."}
                         </div>
                         <div style={{ fontWeight: 600, marginBottom: "4px" }}>
                             Hướng xử lý gợi ý:
@@ -406,9 +446,9 @@ export const GitHubConfigComponent = ({ currentUserRole }) => {
                                         borderRadius: "3px",
                                     }}
                                 >
-                                    repo
-                                </code>{" "}
-                                hoặc{" "}
+                                    Metadata: Read
+                                </code>
+                                ,{" "}
                                 <code
                                     style={{
                                         backgroundColor: "#fffae6",

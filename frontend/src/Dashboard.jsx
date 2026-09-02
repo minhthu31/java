@@ -384,7 +384,10 @@ export default function Dashboard({ title }) {
                 >
                     {activeTab === "github-config" && (
                         <div style={{ padding: "20px" }}>
-                            <GitHubConfigComponent currentUserRole={userRole} />
+                            <GitHubConfigComponent
+                                currentUserRole={userRole}
+                                projectId={selectedProjectId}
+                            />
                         </div>
                     )}
 

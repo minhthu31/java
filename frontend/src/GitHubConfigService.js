@@ -1,27 +1,27 @@
-import axios from "axios";
+import api from "./api";
 
-const API_BASE_URL =
-    process.env.REACT_APP_API_BASE_URL || "http://localhost:8080/api";
+const BASE_PROJECT_URL = "/projects";
 
 export const GitHubConfigService = {
-    getConfig: async () => {
-        const response = await axios.get(`${API_BASE_URL}/admin/config/github`);
-        return response.data;
+    getConfig: async (projectId) => {
+        const response = await api.get(
+            `${BASE_PROJECT_URL}/${projectId}/integrations/github/config`,
+        );
+        return response.data?.data;
     },
-
-    saveConfig: async (configData) => {
-        const response = await axios.post(
-            `${API_BASE_URL}/admin/config/github`,
+    saveConfig: async (projectId, configData) => {
+        const response = await api.put(
+            `${BASE_PROJECT_URL}/${projectId}/integrations/github/config`,
             configData,
         );
-        return response.data;
+        return response.data?.data;
     },
-
-    testConnection: async (connectionData) => {
-        const response = await axios.post(
-            `${API_BASE_URL}/admin/config/github/test`,
-            connectionData,
+    testConnection: async (projectId) => {
+        const response = await api.post(
+            `${BASE_PROJECT_URL}/${projectId}/integrations/github/test-connection`,
         );
-        return response.data;
+        return response.data?.data;
     },
 };
+
+export default GitHubConfigService;
