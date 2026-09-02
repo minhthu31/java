@@ -18,6 +18,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.data.domain.PageImpl;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -27,6 +28,9 @@ import vn.edu.cnpm.projectsupport.integration.jira.domain.JiraBacklogSnapshot;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.JiraIssueSnapshot;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLog;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLogStatus;
+import vn.edu.cnpm.projectsupport.integration.jira.exception.JiraApiException;
+import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncDirection;
+import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraIssueDto;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraIssueFieldsDto;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraPageDto;
@@ -68,7 +72,7 @@ class JiraSyncServiceTest {
 
         project = org.mockito.Mockito.mock(Project.class);
         lenient().when(project.getJiraProjectKey()).thenReturn(PROJECT_KEY);
-        when(projectRepository.findById(PROJECT_ID)).thenReturn(Optional.of(project));
+        lenient().when(projectRepository.findById(PROJECT_ID)).thenReturn(Optional.of(project));
     }
 
     @Test
@@ -201,6 +205,144 @@ class JiraSyncServiceTest {
                 log.getStatus() == SyncLogStatus.FAILED
                         && "PROJECT_NOT_FOUND".equals(log.getErrorCode())
                         && log.getProjectId() == null);
+    }
+
+    @Test
+    void shouldRetryRetryableJiraFailuresWithExponentialBackoff() {
+        java.util.List<Long> delays = new java.util.ArrayList<>();
+        JiraRetryExecutor executor = new JiraRetryExecutor(delays::add);
+        SyncLog log = new SyncLog(PROJECT_ID, IntegrationProvider.JIRA, "PROJECT_SYNC", PROJECT_KEY,
+                SyncDirection.IMPORT, "corr-1", Instant.now());
+        JiraApiException transientError = new JiraApiException(
+                org.springframework.http.HttpStatus.BAD_GATEWAY, "JIRA_UNAVAILABLE", true, null);
+        when(jiraClient.getProject(PROJECT_ID, PROJECT_KEY))
+                .thenThrow(transientError).thenThrow(transientError)
+                .thenReturn(new JiraProject("1", PROJECT_KEY, "CNPM", "https://example.atlassian.net/p/1"));
+
+        JiraProject result = executor.execute(() -> jiraClient.getProject(PROJECT_ID, PROJECT_KEY), log);
+
+        assertThat(result.key()).isEqualTo(PROJECT_KEY);
+        assertThat(delays).containsExactly(200L, 400L);
+        assertThat(log.getRetryCount()).isEqualTo(2);
+    }
+
+    @Test
+    void shouldNotRetryNonRetryableAuthenticationFailure() {
+        java.util.List<Long> delays = new java.util.ArrayList<>();
+        JiraRetryExecutor executor = new JiraRetryExecutor(delays::add);
+        SyncLog log = new SyncLog(PROJECT_ID, IntegrationProvider.JIRA, "PROJECT_SYNC", PROJECT_KEY,
+                SyncDirection.IMPORT, "corr-2", Instant.now());
+        JiraApiException auth = new JiraApiException(
+                org.springframework.http.HttpStatus.UNAUTHORIZED, "JIRA_AUTH_FAILED", false, null);
+
+        assertThatThrownBy(() -> executor.execute(() -> { throw auth; }, log)).isSameAs(auth);
+        assertThat(delays).isEmpty();
+        assertThat(log.getRetryCount()).isZero();
+    }
+
+    @Test
+    void shouldUseRetryAfterForRateLimitAndCapBackoff() {
+        java.util.List<Long> delays = new java.util.ArrayList<>();
+        JiraRetryExecutor executor = new JiraRetryExecutor(delays::add);
+        SyncLog log = new SyncLog(PROJECT_ID, IntegrationProvider.JIRA, "PROJECT_SYNC", PROJECT_KEY,
+                SyncDirection.IMPORT, "corr-3", Instant.now());
+        JiraApiException rate = new JiraApiException(
+                org.springframework.http.HttpStatus.TOO_MANY_REQUESTS, "JIRA_RATE_LIMITED", true, 10L);
+
+        assertThatThrownBy(() -> executor.execute(() -> { throw rate; }, log)).isSameAs(rate);
+        assertThat(delays).containsExactly(10000L, 10000L);
+        assertThat(log.getRetryCount()).isEqualTo(2);
+    }
+
+    @Test
+    void shouldAccumulateRetryCountAcrossMultipleJiraOperationsInOneSync() {
+        java.util.List<Long> delays = new java.util.ArrayList<>();
+        JiraRetryExecutor executor = new JiraRetryExecutor(delays::add);
+        SyncLog log = new SyncLog(
+                PROJECT_ID,
+                IntegrationProvider.JIRA,
+                "PROJECT_SYNC",
+                PROJECT_KEY,
+                SyncDirection.IMPORT,
+                "corr-multi-operation",
+                Instant.now());
+
+        JiraApiException firstFailure = new JiraApiException(
+                org.springframework.http.HttpStatus.BAD_GATEWAY,
+                "JIRA_UNAVAILABLE",
+                true,
+                null);
+        JiraApiException secondFailure = new JiraApiException(
+                org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                "JIRA_UNAVAILABLE",
+                true,
+                null);
+
+        final int[] firstCalls = {0};
+        final int[] secondCalls = {0};
+
+        executor.execute(() -> {
+            if (firstCalls[0]++ == 0) {
+                throw firstFailure;
+            }
+            return "project-ok";
+        }, log);
+
+        executor.execute(() -> {
+            if (secondCalls[0]++ == 0) {
+                throw secondFailure;
+            }
+            return "issues-ok";
+        }, log);
+
+        assertThat(log.getRetryCount()).isEqualTo(2);
+        assertThat(delays).containsExactly(200L, 200L);
+    }
+
+    @Test
+    void shouldSanitizeSensitiveDataBeforeSavingSyncLog() {
+        JiraApiException failure = new JiraApiException(
+                org.springframework.http.HttpStatus.BAD_GATEWAY,
+                "JIRA_UNAVAILABLE",
+                false,
+                null,
+                "authorization: Bearer secret-token token=abc123 password=secret",
+                null);
+        when(jiraClient.getProject(PROJECT_ID, PROJECT_KEY)).thenThrow(failure);
+
+        assertThatThrownBy(() -> service.syncProject(PROJECT_ID))
+                .isSameAs(failure);
+
+        ArgumentCaptor<SyncLog> captor = ArgumentCaptor.forClass(SyncLog.class);
+        verify(syncLogRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
+        assertThat(captor.getAllValues())
+                .anyMatch(log -> "JIRA_UNAVAILABLE".equals(log.getErrorCode())
+                        && log.getErrorMessage() != null
+                        && !log.getErrorMessage().contains("secret-token")
+                        && !log.getErrorMessage().contains("abc123")
+                        && !log.getErrorMessage().contains("secret"));
+    }
+
+    @Test
+    void shouldFindLatestFailedSync() {
+        SyncLog failed = new SyncLog(
+                PROJECT_ID,
+                IntegrationProvider.JIRA,
+                "PROJECT_SYNC",
+                PROJECT_KEY,
+                SyncDirection.IMPORT,
+                "corr-latest",
+                Instant.now());
+        failed.setStatus(SyncLogStatus.FAILED);
+        failed.setErrorCode("JIRA_UNAVAILABLE");
+        failed.setCompletedAt(Instant.now());
+
+        when(syncLogRepository.findByProjectIdAndStatusOrderByStartedAtDesc(
+                eq(PROJECT_ID), eq(SyncLogStatus.FAILED), any()))
+                .thenReturn(new PageImpl<>(List.of(failed)));
+
+        assertThat(service.findLatestFailedSync(PROJECT_ID))
+                .contains(failed);
     }
 
     private void stubSuccessfulSync(JiraIssueDto issue) {
