@@ -1,0 +1,261 @@
+{
+  "info": {
+    "name": "CNPM Sprint 3 - Jira Integration",
+    "description": "CNPM-87: luồng demo cấu hình Jira, Task local, sync, update, retry và import dữ liệu.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Jira configuration",
+      "item": [
+        {
+          "name": "Lưu cấu hình Jira",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token_admin}}", "type": "string" }] },
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/config",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"siteUrl\": \"{{jira_site_url}}\",\n  \"projectKey\": \"{{jira_project_key}}\",\n  \"email\": \"{{jira_email}}\",\n  \"apiToken\": \"{{jira_api_token}}\",\n  \"authType\": \"BASIC\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Cấu hình được lưu', () => pm.expect(body.data.configured).to.eql(true));",
+              "pm.test('Response không lộ API token', () => pm.expect(JSON.stringify(body)).not.to.include(pm.environment.get('jira_api_token')));"
+            ]}
+          }]
+        },
+        {
+          "name": "Đọc cấu hình đã che secret",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token_admin}}", "type": "string" }] },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/config"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Có data và timestamp', () => { pm.expect(body.data).to.be.an('object'); pm.expect(body.timestamp).to.exist; });",
+              "pm.test('Không trả apiToken', () => pm.expect(body.data).not.to.have.property('apiToken'));"
+            ]}
+          }]
+        },
+        {
+          "name": "Kiểm tra kết nối Jira",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token_admin}}", "type": "string" }] },
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/test-connection"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Jira connected', () => pm.expect(body.data.connected).to.eql(true));",
+              "pm.test('Đúng project key', () => pm.expect(body.data.projectKey).to.eql(pm.environment.get('jira_project_key')));"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "2. Local Task to Jira",
+      "item": [
+        {
+          "name": "Tạo Task local và lưu taskId",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token_leader}}", "type": "string" }] },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "cnpm87-create-{{$guid}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/tasks",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"CNPM-87 Jira demo {{$timestamp}}\",\n  \"description\": \"Task tạo từ Postman để demo Sprint 3\",\n  \"acceptanceCriteria\": \"Task được liên kết với đúng một Jira Issue\",\n  \"issueType\": \"TASK\",\n  \"priority\": \"HIGH\",\n  \"classification\": \"NEW_FEATURE\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status 201', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.test('Task được tạo', () => pm.expect(body.data.id).to.be.a('number'));",
+              "pm.environment.set('taskId', body.data.id);"
+            ]}
+          }]
+        },
+        {
+          "name": "Đẩy Task lên Jira",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token_leader}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Idempotency-Key", "value": "cnpm87-sync-{{$guid}}" }],
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/tasks/{{taskId}}/sync"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Task đã sync', () => pm.expect(body.data.syncStatus).to.eql('SYNCED'));",
+              "pm.test('Có Jira Issue Key', () => pm.expect(body.data.jiraIssueKey).to.be.a('string').and.not.empty);",
+              "pm.environment.set('jiraIssueKey', body.data.jiraIssueKey);"
+            ]}
+          }]
+        },
+        {
+          "name": "Đọc lại Task và Issue Key",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token_leader}}", "type": "string" }] },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/tasks/{{taskId}}"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Task giữ Jira Issue Key', () => pm.expect(body.data.jiraIssueKey).to.eql(pm.environment.get('jiraIssueKey')));"
+            ]}
+          }]
+        },
+        {
+          "name": "Đọc Jira Issue đã liên kết",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token_leader}}", "type": "string" }] },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/issues/{{jiraIssueKey}}"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Issue thuộc đúng Task', () => pm.expect(String(body.data.localTaskId)).to.eql(pm.environment.get('taskId')));",
+              "pm.test('Đúng Jira Issue Key', () => pm.expect(body.data.jiraIssueKey).to.eql(pm.environment.get('jiraIssueKey')));"
+            ]}
+          }]
+        },
+        {
+          "name": "Cập nhật status Task",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token_leader}}", "type": "string" }] },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/tasks/{{taskId}}/status",
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"IN_PROGRESS\",\n  \"reason\": \"CNPM-87 demo\"\n}" }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "pm.test('Status đã cập nhật', () => pm.expect(pm.response.json().data.status).to.eql('IN_PROGRESS'));"
+            ]}
+          }]
+        },
+        {
+          "name": "Cập nhật assignee Task",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token_leader}}", "type": "string" }] },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/tasks/{{taskId}}/assignee",
+            "body": { "mode": "raw", "raw": "{\n  \"assigneeUserId\": {{member_user_id}}\n}" }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "pm.test('Assignee đã cập nhật', () => pm.expect(String(pm.response.json().data.assigneeUserId)).to.eql(pm.environment.get('member_user_id')));"
+            ]}
+          }]
+        },
+        {
+          "name": "Retry Task bị lỗi (tùy chọn)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": { "type": "text/javascript", "exec": [
+                "if (pm.environment.get('runRetryScenario') !== 'true') { pm.execution.skipRequest(); }"
+              ]}
+            },
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('Retry thành công', () => pm.expect(pm.response.json().data.syncStatus).to.eql('SYNCED'));"
+              ]}
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token_leader}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Idempotency-Key", "value": "cnpm87-retry-{{$guid}}" }],
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/tasks/{{taskId}}/retry"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Jira to local",
+      "item": [
+        {
+          "name": "Đồng bộ Project, Issue, Backlog và Sprint",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token_leader}}", "type": "string" }] },
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/sync"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Có kết quả và correlation ID', () => { pm.expect(body.data.projectId).to.eql(Number(pm.environment.get('projectId'))); pm.expect(body.data.correlationId).to.be.a('string').and.not.empty; });",
+              "pm.test('Có số liệu đồng bộ', () => { pm.expect(body.data.issuesSynced).to.be.a('number'); pm.expect(body.data.sprintsSynced).to.be.a('number'); });"
+            ]}
+          }]
+        },
+        {
+          "name": "Đọc SyncLog lỗi gần nhất",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token_leader}}", "type": "string" }] },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/sync/failed/latest"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "pm.test('Response đúng envelope', () => pm.expect(pm.response.json()).to.have.property('timestamp'));"
+            ]}
+          }]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "projectId", "value": "" },
+    { "key": "token_admin", "value": "" },
+    { "key": "token_leader", "value": "" },
+    { "key": "jira_site_url", "value": "https://your-domain.atlassian.net" },
+    { "key": "jira_project_key", "value": "" },
+    { "key": "jira_email", "value": "" },
+    { "key": "jira_api_token", "value": "" },
+    { "key": "member_user_id", "value": "" },
+    { "key": "taskId", "value": "" },
+    { "key": "jiraIssueKey", "value": "" },
+    { "key": "runRetryScenario", "value": "false" }
+  ]
+}
