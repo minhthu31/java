@@ -7,6 +7,7 @@
 # Postman Environment & Global Variables chứa Token
 *.postman_environment.json
 *environment*.json
+!jira-sprint3-environment.example.json
 
 # IDE & Editor files
 .vscode/

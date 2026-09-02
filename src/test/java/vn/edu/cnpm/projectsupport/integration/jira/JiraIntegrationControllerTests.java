@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,9 +28,15 @@ import org.springframework.transaction.annotation.Transactional;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationConfig;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationConfigStatus;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider;
+import vn.edu.cnpm.projectsupport.integration.jira.domain.JiraIssue;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.IntegrationConfigRepository;
+import vn.edu.cnpm.projectsupport.integration.jira.repository.JiraIssueRepository;
 import vn.edu.cnpm.projectsupport.security.IntegrationSecretService;
 import vn.edu.cnpm.projectsupport.security.ProjectAuthorizationService;
+import vn.edu.cnpm.projectsupport.task.domain.Task;
+import vn.edu.cnpm.projectsupport.task.domain.TaskIssueType;
+import vn.edu.cnpm.projectsupport.task.domain.TaskPriority;
+import vn.edu.cnpm.projectsupport.task.repository.TaskRepository;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -46,6 +53,12 @@ class JiraIntegrationControllerTests {
 
     @Autowired
     private IntegrationConfigRepository configRepository;
+
+    @Autowired
+    private JiraIssueRepository jiraIssueRepository;
+
+    @Autowired
+    private TaskRepository taskRepository;
 
     @Autowired
     private IntegrationSecretService secretService;
@@ -228,5 +241,34 @@ class JiraIntegrationControllerTests {
         mockMvc.perform(get(BASE_URL + "/config", PROJECT_ID)
                         .with(user("member").roles("TEAM_MEMBER")))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Team Leader đọc được Jira Issue đã liên kết với Task của project")
+    void leaderCanReadMappedJiraIssue() throws Exception {
+        Task task = taskRepository.saveAndFlush(new Task(
+                PROJECT_ID,
+                "CNPM-87 integration demo",
+                "Có thể đọc lại Jira Issue Key",
+                TaskIssueType.TASK,
+                TaskPriority.HIGH));
+
+        jiraIssueRepository.saveAndFlush(new JiraIssue(
+                task.getId(),
+                "10087",
+                "TEST-87",
+                "https://example.atlassian.net/browse/TEST-87",
+                Instant.parse("2026-09-02T05:00:00Z")));
+
+        when(projectAuthorization.isCurrentUserLeader(PROJECT_ID)).thenReturn(true);
+
+        mockMvc.perform(get(BASE_URL + "/issues/{jiraIssueKey}", PROJECT_ID, "TEST-87")
+                        .with(user("leader").roles("TEAM_LEADER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.projectId").value(PROJECT_ID))
+                .andExpect(jsonPath("$.data.localTaskId").value(task.getId()))
+                .andExpect(jsonPath("$.data.jiraIssueKey").value("TEST-87"))
+                .andExpect(jsonPath("$.data.jiraIssueUrl")
+                        .value("https://example.atlassian.net/browse/TEST-87"));
     }
 }
