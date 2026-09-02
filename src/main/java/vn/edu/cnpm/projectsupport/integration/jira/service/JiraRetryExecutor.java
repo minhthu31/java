@@ -61,7 +61,8 @@ public class JiraRetryExecutor {
                 }
 
                 if (log != null) {
-                    log.setRetryCount(attempt);
+                    int current = log.getRetryCount();
+                    log.setRetryCount(current + 1);
                 }
 
                 long delay = backoffMillis(attempt, runtime);
@@ -90,8 +91,11 @@ public class JiraRetryExecutor {
         if (exception instanceof JiraApiException jira
                 && jira.getStatus() == HttpStatus.TOO_MANY_REQUESTS
                 && jira.getRetryAfterSeconds() != null) {
-            return Math.min(MAX_BACKOFF_MILLIS,
-                    Math.max(0L, jira.getRetryAfterSeconds() * 1000L));
+            long retryAfterSeconds = Math.max(0L, jira.getRetryAfterSeconds());
+            if (retryAfterSeconds > Long.MAX_VALUE / 1000L) {
+                return Long.MAX_VALUE;
+            }
+            return retryAfterSeconds * 1000L;
         }
 
         long delay = INITIAL_BACKOFF_MILLIS * (1L << Math.max(0, retryNumber - 1));

@@ -11,7 +11,6 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.lenient;
 
 import java.time.Instant;
 import java.util.List;
@@ -72,13 +71,8 @@ class JiraSyncServiceTest {
                 syncLogRepository);
 
         project = org.mockito.Mockito.mock(Project.class);
-        lenient()
-                .when(project.getJiraProjectKey())
-                .thenReturn(PROJECT_KEY);
-
-        lenient()
-                .when(projectRepository.findById(PROJECT_ID))
-                .thenReturn(Optional.of(project));
+        lenient().when(project.getJiraProjectKey()).thenReturn(PROJECT_KEY);
+        lenient().when(projectRepository.findById(PROJECT_ID)).thenReturn(Optional.of(project));
     }
 
     @Test
@@ -256,8 +250,53 @@ class JiraSyncServiceTest {
                 org.springframework.http.HttpStatus.TOO_MANY_REQUESTS, "JIRA_RATE_LIMITED", true, 10L);
 
         assertThatThrownBy(() -> executor.execute(() -> { throw rate; }, log)).isSameAs(rate);
-        assertThat(delays).containsExactly(5000L, 5000L);
+        assertThat(delays).containsExactly(10000L, 10000L);
         assertThat(log.getRetryCount()).isEqualTo(2);
+    }
+
+    @Test
+    void shouldAccumulateRetryCountAcrossMultipleJiraOperationsInOneSync() {
+        java.util.List<Long> delays = new java.util.ArrayList<>();
+        JiraRetryExecutor executor = new JiraRetryExecutor(delays::add);
+        SyncLog log = new SyncLog(
+                PROJECT_ID,
+                IntegrationProvider.JIRA,
+                "PROJECT_SYNC",
+                PROJECT_KEY,
+                SyncDirection.IMPORT,
+                "corr-multi-operation",
+                Instant.now());
+
+        JiraApiException firstFailure = new JiraApiException(
+                org.springframework.http.HttpStatus.BAD_GATEWAY,
+                "JIRA_UNAVAILABLE",
+                true,
+                null);
+        JiraApiException secondFailure = new JiraApiException(
+                org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                "JIRA_UNAVAILABLE",
+                true,
+                null);
+
+        final int[] firstCalls = {0};
+        final int[] secondCalls = {0};
+
+        executor.execute(() -> {
+            if (firstCalls[0]++ == 0) {
+                throw firstFailure;
+            }
+            return "project-ok";
+        }, log);
+
+        executor.execute(() -> {
+            if (secondCalls[0]++ == 0) {
+                throw secondFailure;
+            }
+            return "issues-ok";
+        }, log);
+
+        assertThat(log.getRetryCount()).isEqualTo(2);
+        assertThat(delays).containsExactly(200L, 200L);
     }
 
     @Test
