@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -25,8 +26,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import vn.edu.cnpm.projectsupport.security.ProjectAuthorizationService;
 
 @SpringBootTest
@@ -34,7 +33,7 @@ import vn.edu.cnpm.projectsupport.security.ProjectAuthorizationService;
 @ActiveProfiles("test")
 class GitHubConfigRbacControllerTest {
 
-    private static final long PROJECT_ID = 9101L;
+    private static final long PROJECT_ID = 9891L;
     private static final String BASE_URL = "/api/v1/projects/{projectId}/integrations/github";
 
     @Autowired
@@ -132,7 +131,7 @@ class GitHubConfigRbacControllerTest {
     }
 
     @Test
-    @DisplayName("Team Leader không thuộc Project bị chặn")
+    @DisplayName("Team Leader không thuộc Project bị chặn 403")
     void leaderOfDifferentProjectIsForbidden() throws Exception {
         when(projectAuthorization.isCurrentUserLeader(PROJECT_ID)).thenReturn(false);
 
