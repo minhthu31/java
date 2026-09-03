@@ -3,7 +3,6 @@ package vn.edu.cnpm.projectsupport.integration.github;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.NoSuchElementException;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,6 +10,7 @@ import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubIntegratio
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationConfig;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider;
 import vn.edu.cnpm.projectsupport.project.repository.ProjectRepository;
+import vn.edu.cnpm.projectsupport.security.IntegrationSecretService;
 
 @Service
 public class GitHubConfigService {
@@ -18,14 +18,18 @@ public class GitHubConfigService {
     private final GitHubIntegrationConfigRepository configRepository;
     private final ProjectRepository projectRepository;
     private final GitHubRestClient gitHubRestClient;
+    private final IntegrationSecretService secretService;
 
+    // Tiêm phụ thuộc chuẩn qua Constructor, không dùng @Autowired(required = false)
     public GitHubConfigService(
             GitHubIntegrationConfigRepository configRepository,
-            @Autowired(required = false) ProjectRepository projectRepository,
-            @Autowired(required = false) GitHubRestClient gitHubRestClient) {
+            ProjectRepository projectRepository,
+            GitHubRestClient gitHubRestClient,
+            IntegrationSecretService secretService) {
         this.configRepository = configRepository;
         this.projectRepository = projectRepository;
         this.gitHubRestClient = gitHubRestClient;
+        this.secretService = secretService;
     }
 
     @Transactional(readOnly = true)
@@ -38,9 +42,8 @@ public class GitHubConfigService {
                         .repositoryFullName(config.getAccountIdentifier())
                         .configured(true)
                         .status(resolveStatus(config.getStatus()))
-                        .githubLogin(config.getAccountIdentifier() != null && config.getAccountIdentifier().contains("/")
-                                ? config.getAccountIdentifier().split("/")[0] : null)
-                        .lastTestedAt(config.getUpdatedAt())
+                        .githubLogin(extractOwner(config.getAccountIdentifier()))
+                        .lastTestedAt(config.getLastCheckedAt() != null ? config.getLastCheckedAt() : config.getUpdatedAt())
                         .lastTestSucceeded("CONNECTED".equalsIgnoreCase(String.valueOf(config.getStatus())))
                         .build())
                 .orElseGet(() -> GitHubConfigResponse.builder()
@@ -60,16 +63,27 @@ public class GitHubConfigService {
 
         String repositoryFullName = request.getRepositoryOwner().trim() + "/" + request.getRepositoryName().trim();
 
-        IntegrationConfig config = configRepository.findGitHubConfigByProjectId(projectId)
-                .orElseGet(() -> new IntegrationConfig(projectId, IntegrationProvider.GITHUB, null));
+        IntegrationConfig config = configRepository.findGitHubConfigByProjectId(projectId).orElse(null);
+
+        if (config == null) {
+            // Cấu hình lần đầu bắt buộc phải có token
+            if (request.getAccessToken() == null || request.getAccessToken().isBlank()) {
+                throw new IllegalArgumentException("Access token bắt buộc khi cấu hình GitHub lần đầu");
+            }
+            config = new IntegrationConfig(projectId, IntegrationProvider.GITHUB, secretService.encrypt(request.getAccessToken().trim()));
+        } else {
+            // Cập nhật cấu hình: accessToken rỗng/blank -> báo lỗi validation
+            if (request.getAccessToken() != null) {
+                if (request.getAccessToken().isBlank()) {
+                    throw new IllegalArgumentException("Access token không được để trống");
+                }
+                config.setEncryptedSecret(secretService.encrypt(request.getAccessToken().trim()));
+            }
+            // accessToken == null -> giữ nguyên token cũ
+        }
 
         config.setBaseUrl("https://api.github.com");
         config.setAccountIdentifier(repositoryFullName);
-
-        // Giữ nguyên token cũ nếu request accessToken là null hoặc blank
-        if (request.getAccessToken() != null && !request.getAccessToken().isBlank()) {
-            config.setEncryptedSecret("enc:" + request.getAccessToken().trim());
-        }
 
         // Thay đổi cấu hình -> bắt buộc reset trạng thái về NOT_CHECKED
         applyStatus(config, "NOT_CHECKED");
@@ -82,7 +96,7 @@ public class GitHubConfigService {
                 .configured(true)
                 .status("NOT_CHECKED")
                 .githubLogin(request.getRepositoryOwner().trim())
-                .lastTestedAt(saved.getUpdatedAt())
+                .lastTestedAt(saved.getLastCheckedAt() != null ? saved.getLastCheckedAt() : saved.getUpdatedAt())
                 .lastTestSucceeded(null)
                 .build();
     }
@@ -102,7 +116,7 @@ public class GitHubConfigService {
         String[] parts = fullName.split("/", 2);
         String owner = parts[0];
         String repo = parts[1];
-        String rawToken = resolveToken(config.getEncryptedSecret());
+        String rawToken = secretService.decrypt(config.getEncryptedSecret());
 
         Instant testedAt = Instant.now();
         try {
@@ -113,23 +127,12 @@ public class GitHubConfigService {
                     GitHubClientConfig.DEFAULT_API_VERSION,
                     Duration.ofSeconds(10));
 
-            GitHubConnectionResult result;
-            if (gitHubRestClient != null) {
-                result = gitHubRestClient.testConnection(clientConfig);
-            } else {
-                result = new GitHubConnectionResult(
-                        true,
-                        1001L,
-                        owner,
-                        2001L,
-                        fullName,
-                        "admin",
-                        4999L,
-                        testedAt.plusSeconds(3600),
-                        testedAt);
-            }
+            // Gọi REST Client thật
+            GitHubConnectionResult result = gitHubRestClient.testConnection(clientConfig);
 
             applyStatus(config, "CONNECTED");
+            config.setLastCheckedAt(testedAt);
+            config.setLastErrorCode(null);
             configRepository.save(config);
 
             return GitHubConnectionTestResponse.builder()
@@ -145,34 +148,33 @@ public class GitHubConfigService {
                     .testedAt(testedAt)
                     .build();
 
-        } catch (Exception ex) {
-            // Khi test thất bại: không làm mất cấu hình, cập nhật CONNECTION_FAILED
+        } catch (GitHubApiException ex) {
+            // Cập nhật trạng thái thất bại và ném lại ngoại lệ để trả đúng HTTP code 401/403/404/429/502
             applyStatus(config, "CONNECTION_FAILED");
+            config.setLastCheckedAt(testedAt);
+            config.setLastErrorCode(ex.getErrorCode());
             configRepository.save(config);
-
-            return GitHubConnectionTestResponse.builder()
-                    .projectId(projectId)
-                    .connected(false)
-                    .repositoryFullName(fullName)
-                    .testedAt(testedAt)
-                    .build();
+            throw ex;
+        } catch (Exception ex) {
+            applyStatus(config, "CONNECTION_FAILED");
+            config.setLastCheckedAt(testedAt);
+            config.setLastErrorCode("GITHUB_PROVIDER_UNAVAILABLE");
+            configRepository.save(config);
+            throw ex;
         }
     }
 
     private void validateProjectExists(Long projectId) {
-        if (projectRepository != null && !projectRepository.existsById(projectId)) {
+        if (!projectRepository.existsById(projectId)) {
             throw new NoSuchElementException("Project không tồn tại: " + projectId);
         }
     }
 
-    private String resolveToken(String encryptedSecret) {
-        if (encryptedSecret == null || encryptedSecret.isBlank()) {
-            throw new IllegalArgumentException("GitHub access token is missing");
+    private String extractOwner(String fullName) {
+        if (fullName != null && fullName.contains("/")) {
+            return fullName.split("/")[0];
         }
-        if (encryptedSecret.startsWith("enc:")) {
-            return encryptedSecret.substring(4);
-        }
-        return encryptedSecret;
+        return fullName;
     }
 
     private void applyStatus(IntegrationConfig config, String status) {
