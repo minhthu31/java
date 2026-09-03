@@ -5,6 +5,7 @@ import RequirementList from "./RequirementList";
 import SrsPreview from "./SrsPreview";
 import TaskComponent from "./TaskComponent";
 import JiraConfigComponent from "./JiraConfigComponent";
+import { GitHubConfigComponent } from "./GitHubConfigComponent";
 
 const getRoleTitle = (role) => {
     switch (role) {
@@ -24,6 +25,11 @@ const getRoleTitle = (role) => {
 export default function Dashboard({ title }) {
     const navigate = useNavigate();
     const user = currentUser();
+
+    const userRole = user?.role
+        ? String(user.role).replace("ROLE_", "").toUpperCase()
+        : null;
+
     const [activeTab, setActiveTab] = useState("requirements");
 
     useEffect(() => {
@@ -33,10 +39,6 @@ export default function Dashboard({ title }) {
     }, [user, navigate]);
 
     if (!user) return null;
-
-    const userRole = user.role
-        ? String(user.role).replace("ROLE_", "").toUpperCase()
-        : null;
 
     const displayTitle = title || getRoleTitle(userRole);
 
@@ -63,6 +65,7 @@ export default function Dashboard({ title }) {
         userRole === "TEAM_LEADER" || userRole === "LECTURER";
 
     const canAccessJira = userRole === "ADMIN";
+    const canAccessGitHubConfig = userRole === "ADMIN";
 
     return (
         <main
@@ -338,6 +341,36 @@ export default function Dashboard({ title }) {
                             Cấu hình Jira
                         </button>
                     )}
+
+                    {canAccessGitHubConfig && (
+                        <button
+                            type="button"
+                            data-testid="github-config-tab"
+                            onClick={() => setActiveTab("github-config")}
+                            style={{
+                                backgroundColor: "#fff",
+                                padding: "16px",
+                                borderRadius: "6px",
+                                border: "none",
+                                borderLeft:
+                                    activeTab === "github-config"
+                                        ? "4px solid #0052cc"
+                                        : "4px solid transparent",
+                                fontWeight:
+                                    activeTab === "github-config" ? 600 : 500,
+                                color:
+                                    activeTab === "github-config"
+                                        ? "#0052cc"
+                                        : "#172b4d",
+                                cursor: "pointer",
+                                textAlign: "left",
+                                boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                                fontSize: "14px",
+                            }}
+                        >
+                            Cấu hình GitHub
+                        </button>
+                    )}
                 </aside>
 
                 <section
@@ -349,6 +382,15 @@ export default function Dashboard({ title }) {
                         overflow: "hidden",
                     }}
                 >
+                    {activeTab === "github-config" && (
+                        <div style={{ padding: "20px" }}>
+                            <GitHubConfigComponent
+                                currentUserRole={userRole}
+                                projectId={selectedProjectId}
+                            />
+                        </div>
+                    )}
+
                     {activeTab === "jira-config" &&
                         (!selectedProjectId ? (
                             <div
