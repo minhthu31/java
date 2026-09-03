@@ -64,7 +64,8 @@ class GitHubRestClientTest {
         when(transport.get(eq("https://api.github.com/repos/octocat/Hello-World"), any(), any()))
                 .thenReturn(new GitHubHttpResponse(200, """
                         {"id":123,"name":"Hello-World","full_name":"octocat/Hello-World",
-                         "private":false,"default_branch":"main","html_url":"https://github.com/octocat/Hello-World","archived":false}
+                         "private":false,"default_branch":"main","html_url":"https://github.com/octocat/Hello-World","archived":false,
+                         "permissions":{"admin":false,"maintain":false,"push":true,"triage":true,"pull":true}}
                         """, Map.of()));
 
         GitHubConnectionResult result = client.testConnection(config);
@@ -74,6 +75,44 @@ class GitHubRestClientTest {
         assertThat(result.login()).isEqualTo("dev01");
         assertThat(result.githubRepositoryId()).isEqualTo(123L);
         assertThat(result.repositoryFullName()).isEqualTo("octocat/Hello-World");
+        assertThat(result.permission()).isEqualTo("push");
+    }
+
+
+    @Test
+    void mapsGitHubUserAvatarAndHtmlUrl() throws Exception {
+        when(transport.get(eq("https://api.github.com/user"), any(), any()))
+                .thenReturn(new GitHubHttpResponse(200, """
+                        {"id":42,"login":"dev01","name":"Developer",
+                         "avatar_url":"https://avatars.githubusercontent.com/u/42",
+                         "html_url":"https://github.com/dev01"}
+                        """, Map.of()));
+
+        GitHubUser user = client.getAuthenticatedUser(config);
+
+        assertThat(user.avatarUrl()).isEqualTo("https://avatars.githubusercontent.com/u/42");
+        assertThat(user.htmlUrl()).isEqualTo("https://github.com/dev01");
+    }
+
+    @Test
+    void mapsCommitStatsFilesParentsAndHtmlUrl() throws Exception {
+        when(transport.get(eq("https://api.github.com/repos/octocat/Hello-World/commits?per_page=100&page=1"), any(), any()))
+                .thenReturn(new GitHubHttpResponse(200, """
+                        [{"sha":"abc123","html_url":"https://github.com/octocat/Hello-World/commit/abc123",
+                          "commit":{"message":"CNPM-90 stats"},
+                          "stats":{"additions":7,"deletions":3,"total":10},
+                          "files":[{"filename":"A.java"},{"filename":"B.java"}],
+                          "parents":[{"sha":"parent1"},{"sha":"parent2"}]}]
+                        """, Map.of()));
+
+        GitHubPage<GitHubCommit> page = client.getCommitsPage(config, 1);
+        GitHubCommit commit = page.items().getFirst();
+
+        assertThat(commit.additions()).isEqualTo(7);
+        assertThat(commit.deletions()).isEqualTo(3);
+        assertThat(commit.filesChanged()).isEqualTo(2);
+        assertThat(commit.parentShas()).containsExactly("parent1", "parent2");
+        assertThat(commit.htmlUrl()).isEqualTo("https://github.com/octocat/Hello-World/commit/abc123");
     }
 
     @Test

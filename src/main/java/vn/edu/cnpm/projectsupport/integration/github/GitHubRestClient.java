@@ -42,23 +42,14 @@ public class GitHubRestClient {
         if (username == null || username.isBlank()) {
             throw new IllegalArgumentException("GitHub username must not be blank");
         }
-
         String path = "/users/" + pathSegment(username.trim());
         return get(config, BASE_URL + path, GitHubUser.class);
     }
 
     public GitHubPage<GitHubCommit> getCommitsPage(GitHubClientConfig config, int page) {
         validatePage(page);
-
-        String url = BASE_URL + "/repos/"
-                + pathSegment(config.owner())
-                + "/"
-                + pathSegment(config.repository())
-                + "/commits?per_page="
-                + MAX_PAGE_SIZE
-                + "&page="
-                + page;
-
+        String url = BASE_URL + "/repos/" + pathSegment(config.owner()) + "/"
+                + pathSegment(config.repository()) + "/commits?per_page=" + MAX_PAGE_SIZE + "&page=" + page;
         return getPage(config, url, GitHubCommit[].class);
     }
 
@@ -66,99 +57,51 @@ public class GitHubRestClient {
             GitHubClientConfig config,
             String state,
             int page) {
-
         validatePage(page);
-
-        String normalizedState =
-                state == null || state.isBlank()
-                        ? "open"
-                        : state.trim().toLowerCase();
-
+        String normalizedState = state == null || state.isBlank() ? "open" : state.trim().toLowerCase();
         if (!List.of("open", "closed", "all").contains(normalizedState)) {
-            throw new IllegalArgumentException(
-                    "GitHub pull request state must be open, closed or all");
+            throw new IllegalArgumentException("GitHub pull request state must be open, closed or all");
         }
-
-        String url = BASE_URL + "/repos/"
-                + pathSegment(config.owner())
-                + "/"
-                + pathSegment(config.repository())
-                + "/pulls?state="
-                + normalizedState
-                + "&per_page="
-                + MAX_PAGE_SIZE
-                + "&page="
-                + page;
-
+        String url = BASE_URL + "/repos/" + pathSegment(config.owner()) + "/"
+                + pathSegment(config.repository()) + "/pulls?state=" + normalizedState
+                + "&per_page=" + MAX_PAGE_SIZE + "&page=" + page;
         return getPage(config, url, GitHubPullRequest[].class);
     }
 
     /** Fetches every GitHub pagination page using the provider's Link rel=next header. */
     public List<GitHubCommit> getAllCommits(GitHubClientConfig config) {
-        return collectPages(
-                config,
-                BASE_URL + "/repos/"
-                        + pathSegment(config.owner())
-                        + "/"
-                        + pathSegment(config.repository())
-                        + "/commits?per_page="
-                        + MAX_PAGE_SIZE
-                        + "&page=1",
+        return collectPages(config, BASE_URL + "/repos/" + pathSegment(config.owner()) + "/"
+                + pathSegment(config.repository()) + "/commits?per_page=" + MAX_PAGE_SIZE + "&page=1",
                 GitHubCommit[].class);
     }
 
     /** Fetches every GitHub pagination page using the provider's Link rel=next header. */
-    public List<GitHubPullRequest> getAllPullRequests(
-            GitHubClientConfig config,
-            String state) {
-
-        String normalizedState =
-                state == null || state.isBlank()
-                        ? "open"
-                        : state.trim().toLowerCase();
-
+    public List<GitHubPullRequest> getAllPullRequests(GitHubClientConfig config, String state) {
+        String normalizedState = state == null || state.isBlank() ? "open" : state.trim().toLowerCase();
         if (!List.of("open", "closed", "all").contains(normalizedState)) {
-            throw new IllegalArgumentException(
-                    "GitHub pull request state must be open, closed or all");
+            throw new IllegalArgumentException("GitHub pull request state must be open, closed or all");
         }
-
-        String url = BASE_URL + "/repos/"
-                + pathSegment(config.owner())
-                + "/"
-                + pathSegment(config.repository())
-                + "/pulls?state="
-                + normalizedState
-                + "&per_page="
-                + MAX_PAGE_SIZE
-                + "&page=1";
-
+        String url = BASE_URL + "/repos/" + pathSegment(config.owner()) + "/"
+                + pathSegment(config.repository()) + "/pulls?state=" + normalizedState
+                + "&per_page=" + MAX_PAGE_SIZE + "&page=1";
         return collectPages(config, url, GitHubPullRequest[].class);
     }
 
     public GitHubConnectionResult testConnection(GitHubClientConfig config) {
         Instant testedAt = Instant.now();
         GitHubPageRateAccumulator rate = new GitHubPageRateAccumulator();
-
-        GitHubHttpResponse userResponse =
-                execute(config, BASE_URL + "/user");
-
-        GitHubUser user =
-                parse(userResponse, GitHubUser.class);
-
+        GitHubHttpResponse userResponse = execute(config, BASE_URL + "/user");
+        GitHubUser user = parse(userResponse, GitHubUser.class);
         rate.capture(userResponse);
 
-        GitHubHttpResponse repositoryResponse =
-                execute(
-                        config,
-                        BASE_URL + "/repos/"
-                                + pathSegment(config.owner())
-                                + "/"
-                                + pathSegment(config.repository()));
-
-        GitHubRepository repository =
-                parse(repositoryResponse, GitHubRepository.class);
-
+        GitHubHttpResponse repositoryResponse = execute(config, BASE_URL + "/repos/"
+                    + pathSegment(config.owner()) + "/" + pathSegment(config.repository()));
+        GitHubRepository repository = parse(repositoryResponse, GitHubRepository.class);
         rate.capture(repositoryResponse);
+
+        String permission = repository.permissions() == null
+                ? null
+                : repository.permissions().effectivePermission();
 
         return new GitHubConnectionResult(
                 true,
@@ -166,37 +109,21 @@ public class GitHubRestClient {
                 user.login(),
                 repository.id(),
                 repository.fullName(),
-                null,
+                permission,
                 rate.remaining,
                 rate.resetAt,
                 testedAt);
     }
 
-    private <T> T get(
-            GitHubClientConfig config,
-            String url,
-            Class<T> type) {
-
-        return parse(
-                execute(config, url),
-                type);
+    private <T> T get(GitHubClientConfig config, String url, Class<T> type) {
+        return parse(execute(config, url), type);
     }
 
-    private <T> GitHubPage<T> getPage(
-            GitHubClientConfig config,
-            String url,
-            Class<T[]> arrayType) {
-
-        GitHubHttpResponse response =
-                execute(config, url);
-
-        T[] array =
-                parse(response, arrayType);
-
-        return new GitHubPage<>(
-                List.of(array),
-                parseNextUrl(
-                        GitHubErrorHandler.header(response, "link")),
+    private <T> GitHubPage<T> getPage(GitHubClientConfig config, String url, Class<T[]> arrayType) {
+        GitHubHttpResponse response = execute(config, url);
+        T[] array = parse(response, arrayType);
+        return new GitHubPage<>(List.of(array),
+                parseNextUrl(GitHubErrorHandler.header(response, "link")),
                 rateLimitInfo(response));
     }
 
@@ -204,7 +131,6 @@ public class GitHubRestClient {
             GitHubClientConfig config,
             String firstUrl,
             Class<T[]> arrayType) {
-
         List<T> result = new ArrayList<>();
         String nextUrl = firstUrl;
         int safetyPageCounter = 0;
@@ -219,110 +145,57 @@ public class GitHubRestClient {
                         "GitHub pagination exceeded the safety limit",
                         null);
             }
-
-            GitHubHttpResponse response =
-                    execute(config, nextUrl);
-
-            T[] page =
-                    parse(response, arrayType);
-
+            GitHubHttpResponse response = execute(config, nextUrl);
+            T[] page = parse(response, arrayType);
             for (T item : page) {
                 result.add(item);
             }
-
-            nextUrl =
-                    parseNextUrl(
-                            GitHubErrorHandler.header(response, "link"));
+            nextUrl = parseNextUrl(GitHubErrorHandler.header(response, "link"));
         }
-
         return List.copyOf(result);
     }
 
-    private GitHubHttpResponse execute(
-            GitHubClientConfig config,
-            String url) {
-
+    private GitHubHttpResponse execute(GitHubClientConfig config, String url) {
         URI uri = URI.create(url);
-
-        if (!BASE_URL.equalsIgnoreCase(
-                uri.getScheme() + "://" + uri.getHost())) {
-
-            throw new IllegalArgumentException(
-                    "Only the official GitHub API origin is allowed");
+        if (!BASE_URL.equalsIgnoreCase(uri.getScheme() + "://" + uri.getHost())) {
+            throw new IllegalArgumentException("Only the official GitHub API origin is allowed");
         }
 
-        Map<String, String> headers =
-                new LinkedHashMap<>();
-
-        headers.put(
-                "Authorization",
-                "Bearer " + config.accessToken());
-
-        headers.put(
-                "Accept",
-                ACCEPT);
-
-        headers.put(
-                "X-GitHub-Api-Version",
-                config.apiVersion());
-
-        headers.put(
-                "User-Agent",
-                USER_AGENT);
+        Map<String, String> headers = new LinkedHashMap<>();
+        headers.put("Authorization", "Bearer " + config.accessToken());
+        headers.put("Accept", ACCEPT);
+        headers.put("X-GitHub-Api-Version", config.apiVersion());
+        headers.put("User-Agent", USER_AGENT);
 
         try {
-            GitHubHttpResponse response =
-                    transport.get(
-                            url,
-                            headers,
-                            config.timeout());
-
-            if (response.statusCode() < 200
-                    || response.statusCode() >= 300) {
-
+            GitHubHttpResponse response = transport.get(url, headers, config.timeout());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 throw GitHubErrorHandler.fromResponse(response);
             }
-
             return response;
-
         } catch (GitHubApiException exception) {
             throw exception;
-
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw GitHubErrorHandler.fromThrowable(exception);
-
         } catch (IOException exception) {
             throw GitHubErrorHandler.fromThrowable(exception);
-
         } catch (RuntimeException exception) {
             if (exception instanceof GitHubApiException githubApiException) {
                 throw githubApiException;
             }
-
             throw exception;
         }
     }
 
-    private <T> T parse(
-            GitHubHttpResponse response,
-            Class<T> type) {
-
+    private <T> T parse(GitHubHttpResponse response, Class<T> type) {
         try {
-            if (response.body() == null
-                    || response.body().isBlank()) {
-
-                throw new IllegalStateException(
-                        "GitHub returned an empty response");
+            if (response.body() == null || response.body().isBlank()) {
+                throw new IllegalStateException("GitHub returned an empty response");
             }
-
-            return objectMapper.readValue(
-                    response.body(),
-                    type);
-
+            return objectMapper.readValue(response.body(), type);
         } catch (RuntimeException exception) {
             throw exception;
-
         } catch (Exception exception) {
             throw new GitHubApiException(
                     org.springframework.http.HttpStatus.BAD_GATEWAY,
@@ -334,61 +207,30 @@ public class GitHubRestClient {
         }
     }
 
-    private static <T> GitHubRateLimitInfo rateLimitInfo(
-            GitHubHttpResponse response) {
-
-        String remaining =
-                GitHubErrorHandler.header(
-                        response,
-                        "x-ratelimit-remaining");
-
-        String reset =
-                GitHubErrorHandler.header(
-                        response,
-                        "x-ratelimit-reset");
-
-        Long remainingValue =
-                parseLong(remaining);
-
-        Instant resetAt =
-                parseEpochInstant(reset);
-
-        return new GitHubRateLimitInfo(
-                remainingValue,
-                resetAt);
+    private static <T> GitHubRateLimitInfo rateLimitInfo(GitHubHttpResponse response) {
+        String remaining = GitHubErrorHandler.header(response, "x-ratelimit-remaining");
+        String reset = GitHubErrorHandler.header(response, "x-ratelimit-reset");
+        Long remainingValue = parseLong(remaining);
+        Instant resetAt = parseEpochInstant(reset);
+        return new GitHubRateLimitInfo(remainingValue, resetAt);
     }
 
     private static String parseNextUrl(String linkHeader) {
-        if (linkHeader == null
-                || linkHeader.isBlank()) {
-
+        if (linkHeader == null || linkHeader.isBlank()) {
             return null;
         }
-
-        Matcher matcher =
-                NEXT_LINK_PATTERN.matcher(linkHeader);
-
+        Matcher matcher = NEXT_LINK_PATTERN.matcher(linkHeader);
         if (!matcher.find()) {
             return null;
         }
-
-        String next =
-                matcher.group(1);
-
-        URI nextUri =
-                URI.create(next);
-
-        if (!"https".equalsIgnoreCase(
-                    nextUri.getScheme())
-                || !"api.github.com".equalsIgnoreCase(
-                    nextUri.getHost())
+        String next = matcher.group(1);
+        URI nextUri = URI.create(next);
+        if (!"https".equalsIgnoreCase(nextUri.getScheme())
+                || !"api.github.com".equalsIgnoreCase(nextUri.getHost())
                 || nextUri.getUserInfo() != null
                 || nextUri.getFragment() != null) {
-
-            throw new IllegalArgumentException(
-                    "GitHub pagination URL is not trusted");
+            throw new IllegalArgumentException("GitHub pagination URL is not trusted");
         }
-
         return next;
     }
 
@@ -398,48 +240,35 @@ public class GitHubRestClient {
 
     private static void validatePage(int page) {
         if (page < 1) {
-            throw new IllegalArgumentException(
-                    "GitHub page must be >= 1");
+            throw new IllegalArgumentException("GitHub page must be >= 1");
         }
     }
 
     private static Long parseLong(String value) {
-        if (value == null
-                || value.isBlank()) {
-
+        if (value == null || value.isBlank()) {
             return null;
         }
-
         try {
             return Long.parseLong(value.trim());
-
         } catch (NumberFormatException ignored) {
             return null;
         }
     }
 
     private static Instant parseEpochInstant(String value) {
-        Long epoch =
-                parseLong(value);
-
-        return epoch == null
-                ? null
-                : Instant.ofEpochSecond(epoch);
+        Long epoch = parseLong(value);
+        return epoch == null ? null : Instant.ofEpochSecond(epoch);
     }
 
     private static final class GitHubPageRateAccumulator {
-
         private Long remaining;
         private Instant resetAt;
 
         private void capture(GitHubHttpResponse response) {
-            GitHubRateLimitInfo info =
-                    rateLimitInfo(response);
-
+            GitHubRateLimitInfo info = rateLimitInfo(response);
             if (info.remaining() != null) {
                 remaining = info.remaining();
             }
-
             if (info.resetAt() != null) {
                 resetAt = info.resetAt();
             }
