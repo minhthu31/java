@@ -141,9 +141,6 @@ describe("GitHubConfigComponent (Task 92 - Chuẩn OpenAPI CNPM-88)", () => {
             );
         });
 
-        const tokenInput = screen.getByLabelText(/Personal Access Token/i);
-        fireEvent.change(tokenInput, { target: { value: "ghp_testToken123" } });
-
         fireEvent.click(
             screen.getByRole("button", { name: /Test Connection/i }),
         );
@@ -180,9 +177,6 @@ describe("GitHubConfigComponent (Task 92 - Chuẩn OpenAPI CNPM-88)", () => {
             );
         });
 
-        const tokenInput = screen.getByLabelText(/Personal Access Token/i);
-        fireEvent.change(tokenInput, { target: { value: "ghp_wrongToken" } });
-
         fireEvent.click(
             screen.getByRole("button", { name: /Test Connection/i }),
         );
@@ -196,5 +190,61 @@ describe("GitHubConfigComponent (Task 92 - Chuẩn OpenAPI CNPM-88)", () => {
             ).toBeInTheDocument();
             expect(screen.getByText(/Hướng xử lý gợi ý:/i)).toBeInTheDocument();
         });
+    });
+
+    test("khóa Test Connection khi cấu hình chưa được lưu hoặc đang bị chỉnh sửa", async () => {
+        GitHubConfigService.getConfig.mockResolvedValueOnce({
+            projectId: 1,
+            repositoryFullName: "",
+            configured: false,
+            status: "NOT_CHECKED",
+        });
+
+        render(<GitHubConfigComponent currentUserRole="ADMIN" projectId={1} />);
+
+        await waitFor(() => {
+            expect(
+                screen.getByRole("button", { name: /Save Configuration/i }),
+            ).toBeInTheDocument();
+        });
+
+        const testBtn = screen.getByRole("button", {
+            name: /Test Connection/i,
+        });
+        expect(testBtn).toBeDisabled();
+
+        fireEvent.change(screen.getByLabelText(/Personal Access Token/i), {
+            target: { value: "ghp_unsavedToken" },
+        });
+        expect(testBtn).toBeDisabled();
+    });
+
+    test("hiển thị thông báo lỗi và vô hiệu hóa Save và Test khi tải cấu hình ban đầu thất bại", async () => {
+        GitHubConfigService.getConfig.mockRejectedValueOnce({
+            response: {
+                data: { message: "Lỗi kết nối CSDL khi tải cấu hình" },
+            },
+        });
+
+        render(<GitHubConfigComponent currentUserRole="ADMIN" projectId={1} />);
+
+        await waitFor(() => {
+            expect(
+                screen.getByTestId("initial-load-error"),
+            ).toBeInTheDocument();
+        });
+
+        expect(
+            screen.getByText(/Lỗi kết nối CSDL khi tải cấu hình/i),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /Save Configuration/i }),
+        ).toBeDisabled();
+        expect(
+            screen.getByRole("button", { name: /Test Connection/i }),
+        ).toBeDisabled();
+        expect(
+            screen.getByRole("button", { name: /Thử lại/i }),
+        ).toBeInTheDocument();
     });
 });

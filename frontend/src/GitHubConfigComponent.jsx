@@ -6,59 +6,65 @@ export const GitHubConfigComponent = ({ currentUserRole, projectId }) => {
     const [repositoryName, setRepositoryName] = useState("");
     const [accessToken, setAccessToken] = useState("");
     const [apiVersion, setApiVersion] = useState("2026-03-10");
+
     const [isConfigured, setIsConfigured] = useState(false);
+    const [isDirty, setIsDirty] = useState(false);
 
     const [connectionStatus, setConnectionStatus] = useState("NOT_CHECKED");
     const [lastChecked, setLastChecked] = useState(null);
     const [failureReason, setFailureReason] = useState("");
 
     const [initialLoading, setInitialLoading] = useState(true);
+    const [loadError, setLoadError] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
     const [isTesting, setIsTesting] = useState(false);
     const [message, setMessage] = useState(null);
 
-    useEffect(() => {
-        let isMounted = true;
-        const fetchExistingConfig = async () => {
-            if (!projectId) {
-                setInitialLoading(false);
-                return;
-            }
-            try {
-                const data = await GitHubConfigService.getConfig(projectId);
-                if (data && isMounted) {
-                    if (data.repositoryFullName) {
-                        const parts = data.repositoryFullName.split("/");
-                        setRepositoryOwner(parts[0] || "");
-                        setRepositoryName(parts[1] || "");
-                    }
-                    setIsConfigured(Boolean(data.configured));
-                    setConnectionStatus(data.status || "NOT_CHECKED");
-                    setLastChecked(
-                        data.lastTestedAt
-                            ? new Date(data.lastTestedAt).toLocaleString(
-                                  "vi-VN",
-                              )
-                            : null,
-                    );
+    const fetchExistingConfig = async () => {
+        if (!projectId) {
+            setInitialLoading(false);
+            return;
+        }
+        setInitialLoading(true);
+        setLoadError(null);
+        try {
+            const data = await GitHubConfigService.getConfig(projectId);
+            if (data) {
+                if (data.repositoryFullName) {
+                    const parts = data.repositoryFullName.split("/");
+                    setRepositoryOwner(parts[0] || "");
+                    setRepositoryName(parts[1] || "");
+                } else {
+                    if (data.repositoryOwner)
+                        setRepositoryOwner(data.repositoryOwner);
+                    if (data.repositoryName)
+                        setRepositoryName(data.repositoryName);
                 }
-            } catch (err) {
-            } finally {
-                if (isMounted) {
-                    setInitialLoading(false);
-                }
+                setIsConfigured(Boolean(data.configured));
+                setConnectionStatus(data.status || "NOT_CHECKED");
+                setLastChecked(
+                    data.lastTestedAt
+                        ? new Date(data.lastTestedAt).toLocaleString("vi-VN")
+                        : null,
+                );
+                setIsDirty(false);
             }
-        };
+        } catch (err) {
+            setLoadError(
+                err.response?.data?.message ||
+                    "Không thể tải cấu hình tích hợp GitHub hiện tại. Vui lòng thử lại.",
+            );
+        } finally {
+            setInitialLoading(false);
+        }
+    };
 
+    useEffect(() => {
         if (currentUserRole === "ADMIN") {
             fetchExistingConfig();
         } else {
             setInitialLoading(false);
         }
-
-        return () => {
-            isMounted = false;
-        };
     }, [currentUserRole, projectId]);
 
     if (currentUserRole !== "ADMIN") {
@@ -111,6 +117,8 @@ export const GitHubConfigComponent = ({ currentUserRole, projectId }) => {
 
     const handleSave = async (e) => {
         e.preventDefault();
+        if (loadError || isBusy) return;
+
         if (!repositoryOwner.trim() || !repositoryName.trim()) {
             setMessage({
                 type: "error",
@@ -143,6 +151,7 @@ export const GitHubConfigComponent = ({ currentUserRole, projectId }) => {
                 payload,
             );
             setIsConfigured(true);
+            setIsDirty(false);
             setAccessToken("");
             if (result?.status) setConnectionStatus(result.status);
             setMessage({
@@ -162,7 +171,7 @@ export const GitHubConfigComponent = ({ currentUserRole, projectId }) => {
     };
 
     const handleTestConnection = async () => {
-        if (!isConfigured && !accessToken.trim()) {
+        if (!isConfigured || isDirty || loadError || isBusy) {
             setMessage({
                 type: "error",
                 text: "Vui lòng lưu cấu hình trước khi kiểm tra kết nối.",
@@ -204,6 +213,10 @@ export const GitHubConfigComponent = ({ currentUserRole, projectId }) => {
 
     const isBusy = initialLoading || isSaving || isTesting;
 
+    const canTest = isConfigured && !isDirty && !loadError && !isBusy;
+
+    const canSave = !loadError && !isBusy;
+
     const statusBadgeStyle = {
         CONNECTED: { bg: "#e3fcef", color: "#006644", text: "Connected" },
         CONNECTION_FAILED: { bg: "#ffebe6", color: "#de350b", text: "Failed" },
@@ -233,7 +246,7 @@ export const GitHubConfigComponent = ({ currentUserRole, projectId }) => {
         fontSize: "14px",
         border: "1px solid #dfe1e6",
         borderRadius: "4px",
-        backgroundColor: isBusy ? "#f4f5f7" : "#fafbfc",
+        backgroundColor: isBusy || Boolean(loadError) ? "#f4f5f7" : "#fafbfc",
         color: "#172b4d",
         boxSizing: "border-box",
         outline: "none",
@@ -259,6 +272,41 @@ export const GitHubConfigComponent = ({ currentUserRole, projectId }) => {
                     dữ liệu Pull Request.
                 </p>
             </div>
+
+            {loadError && (
+                <div
+                    data-testid="initial-load-error"
+                    style={{
+                        padding: "12px 16px",
+                        marginBottom: "20px",
+                        borderRadius: "6px",
+                        fontSize: "13px",
+                        backgroundColor: "#ffebe6",
+                        color: "#de350b",
+                        border: "1px solid #ffbdad",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                    }}
+                >
+                    <span>{loadError}</span>
+                    <button
+                        type="button"
+                        onClick={fetchExistingConfig}
+                        style={{
+                            padding: "4px 10px",
+                            backgroundColor: "#de350b",
+                            color: "#fff",
+                            border: "none",
+                            borderRadius: "4px",
+                            fontSize: "12px",
+                            cursor: "pointer",
+                        }}
+                    >
+                        Thử lại
+                    </button>
+                </div>
+            )}
 
             {message && (
                 <div
@@ -291,8 +339,11 @@ export const GitHubConfigComponent = ({ currentUserRole, projectId }) => {
                         style={inputStyle}
                         placeholder="e.g. github-username hoặc organization-name"
                         value={repositoryOwner}
-                        onChange={(e) => setRepositoryOwner(e.target.value)}
-                        disabled={isBusy}
+                        onChange={(e) => {
+                            setRepositoryOwner(e.target.value);
+                            setIsDirty(true);
+                        }}
+                        disabled={isBusy || Boolean(loadError)}
                     />
                 </div>
 
@@ -307,8 +358,11 @@ export const GitHubConfigComponent = ({ currentUserRole, projectId }) => {
                         style={inputStyle}
                         placeholder="e.g. cnpm-project-support"
                         value={repositoryName}
-                        onChange={(e) => setRepositoryName(e.target.value)}
-                        disabled={isBusy}
+                        onChange={(e) => {
+                            setRepositoryName(e.target.value);
+                            setIsDirty(true);
+                        }}
+                        disabled={isBusy || Boolean(loadError)}
                     />
                 </div>
 
@@ -330,8 +384,11 @@ export const GitHubConfigComponent = ({ currentUserRole, projectId }) => {
                                 : "ghp_xxxxxxxxxxxxxxxxxxxx"
                         }
                         value={accessToken}
-                        onChange={(e) => setAccessToken(e.target.value)}
-                        disabled={isBusy}
+                        onChange={(e) => {
+                            setAccessToken(e.target.value);
+                            setIsDirty(true);
+                        }}
+                        disabled={isBusy || Boolean(loadError)}
                     />
                     <span
                         style={{
@@ -478,7 +535,12 @@ export const GitHubConfigComponent = ({ currentUserRole, projectId }) => {
                     <button
                         type="button"
                         onClick={handleTestConnection}
-                        disabled={isBusy}
+                        disabled={!canTest}
+                        title={
+                            !isConfigured || isDirty
+                                ? "Vui lòng lưu cấu hình trước khi kiểm tra kết nối"
+                                : ""
+                        }
                         style={{
                             padding: "9px 16px",
                             fontSize: "14px",
@@ -487,8 +549,8 @@ export const GitHubConfigComponent = ({ currentUserRole, projectId }) => {
                             color: "#0052cc",
                             border: "1px solid #c1c7d0",
                             borderRadius: "4px",
-                            cursor: isBusy ? "not-allowed" : "pointer",
-                            opacity: isBusy ? 0.6 : 1,
+                            cursor: !canTest ? "not-allowed" : "pointer",
+                            opacity: !canTest ? 0.6 : 1,
                         }}
                     >
                         {isTesting ? "Đang kiểm tra..." : "Test Connection"}
@@ -496,7 +558,7 @@ export const GitHubConfigComponent = ({ currentUserRole, projectId }) => {
 
                     <button
                         type="submit"
-                        disabled={isBusy}
+                        disabled={!canSave}
                         style={{
                             padding: "9px 18px",
                             fontSize: "14px",
@@ -505,8 +567,8 @@ export const GitHubConfigComponent = ({ currentUserRole, projectId }) => {
                             color: "#fff",
                             border: "none",
                             borderRadius: "4px",
-                            cursor: isBusy ? "not-allowed" : "pointer",
-                            opacity: isBusy ? 0.6 : 1,
+                            cursor: !canSave ? "not-allowed" : "pointer",
+                            opacity: !canSave ? 0.6 : 1,
                         }}
                     >
                         {isSaving ? "Đang lưu..." : "Save Configuration"}
