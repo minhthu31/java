@@ -11,6 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 import vn.edu.cnpm.projectsupport.integration.github.domain.GitHubCommit;
 import vn.edu.cnpm.projectsupport.integration.github.domain.GitHubPullRequest;
@@ -119,7 +120,7 @@ class GitHubPersistenceRepositoryTests {
     void findsRepositoryByProjectAndGitHubRepositoryId() {
         GitHubRepository repository = repositoryRepository.saveAndFlush(repository(PROJECT_ID, 12345L, "team/demo"));
 
-        assertThat(repositoryRepository.findByProjectIdOrderByFullNameAsc(PROJECT_ID))
+        assertThat(repositoryRepository.findByProjectIdOrderByFullNameAsc(PROJECT_ID, PageRequest.of(0, 20)).getContent())
                 .containsExactly(repository);
         assertThat(repositoryRepository.findByGithubRepositoryId(12345L)).contains(repository);
         assertThat(repositoryRepository.findByProjectIdAndGithubRepositoryId(PROJECT_ID, 12345L))
@@ -169,11 +170,11 @@ class GitHubPersistenceRepositoryTests {
         GitHubPullRequest memberPr = pullRequestRepository.saveAndFlush(
                 pullRequest(repository.getId(), 21, account.getId()));
 
-        assertThat(commitRepository.findActivityByProjectId(PROJECT_ID)).containsExactly(memberCommit);
-        assertThat(commitRepository.findActivityByProjectIdAndUserId(PROJECT_ID, memberUserId))
+        assertThat(commitRepository.findActivityByProjectId(PROJECT_ID, PageRequest.of(0, 20)).getContent()).containsExactly(memberCommit);
+        assertThat(commitRepository.findActivityByProjectIdAndUserId(PROJECT_ID, memberUserId, PageRequest.of(0, 20)).getContent())
                 .containsExactly(memberCommit)
                 .doesNotContain(otherProjectCommit);
-        assertThat(pullRequestRepository.findActivityByProjectIdAndUserId(PROJECT_ID, memberUserId))
+        assertThat(pullRequestRepository.findActivityByProjectIdAndUserId(PROJECT_ID, memberUserId, PageRequest.of(0, 20)).getContent())
                 .containsExactly(memberPr);
     }
 
@@ -205,6 +206,56 @@ class GitHubPersistenceRepositoryTests {
                 "INSERT INTO task_pr_links (task_id, pull_request_id, link_source) VALUES (?, ?, 'AUTO')",
                 TASK_ID, pr.getId()))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void cnpm88ColumnsExistAndLinkSourceIsConstrained() {
+        assertThat(columnExists("github_repositories", "owner_login")).isTrue();
+        assertThat(columnExists("github_repositories", "private_repository")).isTrue();
+        assertThat(columnExists("github_repositories", "archived")).isTrue();
+        assertThat(columnExists("github_commits", "git_author_name")).isTrue();
+        assertThat(columnExists("github_commits", "parent_shas")).isTrue();
+        assertThat(columnExists("github_pull_requests", "body")).isTrue();
+        assertThat(columnExists("github_pull_requests", "head_sha")).isTrue();
+        assertThat(columnExists("github_pull_requests", "commit_count")).isTrue();
+        assertThat(columnExists("github_pull_requests", "additions")).isTrue();
+        assertThat(columnExists("github_pull_requests", "deletions")).isTrue();
+        assertThat(columnExists("github_pull_requests", "changed_files")).isTrue();
+        assertThat(columnExists("task_commit_links", "matched_from")).isTrue();
+        assertThat(columnExists("task_pr_links", "matched_from")).isTrue();
+    }
+
+    @Test
+    void githubEnumsAndContractFieldsArePersisted() {
+        GitHubRepository repository = repositoryRepository.saveAndFlush(repository(PROJECT_ID, 12345L, "team/demo"));
+        GitHubPullRequest pr = pullRequestRepository.saveAndFlush(pullRequest(repository.getId(), 23, null));
+
+        assertThat(pr.getState()).isEqualTo(vn.edu.cnpm.projectsupport.integration.github.domain.GitHubPullRequestState.OPEN);
+        assertThat(repository.getOwnerLogin()).isEqualTo("team");
+        assertThat(repository.getName()).isEqualTo("demo");
+        assertThat(repository.isPrivateRepository()).isFalse();
+        assertThat(repository.isArchived()).isFalse();
+    }
+
+    @Test
+    void linkSourceRejectsValuesOutsideContract() {
+        GitHubRepository repository = repositoryRepository.saveAndFlush(repository(PROJECT_ID, 12345L, "team/demo"));
+        GitHubCommit commit = commitRepository.saveAndFlush(commit(repository.getId(), "enum-sha", null));
+        TaskCommitLinkId id = new TaskCommitLinkId(TASK_ID, commit.getId());
+
+        assertThatThrownBy(() -> new TaskCommitLink(id, "INVALID"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "INSERT INTO task_commit_links (task_id, commit_id, link_source) VALUES (?, ?, 'INVALID')",
+                TASK_ID, commit.getId()))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    private boolean columnExists(String table, String column) {
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE LOWER(TABLE_NAME) = LOWER(?) AND LOWER(COLUMN_NAME) = LOWER(?)",
+                Integer.class, table, column);
+        return count != null && count > 0;
     }
 
     private GitHubRepository repository(long projectId, long githubId, String fullName) {

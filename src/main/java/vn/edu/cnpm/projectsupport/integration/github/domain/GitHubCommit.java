@@ -27,6 +27,18 @@ public class GitHubCommit {
     @Column(name = "author_external_account_id")
     private Long authorExternalAccountId;
 
+    @Column(name = "author_github_user_id")
+    private Long authorGithubUserId;
+
+    @Column(name = "author_login", length = 100)
+    private String authorLogin;
+
+    @Column(name = "git_author_name", length = 255)
+    private String gitAuthorName;
+
+    @Column(name = "git_author_email", length = 320)
+    private String gitAuthorEmail;
+
     @Column(name = "sha", nullable = false, length = 64)
     private String sha;
 
@@ -39,14 +51,17 @@ public class GitHubCommit {
     @Column(name = "html_url", nullable = false, length = 500)
     private String htmlUrl;
 
-    @Column(name = "additions")
+    @Column(name = "additions", nullable = false)
     private Integer additions;
 
-    @Column(name = "deletions")
+    @Column(name = "deletions", nullable = false)
     private Integer deletions;
 
     @Column(name = "files_changed")
     private Integer filesChanged;
+
+    @Column(name = "parent_shas", columnDefinition = "TEXT")
+    private String parentShas;
 
     @Column(name = "is_reverted", nullable = false)
     private boolean reverted;
@@ -68,11 +83,17 @@ public class GitHubCommit {
         this.message = message;
         this.committedAt = committedAt;
         this.htmlUrl = htmlUrl;
+        this.additions = 0;
+        this.deletions = 0;
     }
 
     public Long getId() { return id; }
     public Long getRepositoryId() { return repositoryId; }
     public Long getAuthorExternalAccountId() { return authorExternalAccountId; }
+    public Long getAuthorGithubUserId() { return authorGithubUserId; }
+    public String getAuthorLogin() { return authorLogin; }
+    public String getGitAuthorName() { return gitAuthorName; }
+    public String getGitAuthorEmail() { return gitAuthorEmail; }
     public String getSha() { return sha; }
     public String getMessage() { return message; }
     public Instant getCommittedAt() { return committedAt; }
@@ -80,12 +101,18 @@ public class GitHubCommit {
     public Integer getAdditions() { return additions; }
     public Integer getDeletions() { return deletions; }
     public Integer getFilesChanged() { return filesChanged; }
+    public String getParentShas() { return parentShas; }
     public boolean isReverted() { return reverted; }
     public Instant getCreatedAt() { return createdAt; }
 
     public void setAuthorExternalAccountId(Long value) { this.authorExternalAccountId = value; }
-    public void setAdditions(Integer additions) { this.additions = additions; }
-    public void setDeletions(Integer deletions) { this.deletions = deletions; }
+    public void setAuthorGithubUserId(Long value) { this.authorGithubUserId = value; }
+    public void setAuthorLogin(String value) { this.authorLogin = value; }
+    public void setGitAuthorName(String value) { this.gitAuthorName = value; }
+    public void setGitAuthorEmail(String value) { this.gitAuthorEmail = value; }
+    public void setAdditions(Integer additions) { this.additions = additions == null ? 0 : additions; }
+    public void setDeletions(Integer deletions) { this.deletions = deletions == null ? 0 : deletions; }
     public void setFilesChanged(Integer filesChanged) { this.filesChanged = filesChanged; }
+    public void setParentShas(String parentShas) { this.parentShas = parentShas; }
     public void setReverted(boolean reverted) { this.reverted = reverted; }
 }

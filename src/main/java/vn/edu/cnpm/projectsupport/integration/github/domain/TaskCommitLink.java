@@ -3,6 +3,8 @@ package vn.edu.cnpm.projectsupport.integration.github.domain;
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import java.time.Instant;
 
@@ -13,8 +15,13 @@ public class TaskCommitLink {
     @EmbeddedId
     private TaskCommitLinkId id;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "link_source", nullable = false, length = 20)
-    private String linkSource;
+    private TaskLinkSource linkSource;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "matched_from", length = 30)
+    private TaskLinkMatchedFrom matchedFrom;
 
     @Column(name = "linked_by_user_id")
     private Long linkedByUserId;
@@ -28,17 +35,41 @@ public class TaskCommitLink {
     protected TaskCommitLink() {
     }
 
-    public TaskCommitLink(TaskCommitLinkId id, String linkSource) {
+    public TaskCommitLink(TaskCommitLinkId id, TaskLinkSource linkSource) {
         this.id = id;
         this.linkSource = linkSource;
     }
 
-    public TaskCommitLinkId getId() { return id; }
-    public String getLinkSource() { return linkSource; }
-    public Long getLinkedByUserId() { return linkedByUserId; }
-    public String getReason() { return reason; }
-    public Instant getLinkedAt() { return linkedAt; }
+    public TaskCommitLink(TaskCommitLinkId id, String linkSource) {
+        this(id, TaskLinkSource.valueOf(linkSource.trim().toUpperCase()));
+    }
 
-    public void setLinkedByUserId(Long value) { this.linkedByUserId = value; }
-    public void setReason(String reason) { this.reason = reason; }
+    public TaskCommitLinkId getId() { 
+        return id; 
+    }
+    public TaskLinkSource getLinkSource() { 
+        return linkSource; 
+    }
+    public TaskLinkMatchedFrom getMatchedFrom() { 
+        return matchedFrom; 
+    }
+    public Long getLinkedByUserId() { 
+        return linkedByUserId; 
+    }
+    public String getReason() { 
+        return reason; 
+    }
+    public Instant getLinkedAt() { 
+        return linkedAt; 
+    }
+
+    public void setMatchedFrom(TaskLinkMatchedFrom value) { 
+        this.matchedFrom = value; 
+    }
+    public void setLinkedByUserId(Long value) { 
+        this.linkedByUserId = value; 
+    }
+    public void setReason(String reason) { 
+        this.reason = reason; 
+    }
 }
