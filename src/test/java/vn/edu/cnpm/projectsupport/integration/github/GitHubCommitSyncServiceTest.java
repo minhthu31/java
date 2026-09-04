@@ -2,6 +2,7 @@ package vn.edu.cnpm.projectsupport.integration.github;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import java.time.Duration;
@@ -18,10 +19,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import vn.edu.cnpm.projectsupport.integration.github.domain.GitHubCommit;
 import vn.edu.cnpm.projectsupport.integration.github.domain.GitHubRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubCommitRepository;
+import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubIntegrationConfigRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubRepositoryRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.UserExternalAccountRepository;
+import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationConfig;
+import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLog;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.SyncLogRepository;
+import vn.edu.cnpm.projectsupport.security.IntegrationSecretService;
 
 @ExtendWith(MockitoExtension.class)
 class GitHubCommitSyncServiceTest {
@@ -31,6 +36,8 @@ class GitHubCommitSyncServiceTest {
     @Mock GitHubRepositoryRepository repositoryRepository;
     @Mock UserExternalAccountRepository externalAccountRepository;
     @Mock SyncLogRepository syncLogRepository;
+    @Mock GitHubIntegrationConfigRepository integrationConfigRepository;
+    @Mock IntegrationSecretService secretService;
 
     private GitHubCommitSyncService service;
     private GitHubClientConfig config;
@@ -46,8 +53,6 @@ class GitHubCommitSyncServiceTest {
         when(localRepository.getId()).thenReturn(20L);
         when(repositoryRepository.findByProjectIdAndGithubRepositoryId(1L, 123L))
                 .thenReturn(Optional.of(localRepository));
-        when(repositoryRepository.saveAndFlush(any(GitHubRepository.class)))
-                .thenReturn(localRepository);
         when(syncLogRepository.save(any(SyncLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
@@ -70,8 +75,11 @@ class GitHubCommitSyncServiceTest {
         when(client.getCommitsPage(config, 1)).thenReturn(new GitHubPage<>(List.of(remote),
                 "https://api.github.com/repos/octocat/Hello-World/commits?page=2", null));
         when(client.getCommitsPage(config, 2)).thenReturn(new GitHubPage<>(List.of(), null, null));
+        when(client.getCommit(config, "sha-1")).thenReturn(remote);
         when(commitRepository.findByRepositoryIdAndSha(20L, "sha-1")).thenReturn(Optional.empty());
         when(commitRepository.saveAndFlush(any(GitHubCommit.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repositoryRepository.saveAndFlush(any(GitHubRepository.class)))
+                .thenReturn(localRepository);
 
         GitHubCommitSyncResult result = service.syncCommits(1L, config);
 
@@ -102,8 +110,11 @@ class GitHubCommitSyncServiceTest {
                 "https://github.com/new", null, null, List.of());
         when(client.getRepository(config)).thenReturn(remoteRepository());
         when(client.getCommitsPage(config, 1)).thenReturn(new GitHubPage<>(List.of(remote), null, null));
+        when(client.getCommit(config, "sha-1")).thenReturn(remote);
         when(commitRepository.findByRepositoryIdAndSha(20L, "sha-1")).thenReturn(Optional.of(existing));
         when(commitRepository.saveAndFlush(existing)).thenReturn(existing);
+        when(repositoryRepository.saveAndFlush(any(GitHubRepository.class)))
+                .thenReturn(localRepository);
 
         GitHubCommitSyncResult result = service.syncCommits(1L, config);
 
@@ -119,6 +130,8 @@ class GitHubCommitSyncServiceTest {
         vn.edu.cnpm.projectsupport.integration.github.GitHubCommit second = remoteCommit("second");
         when(client.getRepository(config)).thenReturn(remoteRepository());
         when(client.getCommitsPage(config, 1)).thenReturn(new GitHubPage<>(List.of(first, second), null, null));
+        when(client.getCommit(config, "first")).thenReturn(first);
+        when(client.getCommit(config, "second")).thenReturn(second);
         when(commitRepository.findByRepositoryIdAndSha(20L, "first")).thenReturn(Optional.empty());
         when(commitRepository.findByRepositoryIdAndSha(20L, "second")).thenReturn(Optional.empty());
         when(commitRepository.saveAndFlush(any(GitHubCommit.class)))
@@ -129,6 +142,8 @@ class GitHubCommitSyncServiceTest {
                     }
                     return value;
                 });
+        when(repositoryRepository.saveAndFlush(any(GitHubRepository.class)))
+                .thenReturn(localRepository);
 
         GitHubCommitSyncResult result = service.syncCommits(1L, config);
 
@@ -138,6 +153,38 @@ class GitHubCommitSyncServiceTest {
         ArgumentCaptor<SyncLog> logCaptor = ArgumentCaptor.forClass(SyncLog.class);
         verify(syncLogRepository, times(2)).save(logCaptor.capture());
         assertThat(logCaptor.getAllValues().getLast().getStatus().name()).isEqualTo("FAILED");
+    }
+
+    @Test
+    void usesProjectIntegrationConfigRepositoryInsteadOfFirstLocalRepository() {
+        IntegrationConfig integrationConfig =
+                new IntegrationConfig(1L, IntegrationProvider.GITHUB, "encrypted-token");
+        integrationConfig.setAccountIdentifier("configured-owner/configured-repository");
+        when(integrationConfigRepository.findGitHubConfigByProjectId(1L))
+                .thenReturn(Optional.of(integrationConfig));
+        when(secretService.decrypt("encrypted-token")).thenReturn("token");
+
+        when(client.getRepository(any(GitHubClientConfig.class))).thenReturn(remoteRepository());
+        when(client.getCommitsPage(any(GitHubClientConfig.class), eq(1)))
+                .thenReturn(new GitHubPage<>(List.of(), null, null));
+        when(repositoryRepository.findByProjectIdAndGithubRepositoryId(1L, 123L))
+                .thenReturn(Optional.of(localRepository));
+        when(repositoryRepository.saveAndFlush(any(GitHubRepository.class)))
+                .thenReturn(localRepository);
+
+        serviceWithConfigRepositories().syncCommits(1L);
+
+        ArgumentCaptor<GitHubClientConfig> configCaptor = ArgumentCaptor.forClass(GitHubClientConfig.class);
+        verify(client).getRepository(configCaptor.capture());
+        assertThat(configCaptor.getValue().owner()).isEqualTo("configured-owner");
+        assertThat(configCaptor.getValue().repository()).isEqualTo("configured-repository");
+        verify(repositoryRepository, never()).findByProjectIdOrderByFullNameAsc(any(), any());
+    }
+
+    private GitHubCommitSyncService serviceWithConfigRepositories() {
+        return new GitHubCommitSyncService(
+                client, commitRepository, repositoryRepository, externalAccountRepository,
+                syncLogRepository, integrationConfigRepository, secretService);
     }
 
     private vn.edu.cnpm.projectsupport.integration.github.GitHubRepository remoteRepository() {

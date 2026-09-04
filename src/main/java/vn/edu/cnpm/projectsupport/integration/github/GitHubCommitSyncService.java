@@ -3,7 +3,6 @@ package vn.edu.cnpm.projectsupport.integration.github;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
-import org.springframework.data.domain.PageRequest;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubIntegrationConfigRepository;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationConfig;
 import vn.edu.cnpm.projectsupport.security.IntegrationSecretService;
@@ -64,16 +63,10 @@ public class GitHubCommitSyncService {
             throw new IllegalArgumentException("GitHub access token is not configured");
         }
 
-        GitHubRepository repository = repositoryRepository
-                .findByProjectIdOrderByFullNameAsc(projectId, PageRequest.of(0, 1))
-                .getContent()
-                .stream()
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("GitHub repository is not configured"));
-
-        String fullName = repository.getFullName();
+        String fullName = integrationConfig.getAccountIdentifier();
         int separator = fullName == null ? -1 : fullName.indexOf('/');
-        if (separator <= 0 || separator == fullName.length() - 1) {
+        if (separator <= 0 || separator == fullName.length() - 1
+                || fullName.indexOf('/', separator + 1) >= 0) {
             throw new IllegalArgumentException("GitHub repository full name is invalid");
         }
         String token = secretService.decrypt(integrationConfig.getEncryptedSecret());
@@ -86,7 +79,7 @@ public class GitHubCommitSyncService {
         return syncCommits(projectId, config);
     }
 
-    public GitHubCommitSyncResult syncCommits(Long projectId, GitHubClientConfig config) {
+    GitHubCommitSyncResult syncCommits(Long projectId, GitHubClientConfig config) {
         if (projectId == null || projectId < 1) {
             throw new IllegalArgumentException("projectId must be positive");
         }
@@ -127,8 +120,16 @@ public class GitHubCommitSyncService {
                 }
                 GitHubPage<vn.edu.cnpm.projectsupport.integration.github.GitHubCommit> pageResult =
                         gitHubRestClient.getCommitsPage(config, page);
-                for (vn.edu.cnpm.projectsupport.integration.github.GitHubCommit remoteCommit : pageResult.items()) {
+                for (vn.edu.cnpm.projectsupport.integration.github.GitHubCommit listedCommit : pageResult.items()) {
                     try {
+                        if (listedCommit == null || listedCommit.sha() == null || listedCommit.sha().isBlank()) {
+                            throw new IllegalArgumentException("GitHub commit list item has no SHA");
+                        }
+                        // The list endpoint is intentionally used only for pagination/SHA discovery.
+                        // GitHub's single-commit endpoint provides the complete stats/files payload
+                        // required by contribution reporting.
+                        vn.edu.cnpm.projectsupport.integration.github.GitHubCommit remoteCommit =
+                                gitHubRestClient.getCommit(config, listedCommit.sha());
                         upsertCommit(localRepository.getId(), remoteCommit);
                         synced++;
                     } catch (RuntimeException commitException) {
