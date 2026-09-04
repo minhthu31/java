@@ -1,0 +1,450 @@
+# Software Requirements Specification (SRS)
+
+## Project Management System Integrated with GitHub and Jira
+
+**Version:** 1.0
+
+---
+
+# 1. Introduction
+
+## 1.1 Purpose
+
+Tài liệu này mô tả đặc tả yêu cầu phần mềm (Software Requirements Specification - SRS) cho hệ thống quản lý dự án tích hợp GitHub và Jira.
+
+Mục đích của tài liệu là xác định rõ các yêu cầu của hệ thống, bao gồm:
+
+- Phạm vi hệ thống.
+- Các Actor sử dụng hệ thống.
+- Các chức năng cần phát triển.
+- Các yêu cầu phi chức năng.
+- Các quy tắc nghiệp vụ.
+
+Tài liệu này được sử dụng làm cơ sở cho quá trình thiết kế, phát triển và kiểm thử hệ thống.
+
+---
+
+## 1.2 Scope
+
+Hệ thống quản lý dự án tích hợp GitHub và Jira được xây dựng nhằm hỗ trợ quản lý quá trình phát triển phần mềm.
+
+Hệ thống cho phép:
+
+- Quản lý người dùng.
+- Quản lý nhóm dự án.
+- Quản lý Requirement.
+- Quản lý Task.
+- Theo dõi tiến độ dự án.
+- Đồng bộ dữ liệu với GitHub.
+- Đồng bộ dữ liệu với Jira.
+- Báo cáo và thống kê tiến độ.
+
+Hệ thống hỗ trợ 4 nhóm người dùng chính:
+
+- Admin.
+- Lecturer.
+- Team Leader.
+- Team Member.
+
+---
+
+# 2. Overall Description
+
+## 2.1 Product Perspective
+
+Hệ thống là một ứng dụng Web hỗ trợ quản lý dự án phần mềm.
+
+Hệ thống hoạt động bằng cách kết hợp:
+
+- Database để lưu trữ dữ liệu dự án.
+- Backend xử lý nghiệp vụ.
+- Frontend cung cấp giao diện người dùng.
+- GitHub REST API để đồng bộ mã nguồn.
+- Jira REST API để đồng bộ công việc.
+
+---
+
+## 2.2 Product Functions
+
+Các chức năng chính của hệ thống:
+
+### Authentication
+
+- Đăng nhập.
+- Đăng xuất.
+- Quản lý phiên đăng nhập.
+
+### User Management
+
+- Quản lý tài khoản.
+- Phân quyền người dùng.
+
+### Group Mângement 
+- Tạo nhóm dự án 
+- Cập nhật thông tin nhóm
+- Quản lý thành viên viên nhóm 
+- Phân công giảng viên phụ trách nhóm 
+
+### Requirement Management
+
+- Tạo Requirement.
+- Cập nhật Requirement.
+- Xóa Requirement.
+- Xem danh sách Requirement.
+
+### Task Management
+
+- Tạo Task.
+- Phân công Task.
+- Cập nhật trạng thái Task.
+- Theo dõi Task.
+
+### Dashboard
+
+- Hiển thị tiến độ dự án.
+- Thống kê Task.
+- Thống kê Requirement.
+
+### Reporting 
+- Xem báo cáo tiến độ dự án 
+- Thống kê số lượng task 
+- Thống kê Requirement 
+- Thống kê Commit Github 
+
+### GitHub Integration
+
+- Đồng bộ Repository.
+- Đồng bộ Commit.
+- Đồng bộ Pull Request.
+
+### Jira Integration
+
+- Đồng bộ Issue.
+- Đồng bộ Sprint.
+- Đồng bộ trạng thái công việc.
+
+---
+
+# 3. Actor Description
+
+## 3.1 Admin
+
+### Description
+
+Admin là người quản trị toàn bộ hệ thống.
+
+### Permissions
+
+- Quản lý tài khoản.
+- Quản lý quyền truy cập.
+- Quản lý cấu hình hệ thống.
+
+---
+
+## 3.2 Lecturer
+
+### Description
+
+Lecturer là người theo dõi hoạt động của các nhóm dự án.
+
+### Permissions
+
+- Xem thông tin nhóm phụ trách.
+- Xem Requirement.
+- Xem Task.
+- Theo dõi tiến độ.
+
+---
+
+## 3.3 Team Leader
+
+### Description
+
+Team Leader là người quản lý hoạt động của nhóm dự án.
+
+### Permissions
+
+- Quản lý Requirement.
+- Tạo và quản lý Task.
+- Phân công Task.
+- Quản lý thành viên nhóm.
+- Theo dõi tiến độ.
+
+---
+
+## 3.4 Team Member
+
+### Description
+
+Team Member là thành viên thực hiện công việc được giao.
+
+### Permissions
+
+- Xem Task được giao.
+- Cập nhật trạng thái Task.
+- Theo dõi công việc cá nhân.
+
+---
+
+# 4. Functional Requirements
+
+## FR-01 Authentication
+
+Hệ thống cho phép người dùng:
+
+- Đăng nhập bằng tài khoản hợp lệ.
+- Đăng xuất khỏi hệ thống.
+- Quản lý trạng thái đăng nhập.
+
+---
+
+## FR-02 User Management
+
+Admin có thể:
+
+- Tạo tài khoản.
+- Cập nhật thông tin người dùng.
+- Xóa tài khoản.
+- Phân quyền người dùng.
+
+---
+
+## FR-03 Requirement Management
+
+Team Leader có thể:
+
+- Tạo Requirement.
+- Chỉnh sửa Requirement.
+- Xóa Requirement.
+- Xem danh sách Requirement.
+
+---
+
+## FR-04 Task Management
+
+Hệ thống hỗ trợ:
+
+- Tạo Task.
+- Giao Task cho thành viên.
+- Cập nhật Task.
+- Thay đổi trạng thái Task.
+
+---
+
+## FR-05 Dashboard
+
+Hệ thống hiển thị:
+
+- Tiến độ dự án.
+- Số lượng Task.
+- Trạng thái Requirement.
+- Báo cáo hoạt động.
+
+---
+
+## FR-06 GitHub Integration
+
+Hệ thống hỗ trợ:
+
+- Kết nối GitHub.
+- Đồng bộ Repository.
+- Đồng bộ Commit.
+- Đồng bộ Pull Request.
+
+---
+
+## FR-07 Jira Integration
+
+Hệ thống hỗ trợ:
+
+- Kết nối Jira.
+- Đồng bộ Issue.
+- Đồng bộ Sprint.
+- Đồng bộ trạng thái công việc.
+
+---
+
+# 5. Non-functional Requirements
+
+## NFR-01 Security
+
+- Người dùng phải được xác thực trước khi sử dụng hệ thống.
+- Phân quyền theo Actor Permission Matrix.
+- Mật khẩu không được lưu dạng Plain Text.
+- Token GitHub/Jira phải được lưu an toàn.
+- Session phải tự động hết hạn.
+
+Priority: High
+
+---
+
+## NFR-02 Performance
+
+- Thời gian đăng nhập không quá 2 giây.
+- Danh sách Requirement tải trong 3 giây.
+- Danh sách Task tải trong 3 giây.
+- Dashboard tải trong 5 giây.
+- Hỗ trợ tối thiểu 100 người dùng đồng thời.
+
+Priority: High
+
+---
+
+## NFR-03 Reliability
+
+- Không mất dữ liệu khi xảy ra lỗi.
+- Dữ liệu được khôi phục sau khi hệ thống khởi động lại.
+- Đảm bảo uptime tối thiểu 99%.
+
+Priority: High
+
+---
+
+## NFR-04 Usability
+
+- Giao diện dễ sử dụng.
+- Chức năng dễ tìm kiếm.
+- Thông báo rõ ràng.
+
+Priority: Medium
+
+---
+
+## NFR-05 Maintainability
+
+- Sử dụng kiến trúc rõ ràng.
+- Module được tách biệt.
+- Dễ mở rộng chức năng.
+
+Priority: Medium
+
+---
+
+## NFR-06 Compatibility
+
+Hệ thống hỗ trợ:
+
+- Google Chrome.
+- Microsoft Edge.
+- Mozilla Firefox.
+
+Tích hợp:
+
+- GitHub REST API.
+- Jira REST API.
+
+Priority: High
+
+---
+
+## NFR-07 Error Handling
+
+Hệ thống phải:
+
+- Hiển thị lỗi dễ hiểu.
+- Không hiển thị Stack Trace.
+- Lưu Log lỗi.
+
+Priority: High
+
+---
+
+## NFR-08 API Rate Limit
+
+Hệ thống phải:
+
+- Theo dõi số lượng Request.
+- Cache dữ liệu phù hợp.
+- Retry khi API lỗi.
+- Thông báo khi vượt giới hạn.
+
+Priority: Medium
+
+---
+
+# 6. Use Case Description
+
+Danh sách Use Case chính:
+
+| ID | Use Case | Actor |
+|----|----------|-------|
+| UC-01 | Login | All Users |
+| UC-02 | Logout | All Users |
+| UC-03 | Manage User | Admin |
+| UC-04 | Manage Requirement | Team Leader |
+| UC-05 | Manage Task | Team Leader |
+| UC-06 | Assign Task | Team Leader |
+| UC-07 | Update Task Status | Team Member |
+| UC-08 | View Dashboard | Lecturer, Team Leader |
+| UC-09 | Sync GitHub | Team Leader |
+| UC-10 | Sync Jira | Team Leader |
+
+---
+
+# 7. Business Rules
+
+## BR-01
+
+Admin có toàn quyền quản trị hệ thống.
+
+## BR-02
+
+Lecturer chỉ được xem thông tin của các nhóm phụ trách.
+
+## BR-03
+
+Team Leader được quản lý Requirement và Task của nhóm.
+
+## BR-04
+
+Team Member chỉ được thao tác trên Task được giao.
+
+## BR-05
+
+Mỗi Task phải thuộc một Requirement.
+
+## BR-06
+
+GitHub và Jira chỉ được đồng bộ khi xác thực thành công.
+
+## BR-07
+
+Chỉ Team Leader được tạo và phân công task.Team Menber chỉ được cập nhật trạng thái các Task đã được giao.
+
+---
+
+# 8. System Constraints
+
+- Hệ thống yêu cầu kết nối Internet.
+- GitHub API và Jira API phải hoạt động.
+- API sử dụng giao thức HTTPS.
+- Người dùng phải có quyền truy cập hợp lệ.
+
+---
+
+# 9. Dependencies
+
+Tài liệu SRS được xây dựng dựa trên:
+
+- Project Scope.
+- Actor Description.
+- Functional Requirements.
+- Non-functional Requirements.
+- Use Case Diagram.
+- Business Rules.
+
+---
+
+# 10. Conclusion
+
+Tài liệu SRS này tổng hợp toàn bộ yêu cầu của hệ thống quản lý dự án tích hợp GitHub và Jira.
+
+Tài liệu là cơ sở để nhóm phát triển thực hiện các bước tiếp theo:
+
+- Thiết kế hệ thống.
+- Xây dựng phần mềm.
+- Kiểm thử.
+- Triển khai.
+
+---
+

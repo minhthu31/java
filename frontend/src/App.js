@@ -1,0 +1,4 @@
+import {Navigate,Route,Routes} from 'react-router-dom'; import LoginPage from './LoginPage'; import ProtectedRoute from './ProtectedRoute'; import Dashboard from './Dashboard';
+const dashboards=[['ADMIN','/admin','Quản trị hệ thống'],['LECTURER','/lecturer','Giảng viên'],['TEAM_LEADER','/team-leader','Trưởng nhóm'],['TEAM_MEMBER','/member','Thành viên']];
+export const pathForRole=r=>({ADMIN:'/admin',LECTURER:'/lecturer',TEAM_LEADER:'/team-leader',TEAM_MEMBER:'/member'}[r]||'/unauthorized');
+export default function App(){return <Routes><Route path="/login" element={<LoginPage/>}/>{dashboards.map(([role,path,title])=><Route key={role} path={path} element={<ProtectedRoute role={role}><Dashboard title={title}/></ProtectedRoute>}/>) }<Route path="/unauthorized" element={<main className="card"><h1>Không có quyền truy cập</h1></main>}/><Route path="*" element={<Navigate to="/login" replace/>}/></Routes>}
