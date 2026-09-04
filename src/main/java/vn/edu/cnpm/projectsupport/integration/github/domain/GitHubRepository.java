@@ -95,7 +95,6 @@ public class GitHubRepository extends BaseEntity {
         this.remoteUpdatedAt = remoteUpdatedAt;
     }
 
-<<<<<<< HEAD
     public Long getProjectId() {
         return projectId; 
     }
@@ -169,30 +168,4 @@ public class GitHubRepository extends BaseEntity {
     public void setLastSyncedAt(Instant lastSyncedAt) {
         this.lastSyncedAt = lastSyncedAt;
     }
-=======
-    public Long getProjectId() { return projectId; }
-    public Long getGithubRepositoryId() { return githubRepositoryId; }
-    public String getNodeId() { return nodeId; }
-    public String getName() { return name; }
-    public String getFullName() { return fullName; }
-    public Long getOwnerGithubUserId() { return ownerGithubUserId; }
-    public String getOwnerLogin() { return ownerLogin; }
-    public boolean isPrivateRepository() { return privateRepository; }
-    public String getDefaultBranch() { return defaultBranch; }
-    public String getHtmlUrl() { return htmlUrl; }
-    public boolean isArchived() { return archived; }
-    public Instant getRemoteUpdatedAt() { return remoteUpdatedAt; }
-    public Instant getLastSyncedAt() { return lastSyncedAt; }
-
-    public void setNodeId(String nodeId) { this.nodeId = nodeId; }
-    public void setName(String name) { this.name = name; }
-    public void setOwnerGithubUserId(Long ownerGithubUserId) { this.ownerGithubUserId = ownerGithubUserId; }
-    public void setOwnerLogin(String ownerLogin) { this.ownerLogin = ownerLogin; }
-    public void setPrivateRepository(boolean privateRepository) { this.privateRepository = privateRepository; }
-    public void setDefaultBranch(String defaultBranch) { this.defaultBranch = defaultBranch; }
-    public void setHtmlUrl(String htmlUrl) { this.htmlUrl = htmlUrl; }
-    public void setArchived(boolean archived) { this.archived = archived; }
-    public void setRemoteUpdatedAt(Instant remoteUpdatedAt) { this.remoteUpdatedAt = remoteUpdatedAt; }
-    public void setLastSyncedAt(Instant lastSyncedAt) { this.lastSyncedAt = lastSyncedAt; }
->>>>>>> e55acb194a49bcead8de10cd7e172347781719ef
 }
