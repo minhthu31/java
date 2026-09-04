@@ -16,7 +16,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.transaction.annotation.Transactional;
 
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubIntegrationConfigRepository;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationConfig;
@@ -25,7 +24,6 @@ import vn.edu.cnpm.projectsupport.security.ProjectAuthorizationService;
 
 @SpringBootTest
 @ActiveProfiles("test")
-@Transactional
 class GitHubConfigServiceIntegrationTest {
 
     private static final long GROUP_ID = 9890L;
@@ -68,7 +66,7 @@ class GitHubConfigServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("1. Tạo cấu hình mới thành công dùng IntegrationSecretService và trạng thái là NOT_CHECKED")
+    @DisplayName("1. Tạo cấu hình mới thành công, trạng thái NOT_CHECKED và lastTestedAt, lastTestSucceeded là null")
     void createNewConfig_shouldSucceed() {
         GitHubConfigRequest request = GitHubConfigRequest.builder()
                 .repositoryOwner("minhthu31")
@@ -82,10 +80,14 @@ class GitHubConfigServiceIntegrationTest {
         assertThat(response.isConfigured()).isTrue();
         assertThat(response.getRepositoryFullName()).isEqualTo("minhthu31/backend-repo");
         assertThat(response.getStatus()).isEqualTo("NOT_CHECKED");
+        assertThat(response.getLastTestedAt()).isNull();
+        assertThat(response.getLastTestSucceeded()).isNull();
 
         IntegrationConfig entity = configRepository.findGitHubConfigByProjectId(PROJECT_ID).orElseThrow();
         assertThat(secretService.decrypt(entity.getEncryptedSecret())).isEqualTo("ghp_secretToken123");
         assertThat(entity.getAccountIdentifier()).isEqualTo("minhthu31/backend-repo");
+        assertThat(entity.getLastCheckedAt()).isNull();
+        assertThat(entity.getLastErrorCode()).isNull();
     }
 
     @Test
@@ -108,8 +110,8 @@ class GitHubConfigServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("3. Cập nhật khi accessToken=null phải giữ nguyên token cũ trong DB và reset NOT_CHECKED")
-    void updateConfig_withNullAccessToken_shouldKeepOldToken() {
+    @DisplayName("3. Cập nhật khi accessToken=null phải giữ nguyên token cũ, reset NOT_CHECKED và xóa lastCheckedAt, lastErrorCode")
+    void updateConfig_withNullAccessToken_shouldKeepOldTokenAndResetCheckData() {
         GitHubConfigRequest createRequest = GitHubConfigRequest.builder()
                 .repositoryOwner("minhthu31")
                 .repositoryName("backend-repo")
@@ -128,15 +130,19 @@ class GitHubConfigServiceIntegrationTest {
 
         assertThat(updateResponse.getRepositoryFullName()).isEqualTo("minhthu31/updated-repo");
         assertThat(updateResponse.getStatus()).isEqualTo("NOT_CHECKED");
+        assertThat(updateResponse.getLastTestedAt()).isNull();
+        assertThat(updateResponse.getLastTestSucceeded()).isNull();
 
         IntegrationConfig entity = configRepository.findGitHubConfigByProjectId(PROJECT_ID).orElseThrow();
         assertThat(entity.getAccountIdentifier()).isEqualTo("minhthu31/updated-repo");
         assertThat(secretService.decrypt(entity.getEncryptedSecret())).isEqualTo("ghp_originalSecretToken");
+        assertThat(entity.getLastCheckedAt()).isNull();
+        assertThat(entity.getLastErrorCode()).isNull();
     }
 
     @Test
-    @DisplayName("4. GET cấu hình không được làm lộ accessToken")
-    void getConfig_shouldNotExposeAccessToken() {
+    @DisplayName("4. GET cấu hình chưa test thì lastTestedAt và lastTestSucceeded phải là null")
+    void getConfig_whenNotTested_shouldReturnNullForTestFields() {
         GitHubConfigRequest request = GitHubConfigRequest.builder()
                 .repositoryOwner("minhthu31")
                 .repositoryName("backend-repo")
@@ -147,6 +153,9 @@ class GitHubConfigServiceIntegrationTest {
         GitHubConfigResponse response = gitHubConfigService.getConfig(PROJECT_ID);
         assertThat(response.isConfigured()).isTrue();
         assertThat(response.getRepositoryFullName()).isEqualTo("minhthu31/backend-repo");
+        assertThat(response.getStatus()).isEqualTo("NOT_CHECKED");
+        assertThat(response.getLastTestedAt()).isNull();
+        assertThat(response.getLastTestSucceeded()).isNull();
     }
 
     @Test
@@ -183,8 +192,8 @@ class GitHubConfigServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("6. Test connection thất bại cập nhật CONNECTION_FAILED, lưu lastErrorCode và ném GitHubApiException")
-    void testConnection_failure_shouldUpdateDbAndRethrow() {
+    @DisplayName("6. Test connection thất bại: DB không bị rollback, lưu CONNECTION_FAILED và lastErrorCode khi exception thoát khỏi service")
+    void testConnection_failure_shouldPersistErrorInDatabaseWithoutRollback() {
         GitHubConfigRequest request = GitHubConfigRequest.builder()
                 .repositoryOwner("minhthu31")
                 .repositoryName("backend-repo")
@@ -197,11 +206,17 @@ class GitHubConfigServiceIntegrationTest {
 
         assertThrows(GitHubApiException.class, () -> gitHubConfigService.testConnection(PROJECT_ID));
 
+        // Đọc lại từ DB mà không bọc Transactional test để xác nhận DB đã commit
         IntegrationConfig entity = configRepository.findGitHubConfigByProjectId(PROJECT_ID).orElseThrow();
         assertThat(String.valueOf(entity.getStatus())).isEqualTo("CONNECTION_FAILED");
         assertThat(entity.getLastErrorCode()).isEqualTo("GITHUB_AUTHENTICATION_FAILED");
         assertThat(entity.getLastCheckedAt()).isNotNull();
         assertThat(secretService.decrypt(entity.getEncryptedSecret())).isEqualTo("ghp_invalidToken");
+
+        GitHubConfigResponse configResponse = gitHubConfigService.getConfig(PROJECT_ID);
+        assertThat(configResponse.getStatus()).isEqualTo("CONNECTION_FAILED");
+        assertThat(configResponse.getLastTestedAt()).isNotNull();
+        assertThat(configResponse.getLastTestSucceeded()).isFalse();
     }
 
     @Test

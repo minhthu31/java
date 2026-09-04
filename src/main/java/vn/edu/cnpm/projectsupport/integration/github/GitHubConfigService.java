@@ -20,7 +20,6 @@ public class GitHubConfigService {
     private final GitHubRestClient gitHubRestClient;
     private final IntegrationSecretService secretService;
 
-    // Tiêm phụ thuộc chuẩn qua Constructor, không dùng @Autowired(required = false)
     public GitHubConfigService(
             GitHubIntegrationConfigRepository configRepository,
             ProjectRepository projectRepository,
@@ -37,15 +36,27 @@ public class GitHubConfigService {
         validateProjectExists(projectId);
 
         return configRepository.findGitHubConfigByProjectId(projectId)
-                .map(config -> GitHubConfigResponse.builder()
-                        .projectId(config.getProjectId())
-                        .repositoryFullName(config.getAccountIdentifier())
-                        .configured(true)
-                        .status(resolveStatus(config.getStatus()))
-                        .githubLogin(extractOwner(config.getAccountIdentifier()))
-                        .lastTestedAt(config.getLastCheckedAt() != null ? config.getLastCheckedAt() : config.getUpdatedAt())
-                        .lastTestSucceeded("CONNECTED".equalsIgnoreCase(String.valueOf(config.getStatus())))
-                        .build())
+                .map(config -> {
+                    String status = resolveStatus(config.getStatus());
+                    Boolean lastTestSucceeded = null;
+                    if (config.getLastCheckedAt() != null) {
+                        if ("CONNECTED".equalsIgnoreCase(status)) {
+                            lastTestSucceeded = true;
+                        } else if ("CONNECTION_FAILED".equalsIgnoreCase(status)) {
+                            lastTestSucceeded = false;
+                        }
+                    }
+
+                    return GitHubConfigResponse.builder()
+                            .projectId(config.getProjectId())
+                            .repositoryFullName(config.getAccountIdentifier())
+                            .configured(true)
+                            .status(status)
+                            .githubLogin(extractOwner(config.getAccountIdentifier()))
+                            .lastTestedAt(config.getLastCheckedAt())
+                            .lastTestSucceeded(lastTestSucceeded)
+                            .build();
+                })
                 .orElseGet(() -> GitHubConfigResponse.builder()
                         .projectId(projectId)
                         .repositoryFullName(null)
@@ -66,27 +77,26 @@ public class GitHubConfigService {
         IntegrationConfig config = configRepository.findGitHubConfigByProjectId(projectId).orElse(null);
 
         if (config == null) {
-            // Cấu hình lần đầu bắt buộc phải có token
             if (request.getAccessToken() == null || request.getAccessToken().isBlank()) {
                 throw new IllegalArgumentException("Access token bắt buộc khi cấu hình GitHub lần đầu");
             }
             config = new IntegrationConfig(projectId, IntegrationProvider.GITHUB, secretService.encrypt(request.getAccessToken().trim()));
         } else {
-            // Cập nhật cấu hình: accessToken rỗng/blank -> báo lỗi validation
             if (request.getAccessToken() != null) {
                 if (request.getAccessToken().isBlank()) {
                     throw new IllegalArgumentException("Access token không được để trống");
                 }
                 config.setEncryptedSecret(secretService.encrypt(request.getAccessToken().trim()));
             }
-            // accessToken == null -> giữ nguyên token cũ
         }
 
         config.setBaseUrl("https://api.github.com");
         config.setAccountIdentifier(repositoryFullName);
 
-        // Thay đổi cấu hình -> bắt buộc reset trạng thái về NOT_CHECKED
+        // Reset trạng thái về NOT_CHECKED và xóa dữ liệu kiểm tra cũ
         applyStatus(config, "NOT_CHECKED");
+        config.setLastCheckedAt(null);
+        config.setLastErrorCode(null);
 
         IntegrationConfig saved = configRepository.save(config);
 
@@ -96,12 +106,12 @@ public class GitHubConfigService {
                 .configured(true)
                 .status("NOT_CHECKED")
                 .githubLogin(request.getRepositoryOwner().trim())
-                .lastTestedAt(saved.getLastCheckedAt() != null ? saved.getLastCheckedAt() : saved.getUpdatedAt())
+                .lastTestedAt(null)
                 .lastTestSucceeded(null)
                 .build();
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = {GitHubApiException.class, RuntimeException.class})
     public GitHubConnectionTestResponse testConnection(Long projectId) {
         validateProjectExists(projectId);
 
@@ -127,7 +137,6 @@ public class GitHubConfigService {
                     GitHubClientConfig.DEFAULT_API_VERSION,
                     Duration.ofSeconds(10));
 
-            // Gọi REST Client thật
             GitHubConnectionResult result = gitHubRestClient.testConnection(clientConfig);
 
             applyStatus(config, "CONNECTED");
@@ -149,7 +158,6 @@ public class GitHubConfigService {
                     .build();
 
         } catch (GitHubApiException ex) {
-            // Cập nhật trạng thái thất bại và ném lại ngoại lệ để trả đúng HTTP code 401/403/404/429/502
             applyStatus(config, "CONNECTION_FAILED");
             config.setLastCheckedAt(testedAt);
             config.setLastErrorCode(ex.getErrorCode());
