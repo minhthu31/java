@@ -5,7 +5,6 @@ import java.time.Instant;
 import java.util.NoSuchElementException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubIntegrationConfigRepository;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationConfig;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider;
@@ -34,7 +33,6 @@ public class GitHubConfigService {
     @Transactional(readOnly = true)
     public GitHubConfigResponse getConfig(Long projectId) {
         validateProjectExists(projectId);
-
         return configRepository.findGitHubConfigByProjectId(projectId)
                 .map(config -> {
                     String status = resolveStatus(config.getStatus());
@@ -46,7 +44,6 @@ public class GitHubConfigService {
                             lastTestSucceeded = false;
                         }
                     }
-
                     return GitHubConfigResponse.builder()
                             .projectId(config.getProjectId())
                             .repositoryFullName(config.getAccountIdentifier())
@@ -71,9 +68,7 @@ public class GitHubConfigService {
     @Transactional
     public GitHubConfigResponse saveConfig(Long projectId, GitHubConfigRequest request) {
         validateProjectExists(projectId);
-
         String repositoryFullName = request.getRepositoryOwner().trim() + "/" + request.getRepositoryName().trim();
-
         IntegrationConfig config = configRepository.findGitHubConfigByProjectId(projectId).orElse(null);
 
         if (config == null) {
@@ -93,7 +88,6 @@ public class GitHubConfigService {
         config.setBaseUrl("https://api.github.com");
         config.setAccountIdentifier(repositoryFullName);
 
-        // Reset trạng thái về NOT_CHECKED và xóa dữ liệu kiểm tra cũ
         applyStatus(config, "NOT_CHECKED");
         config.setLastCheckedAt(null);
         config.setLastErrorCode(null);
@@ -111,7 +105,7 @@ public class GitHubConfigService {
                 .build();
     }
 
-    @Transactional(noRollbackFor = {GitHubApiException.class, RuntimeException.class})
+    @Transactional(noRollbackFor = GitHubApiException.class)
     public GitHubConnectionTestResponse testConnection(Long projectId) {
         validateProjectExists(projectId);
 
@@ -127,8 +121,8 @@ public class GitHubConfigService {
         String owner = parts[0];
         String repo = parts[1];
         String rawToken = secretService.decrypt(config.getEncryptedSecret());
-
         Instant testedAt = Instant.now();
+
         try {
             GitHubClientConfig clientConfig = new GitHubClientConfig(
                     owner,
@@ -156,7 +150,6 @@ public class GitHubConfigService {
                     .rateLimitResetAt(result.rateLimitResetAt())
                     .testedAt(testedAt)
                     .build();
-
         } catch (GitHubApiException ex) {
             applyStatus(config, "CONNECTION_FAILED");
             config.setLastCheckedAt(testedAt);
@@ -164,11 +157,12 @@ public class GitHubConfigService {
             configRepository.save(config);
             throw ex;
         } catch (Exception ex) {
+            GitHubApiException apiEx = GitHubErrorHandler.fromThrowable(ex);
             applyStatus(config, "CONNECTION_FAILED");
             config.setLastCheckedAt(testedAt);
-            config.setLastErrorCode("GITHUB_PROVIDER_UNAVAILABLE");
+            config.setLastErrorCode(apiEx.getErrorCode());
             configRepository.save(config);
-            throw ex;
+            throw apiEx;
         }
     }
 

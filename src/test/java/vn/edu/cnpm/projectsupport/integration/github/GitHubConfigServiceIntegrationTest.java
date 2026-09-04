@@ -16,7 +16,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubIntegrationConfigRepository;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationConfig;
 import vn.edu.cnpm.projectsupport.security.IntegrationSecretService;
@@ -53,13 +52,11 @@ class GitHubConfigServiceIntegrationTest {
         jdbcTemplate.update("DELETE FROM integration_configs WHERE project_id = ?", PROJECT_ID);
         jdbcTemplate.update("DELETE FROM projects WHERE id = ?", PROJECT_ID);
         jdbcTemplate.update("DELETE FROM student_groups WHERE id = ?", GROUP_ID);
-
         jdbcTemplate.update("""
                 MERGE INTO student_groups (id, code, name)
                 KEY(id)
                 VALUES (?, ?, ?)
                 """, GROUP_ID, "CNPM-91-TEST", "CNPM 91 Test Group");
-
         jdbcTemplate.update(
                 "INSERT INTO projects (id, group_id, name) VALUES (?, ?, ?)",
                 PROJECT_ID, GROUP_ID, "CNPM 91 Project");
@@ -118,6 +115,7 @@ class GitHubConfigServiceIntegrationTest {
                 .accessToken("ghp_originalSecretToken")
                 .apiVersion("2026-03-10")
                 .build();
+
         gitHubConfigService.saveConfig(PROJECT_ID, createRequest);
 
         GitHubConfigRequest updateRequest = GitHubConfigRequest.builder()
@@ -126,6 +124,7 @@ class GitHubConfigServiceIntegrationTest {
                 .accessToken(null)
                 .apiVersion("2026-03-10")
                 .build();
+
         GitHubConfigResponse updateResponse = gitHubConfigService.saveConfig(PROJECT_ID, updateRequest);
 
         assertThat(updateResponse.getRepositoryFullName()).isEqualTo("minhthu31/updated-repo");
@@ -148,9 +147,11 @@ class GitHubConfigServiceIntegrationTest {
                 .repositoryName("backend-repo")
                 .accessToken("ghp_secretToken123")
                 .build();
+
         gitHubConfigService.saveConfig(PROJECT_ID, request);
 
         GitHubConfigResponse response = gitHubConfigService.getConfig(PROJECT_ID);
+
         assertThat(response.isConfigured()).isTrue();
         assertThat(response.getRepositoryFullName()).isEqualTo("minhthu31/backend-repo");
         assertThat(response.getStatus()).isEqualTo("NOT_CHECKED");
@@ -166,6 +167,7 @@ class GitHubConfigServiceIntegrationTest {
                 .repositoryName("backend-repo")
                 .accessToken("ghp_secretToken123")
                 .build();
+
         gitHubConfigService.saveConfig(PROJECT_ID, request);
 
         when(gitHubRestClient.testConnection(any(GitHubClientConfig.class))).thenReturn(
@@ -182,6 +184,7 @@ class GitHubConfigServiceIntegrationTest {
         );
 
         GitHubConnectionTestResponse testResponse = gitHubConfigService.testConnection(PROJECT_ID);
+
         assertThat(testResponse.isConnected()).isTrue();
         assertThat(testResponse.getLogin()).isEqualTo("minhthu31");
 
@@ -199,6 +202,7 @@ class GitHubConfigServiceIntegrationTest {
                 .repositoryName("backend-repo")
                 .accessToken("ghp_invalidToken")
                 .build();
+
         gitHubConfigService.saveConfig(PROJECT_ID, request);
 
         when(gitHubRestClient.testConnection(any(GitHubClientConfig.class)))
@@ -206,7 +210,6 @@ class GitHubConfigServiceIntegrationTest {
 
         assertThrows(GitHubApiException.class, () -> gitHubConfigService.testConnection(PROJECT_ID));
 
-        // Đọc lại từ DB mà không bọc Transactional test để xác nhận DB đã commit
         IntegrationConfig entity = configRepository.findGitHubConfigByProjectId(PROJECT_ID).orElseThrow();
         assertThat(String.valueOf(entity.getStatus())).isEqualTo("CONNECTION_FAILED");
         assertThat(entity.getLastErrorCode()).isEqualTo("GITHUB_AUTHENTICATION_FAILED");
@@ -220,7 +223,32 @@ class GitHubConfigServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("7. Project không tồn tại ném NoSuchElementException khi gọi API")
+    @DisplayName("7. Test connection gặp lỗi runtime từ client phải chuyển thành GitHubApiException 502 GITHUB_PROVIDER_UNAVAILABLE")
+    void testConnection_runtimeExceptionFromClient_shouldWrapToGitHubApiException502() {
+        GitHubConfigRequest request = GitHubConfigRequest.builder()
+                .repositoryOwner("minhthu31")
+                .repositoryName("backend-repo")
+                .accessToken("ghp_testToken")
+                .build();
+
+        gitHubConfigService.saveConfig(PROJECT_ID, request);
+
+        when(gitHubRestClient.testConnection(any(GitHubClientConfig.class)))
+                .thenThrow(new RuntimeException("GitHub connection timeout or network glitch"));
+
+        GitHubApiException exception = assertThrows(GitHubApiException.class, () -> gitHubConfigService.testConnection(PROJECT_ID));
+
+        assertThat(exception.getErrorCode()).isEqualTo("GITHUB_PROVIDER_UNAVAILABLE");
+        assertThat(exception.getStatus()).isEqualTo(HttpStatus.BAD_GATEWAY);
+
+        IntegrationConfig entity = configRepository.findGitHubConfigByProjectId(PROJECT_ID).orElseThrow();
+        assertThat(String.valueOf(entity.getStatus())).isEqualTo("CONNECTION_FAILED");
+        assertThat(entity.getLastErrorCode()).isEqualTo("GITHUB_PROVIDER_UNAVAILABLE");
+        assertThat(entity.getLastCheckedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("8. Project không tồn tại ném NoSuchElementException khi gọi API")
     void whenProjectDoesNotExist_shouldThrowException() {
         GitHubConfigRequest request = GitHubConfigRequest.builder()
                 .repositoryOwner("minhthu31")
