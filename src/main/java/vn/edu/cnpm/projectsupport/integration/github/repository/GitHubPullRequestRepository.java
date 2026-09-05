@@ -31,7 +31,7 @@ public interface GitHubPullRequestRepository extends JpaRepository<GitHubPullReq
             Pageable pageable);
 
     @Query("""
-            select pr from GitHubPullRequest pr
+            select distinct pr from GitHubPullRequest pr
             join TaskPullRequestLink tpl on tpl.id.pullRequestId = pr.id
             join JiraIssue ji on ji.taskId = tpl.id.taskId
             where pr.repositoryId = :repositoryId
@@ -65,7 +65,7 @@ public interface GitHubPullRequestRepository extends JpaRepository<GitHubPullReq
             Pageable pageable);
 
     @Query("""
-            select pr from GitHubPullRequest pr
+            select distinct pr from GitHubPullRequest pr
             join GitHubRepository r on r.id = pr.repositoryId
             left join UserExternalAccount a on a.id = pr.authorExternalAccountId
             join TaskPullRequestLink tpl on tpl.id.pullRequestId = pr.id

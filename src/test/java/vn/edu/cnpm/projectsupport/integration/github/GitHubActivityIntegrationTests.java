@@ -1,5 +1,6 @@
 package vn.edu.cnpm.projectsupport.integration.github;
 
+import static org.hamcrest.Matchers.hasItem;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -73,11 +74,11 @@ class GitHubActivityIntegrationTests {
 
         jdbcTemplate.update("DELETE FROM task_pr_links");
         jdbcTemplate.update("DELETE FROM task_commit_links");
+        jdbcTemplate.update("DELETE FROM jira_issues");
         jdbcTemplate.update("DELETE FROM github_pull_requests");
         jdbcTemplate.update("DELETE FROM github_commits");
         jdbcTemplate.update("DELETE FROM github_repositories");
         jdbcTemplate.update("DELETE FROM user_external_accounts");
-        jdbcTemplate.update("DELETE FROM jira_issues");
         jdbcTemplate.update("DELETE FROM integration_configs WHERE project_id = ?", PROJECT_ID);
         jdbcTemplate.update("DELETE FROM tasks WHERE id IN (?, ?)", TASK_98_ID, TASK_9_ID);
         jdbcTemplate.update("DELETE FROM projects WHERE id = ?", PROJECT_ID);
@@ -97,8 +98,14 @@ class GitHubActivityIntegrationTests {
                 VALUES (?, ?, 'Task 9 Activity', 'Test criteria', 'TASK', 'MEDIUM', 'TO_DO', 'NOT_SYNCED')
                 """, TASK_9_ID, PROJECT_ID);
 
-        jdbcTemplate.update("INSERT INTO jira_issues (task_id, jira_issue_key, sync_status) VALUES (?, 'CNPM-98', 'SYNCED')", TASK_98_ID);
-        jdbcTemplate.update("INSERT INTO jira_issues (task_id, jira_issue_key, sync_status) VALUES (?, 'CNPM-9', 'SYNCED')", TASK_9_ID);
+        jdbcTemplate.update("""
+                INSERT INTO jira_issues (task_id, jira_issue_id, jira_issue_key, url, last_synced_at)
+                VALUES (?, 10098, 'CNPM-98', 'https://jira.com/CNPM-98', CURRENT_TIMESTAMP)
+                """, TASK_98_ID);
+        jdbcTemplate.update("""
+                INSERT INTO jira_issues (task_id, jira_issue_id, jira_issue_key, url, last_synced_at)
+                VALUES (?, 10009, 'CNPM-9', 'https://jira.com/CNPM-9', CURRENT_TIMESTAMP)
+                """, TASK_9_ID);
 
         UserExternalAccount account = externalAccountRepository.saveAndFlush(
                 new UserExternalAccount(memberUserId, IntegrationProvider.GITHUB, "gh-actor-98", "member98"));
@@ -157,7 +164,51 @@ class GitHubActivityIntegrationTests {
     }
 
     @Test
-    @DisplayName("2. actorUserId lọc và trả về ID user local, không phải authorExternalAccountId")
+    @DisplayName("2. Lấy danh sách Pull Request có filter state và pagination thành công")
+    void listPullRequests_shouldReturnPagedData() throws Exception {
+        when(projectAuthorization.canViewTasks(PROJECT_ID)).thenReturn(true);
+
+        mockMvc.perform(get(BASE_URL + "/repositories/{repositoryId}/pull-requests", PROJECT_ID, savedRepo.getId())
+                        .with(user("member").roles("TEAM_MEMBER"))
+                        .param("state", "OPEN")
+                        .param("page", "0")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content").isArray())
+                .andExpect(jsonPath("$.data.content[0].number").value(10))
+                .andExpect(jsonPath("$.data.content[0].state").value("OPEN"));
+    }
+
+    @Test
+    @DisplayName("3. /activities không truyền type phải hợp nhất cả Commit và PR")
+    void listActivities_withoutType_shouldReturnMergedCommitsAndPrs() throws Exception {
+        when(projectAuthorization.canViewTasks(PROJECT_ID)).thenReturn(true);
+
+        mockMvc.perform(get(BASE_URL + "/activities", PROJECT_ID)
+                        .with(user("member").roles("TEAM_MEMBER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content").isArray())
+                .andExpect(jsonPath("$.data.content[*].type", hasItem("COMMIT")))
+                .andExpect(jsonPath("$.data.content[*].type", hasItem("PULL_REQUEST")))
+                .andExpect(jsonPath("$.data.totalElements").value(3));
+    }
+
+    @Test
+    @DisplayName("4. /tasks/{taskId}/activities phải trả về cả Commit lẫn PR liên kết")
+    void listTaskActivities_shouldReturnBothCommitAndPr() throws Exception {
+        when(projectAuthorization.canViewTask(PROJECT_ID, TASK_98_ID)).thenReturn(true);
+
+        mockMvc.perform(get(BASE_URL + "/tasks/{taskId}/activities", PROJECT_ID, TASK_98_ID)
+                        .with(user("member").roles("TEAM_MEMBER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content").isArray())
+                .andExpect(jsonPath("$.data.content[*].type", hasItem("COMMIT")))
+                .andExpect(jsonPath("$.data.content[*].type", hasItem("PULL_REQUEST")))
+                .andExpect(jsonPath("$.data.totalElements").value(2));
+    }
+
+    @Test
+    @DisplayName("5. actorUserId lọc và trả về ID user local")
     void listActivities_actorUserId_shouldMapToLocalUserId() throws Exception {
         when(projectAuthorization.canViewTasks(PROJECT_ID)).thenReturn(true);
 
@@ -170,18 +221,16 @@ class GitHubActivityIntegrationTests {
     }
 
     @Test
-    @DisplayName("3. Validate from > to và type sai phải trả 400 Bad Request")
+    @DisplayName("6. Validate from > to và type sai phải trả 400 Bad Request")
     void listActivities_invalidParams_shouldReturnBadRequest() throws Exception {
         when(projectAuthorization.canViewTasks(PROJECT_ID)).thenReturn(true);
 
-        // from > to
         mockMvc.perform(get(BASE_URL + "/activities", PROJECT_ID)
                         .with(user("member").roles("TEAM_MEMBER"))
                         .param("from", "2026-09-05T00:00:00Z")
                         .param("to", "2026-09-01T00:00:00Z"))
                 .andExpect(status().isBadRequest());
 
-        // type sai
         mockMvc.perform(get(BASE_URL + "/activities", PROJECT_ID)
                         .with(user("member").roles("TEAM_MEMBER"))
                         .param("type", "INVALID_TYPE"))
@@ -189,7 +238,7 @@ class GitHubActivityIntegrationTests {
     }
 
     @Test
-    @DisplayName("4. Giới hạn page size tối đa 100")
+    @DisplayName("7. Giới hạn page size tối đa 100")
     void listCommits_sizeExceeding100_shouldReturnBadRequest() throws Exception {
         when(projectAuthorization.canViewTasks(PROJECT_ID)).thenReturn(true);
 
@@ -197,5 +246,15 @@ class GitHubActivityIntegrationTests {
                         .with(user("member").roles("TEAM_MEMBER"))
                         .param("size", "101"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("8. Quyền RBAC: Người dùng không thuộc Project bị chặn 403 Forbidden")
+    void nonProjectMember_shouldBeForbidden() throws Exception {
+        when(projectAuthorization.canViewTasks(PROJECT_ID)).thenReturn(false);
+
+        mockMvc.perform(get(BASE_URL + "/activities", PROJECT_ID)
+                        .with(user("outsider").roles("TEAM_MEMBER")))
+                .andExpect(status().isForbidden());
     }
 }

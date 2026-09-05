@@ -16,14 +16,7 @@ public interface GitHubCommitRepository extends JpaRepository<GitHubCommit, Long
     Page<GitHubCommit> findByRepositoryIdOrderByCommittedAtDesc(Long repositoryId, Pageable pageable);
 
     @Query("""
-            select c from GitHubCommit c
-            where c.repositoryId = :repositoryId
-            order by c.committedAt desc, c.id desc
-            """)
-    Page<GitHubCommit> findByRepositoryId(@Param("repositoryId") Long repositoryId, Pageable pageable);
-
-    @Query("""
-            select c from GitHubCommit c
+            select distinct c from GitHubCommit c
             join TaskCommitLink tcl on tcl.id.commitId = c.id
             join JiraIssue ji on ji.taskId = tcl.id.taskId
             where c.repositoryId = :repositoryId
@@ -53,7 +46,7 @@ public interface GitHubCommitRepository extends JpaRepository<GitHubCommit, Long
             Pageable pageable);
 
     @Query("""
-            select c from GitHubCommit c
+            select distinct c from GitHubCommit c
             join GitHubRepository r on r.id = c.repositoryId
             left join UserExternalAccount a on a.id = c.authorExternalAccountId
             join TaskCommitLink tcl on tcl.id.commitId = c.id

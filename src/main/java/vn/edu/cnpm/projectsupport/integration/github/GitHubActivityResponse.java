@@ -5,12 +5,12 @@ import java.util.List;
 
 public record GitHubActivityResponse(
         String type,
-        String externalId,
-        String title,
+        String key,
+        String summary,
         Long actorUserId,
         String actorLogin,
-        Instant occurredAt,
-        String htmlUrl,
+        Instant timestamp,
+        String url,
         List<String> issueKeys,
         List<Long> linkedTaskIds
 ) {}
