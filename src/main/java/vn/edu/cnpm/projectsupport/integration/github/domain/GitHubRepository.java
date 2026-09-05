@@ -96,7 +96,7 @@ public class GitHubRepository extends BaseEntity {
     }
 
     public Long getProjectId() {
-        return projectId; 
+        return projectId;
     }
     public Long getGithubRepositoryId() {
         return githubRepositoryId;
