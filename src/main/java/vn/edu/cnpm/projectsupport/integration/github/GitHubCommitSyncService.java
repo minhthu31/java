@@ -36,6 +36,7 @@ public class GitHubCommitSyncService {
     private final SyncLogRepository syncLogRepository;
     private final GitHubIntegrationConfigRepository integrationConfigRepository;
     private final IntegrationSecretService secretService;
+    private final GitHubTaskLinkService taskLinkService;
 
     public GitHubCommitSyncService(
             GitHubRestClient gitHubRestClient,
@@ -44,7 +45,8 @@ public class GitHubCommitSyncService {
             UserExternalAccountRepository externalAccountRepository,
             SyncLogRepository syncLogRepository,
             GitHubIntegrationConfigRepository integrationConfigRepository,
-            IntegrationSecretService secretService) {
+            IntegrationSecretService secretService,
+            GitHubTaskLinkService taskLinkService) {
         this.gitHubRestClient = gitHubRestClient;
         this.commitRepository = commitRepository;
         this.repositoryRepository = repositoryRepository;
@@ -52,6 +54,7 @@ public class GitHubCommitSyncService {
         this.syncLogRepository = syncLogRepository;
         this.integrationConfigRepository = integrationConfigRepository;
         this.secretService = secretService;
+        this.taskLinkService = taskLinkService;
     }
 
     /** Loads the project GitHub secret and repository snapshot from the existing integration configuration. */
@@ -130,7 +133,8 @@ public class GitHubCommitSyncService {
                         // required by contribution reporting.
                         vn.edu.cnpm.projectsupport.integration.github.GitHubCommit remoteCommit =
                                 gitHubRestClient.getCommit(config, listedCommit.sha());
-                        upsertCommit(localRepository.getId(), remoteCommit);
+                        GitHubCommit localCommit = upsertCommit(localRepository.getId(), remoteCommit);
+                        taskLinkService.linkCommit(projectId, localCommit);
                         synced++;
                     } catch (RuntimeException commitException) {
                         errors++;
@@ -204,7 +208,7 @@ public class GitHubCommitSyncService {
         return repositoryRepository.saveAndFlush(local);
     }
 
-    private void upsertCommit(Long repositoryId, vn.edu.cnpm.projectsupport.integration.github.GitHubCommit remote) {
+    private GitHubCommit upsertCommit(Long repositoryId, vn.edu.cnpm.projectsupport.integration.github.GitHubCommit remote) {
         if (remote.sha() == null || remote.sha().isBlank()
                 || remote.commit() == null || remote.commit().message() == null
                 || remote.commit().author() == null || remote.commit().author().date() == null
@@ -239,7 +243,7 @@ public class GitHubCommitSyncService {
         local.setFilesChanged(remote.filesChanged());
         local.setParentShas(String.join(",", remote.parentShas()));
         mapExternalAuthor(local, remote.author());
-        commitRepository.saveAndFlush(local);
+        return commitRepository.saveAndFlush(local);
     }
 
     private void mapExternalAuthor(GitHubCommit local, GitHubUser author) {
