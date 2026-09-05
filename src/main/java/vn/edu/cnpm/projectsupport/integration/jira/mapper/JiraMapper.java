@@ -30,7 +30,7 @@ public class JiraMapper {
 
     public JiraIssueDto toIssue(String id, String key, String summary, JiraAdfDocumentDto description, JiraStatusDto status,
          JiraPriorityDto priority, JiraUserDto assignee, JiraProjectDto project) {
-        JiraIssueFieldsDto fields = new JiraIssueFieldsDto(summary, description, status, priority, assignee, project, null, null, null);
+        JiraIssueFieldsDto fields = new JiraIssueFieldsDto(summary, description, status, priority, assignee, project, null, null, null, null);
         return new JiraIssueDto(id, key, fields);
     }
 

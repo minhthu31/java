@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 
 import vn.edu.cnpm.projectsupport.common.api.ApiError;
+import vn.edu.cnpm.projectsupport.integration.github.GitHubApiException;
 import vn.edu.cnpm.projectsupport.integration.jira.exception.JiraApiException;
 
 @RestControllerAdvice
@@ -137,6 +138,27 @@ public class GlobalExceptionHandler {
                 exception.getMessage(),
                 Map.of(),
                 request);
+    }
+
+    @ExceptionHandler(GitHubApiException.class)
+    public ResponseEntity<ApiError> handleGitHubApiException(
+            GitHubApiException exception,
+            WebRequest request) {
+
+        ApiError apiError = new ApiError(
+                exception.getErrorCode(),
+                exception.getMessage(),
+                exception.getCorrelationId(),
+                Map.of(),
+                Instant.now(),
+                exception.isRetryable(),
+                exception.getRetryAfterSeconds());
+
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(exception.getStatus());
+        if (exception.getRetryAfterSeconds() != null) {
+            response.header("Retry-After", String.valueOf(exception.getRetryAfterSeconds()));
+        }
+        return response.body(apiError);
     }
 
     @ExceptionHandler(JiraApiException.class)

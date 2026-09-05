@@ -1,0 +1,558 @@
+openapi: 3.0.3
+info:
+  title: CNPM GitHub Integration API
+  version: 1.0.0
+  description: Contract chốt bởi CNPM-88 cho các task CNPM-89 đến CNPM-101.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: GitHub Integration
+
+paths:
+  /projects/{projectId}/integrations/github/config:
+    get:
+      tags: [GitHub Integration]
+      operationId: getGitHubConfig
+      summary: Đọc cấu hình GitHub đã che token
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Cấu hình hiện tại
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubConfigApiResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [GitHub Integration]
+      operationId: configureGitHub
+      summary: Tạo hoặc cập nhật cấu hình GitHub
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GitHubConfigRequest'
+      responses:
+        '200':
+          description: Cấu hình đã lưu; không trả access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubConfigApiResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /projects/{projectId}/integrations/github/test-connection:
+    post:
+      tags: [GitHub Integration]
+      operationId: testGitHubConnection
+      summary: Kiểm tra token, user và quyền đọc repository
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Kết quả kiểm tra kết nối
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubConnectionTestApiResponse'
+        '401': { $ref: '#/components/responses/GitHubAuthenticationFailed' }
+        '403': { $ref: '#/components/responses/GitHubAuthorizationFailed' }
+        '404': { $ref: '#/components/responses/GitHubRepositoryNotFound' }
+        '429': { $ref: '#/components/responses/GitHubRateLimited' }
+        '502': { $ref: '#/components/responses/GitHubUnavailable' }
+
+  /projects/{projectId}/integrations/github/sync:
+    post:
+      tags: [GitHub Integration]
+      operationId: syncGitHubActivity
+      summary: Đồng bộ repository, commit, pull request và user
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Kết quả đồng bộ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubSyncApiResponse'
+        '401': { $ref: '#/components/responses/GitHubAuthenticationFailed' }
+        '403': { $ref: '#/components/responses/GitHubAuthorizationFailed' }
+        '404': { $ref: '#/components/responses/GitHubRepositoryNotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/GitHubRateLimited' }
+        '502': { $ref: '#/components/responses/GitHubUnavailable' }
+
+  /projects/{projectId}/integrations/github/repositories:
+    get:
+      tags: [GitHub Integration]
+      operationId: listGitHubRepositories
+      summary: Đọc repository snapshot
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Danh sách repository
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RepositoryPageApiResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /projects/{projectId}/integrations/github/repositories/{repositoryId}/commits:
+    get:
+      tags: [GitHub Integration]
+      operationId: listGitHubCommits
+      summary: Đọc commit snapshot
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/RepositoryId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/IssueKey'
+      responses:
+        '200':
+          description: Danh sách commit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommitPageApiResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /projects/{projectId}/integrations/github/repositories/{repositoryId}/pull-requests:
+    get:
+      tags: [GitHub Integration]
+      operationId: listGitHubPullRequests
+      summary: Đọc Pull Request snapshot
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/RepositoryId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/IssueKey'
+        - name: state
+          in: query
+          schema:
+            type: string
+            enum: [OPEN, CLOSED, MERGED]
+      responses:
+        '200':
+          description: Danh sách Pull Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PullRequestPageApiResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /projects/{projectId}/integrations/github/activities:
+    get:
+      tags: [GitHub Integration]
+      operationId: listGitHubActivities
+      summary: Đọc hoạt động GitHub hợp nhất
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/IssueKey'
+        - name: actorUserId
+          in: query
+          schema: { type: integer, format: int64 }
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [COMMIT, PULL_REQUEST, WORKFLOW_RUN]
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Hoạt động GitHub
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityPageApiResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /projects/{projectId}/integrations/github/tasks/{taskId}/activities:
+    get:
+      tags: [GitHub Integration]
+      operationId: listTaskGitHubActivities
+      summary: Đọc commit và PR đã liên kết với Task
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/TaskId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Hoạt động liên kết với Task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityPageApiResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /projects/{projectId}/integrations/github/members/{userId}/account-link:
+    put:
+      tags: [GitHub Integration]
+      operationId: linkGitHubAccount
+      summary: Liên kết thành viên với GitHub user ID
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: userId
+          in: path
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GitHubAccountLinkRequest'
+      responses:
+        '200':
+          description: Tài khoản đã liên kết
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubAccountLinkApiResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
+    RepositoryId:
+      name: repositoryId
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
+    TaskId:
+      name: taskId
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 100 }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 0, default: 0 }
+    Size:
+      name: size
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    IssueKey:
+      name: issueKey
+      in: query
+      schema:
+        type: string
+        pattern: '^[A-Z][A-Z0-9_]{1,29}-[1-9][0-9]*$'
+
+  schemas:
+    GitHubConfigRequest:
+      type: object
+      required: [repositoryOwner, repositoryName]
+      properties:
+        repositoryOwner: { type: string, minLength: 1, maxLength: 100 }
+        repositoryName: { type: string, minLength: 1, maxLength: 100 }
+        accessToken:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 2048
+          writeOnly: true
+        apiVersion: { type: string, default: '2026-03-10' }
+    GitHubConfigResponse:
+      type: object
+      required: [projectId, repositoryFullName, configured, status]
+      properties:
+        projectId: { type: integer, format: int64 }
+        repositoryFullName: { type: string }
+        configured: { type: boolean }
+        status:
+          type: string
+          enum: [NOT_CONFIGURED, NOT_CHECKED, CONNECTED, CONNECTION_FAILED]
+        githubLogin: { type: string, nullable: true }
+        lastTestedAt: { type: string, format: date-time, nullable: true }
+        lastTestSucceeded: { type: boolean, nullable: true }
+    GitHubConnectionTestResponse:
+      type: object
+      required: [projectId, connected, repositoryFullName, testedAt]
+      properties:
+        projectId: { type: integer, format: int64 }
+        connected: { type: boolean }
+        githubUserId: { type: integer, format: int64, nullable: true }
+        login: { type: string, nullable: true }
+        githubRepositoryId: { type: integer, format: int64, nullable: true }
+        repositoryFullName: { type: string }
+        permission: { type: string, nullable: true }
+        rateLimitRemaining: { type: integer, format: int64, nullable: true }
+        rateLimitResetAt: { type: string, format: date-time, nullable: true }
+        testedAt: { type: string, format: date-time }
+    GitHubSyncResponse:
+      type: object
+      required: [projectId, commitsSynced, pullRequestsSynced, usersSynced, linksCreated, unlinkedActivities, errors, lastSyncedAt, correlationId]
+      properties:
+        projectId: { type: integer, format: int64 }
+        repositoryId: { type: integer, format: int64 }
+        commitsSynced: { type: integer, minimum: 0 }
+        pullRequestsSynced: { type: integer, minimum: 0 }
+        usersSynced: { type: integer, minimum: 0 }
+        linksCreated: { type: integer, minimum: 0 }
+        unlinkedActivities: { type: integer, minimum: 0 }
+        errors: { type: integer, minimum: 0 }
+        lastSyncedAt: { type: string, format: date-time }
+        correlationId: { type: string }
+    RepositoryResponse:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        githubRepositoryId: { type: integer, format: int64 }
+        fullName: { type: string }
+        ownerLogin: { type: string }
+        privateRepository: { type: boolean }
+        defaultBranch: { type: string }
+        htmlUrl: { type: string, format: uri }
+        archived: { type: boolean }
+        remoteUpdatedAt: { type: string, format: date-time }
+        lastSyncedAt: { type: string, format: date-time }
+    CommitResponse:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        repositoryId: { type: integer, format: int64 }
+        sha: { type: string }
+        message: { type: string }
+        authorGithubUserId: { type: integer, format: int64, nullable: true }
+        authorLogin: { type: string, nullable: true }
+        committedAt: { type: string, format: date-time }
+        htmlUrl: { type: string, format: uri }
+        additions: { type: integer, minimum: 0 }
+        deletions: { type: integer, minimum: 0 }
+        filesChanged: { type: integer, minimum: 0, nullable: true }
+        issueKeys: { type: array, items: { type: string } }
+    PullRequestResponse:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        repositoryId: { type: integer, format: int64 }
+        githubPullRequestId: { type: integer, format: int64 }
+        number: { type: integer }
+        title: { type: string }
+        authorGithubUserId: { type: integer, format: int64, nullable: true }
+        authorLogin: { type: string, nullable: true }
+        headRef: { type: string }
+        headSha: { type: string }
+        baseRef: { type: string }
+        state: { type: string, enum: [OPEN, CLOSED, MERGED] }
+        draft: { type: boolean }
+        mergedAt: { type: string, format: date-time, nullable: true }
+        htmlUrl: { type: string, format: uri }
+        issueKeys: { type: array, items: { type: string } }
+    GitHubActivityResponse:
+      type: object
+      properties:
+        type: { type: string, enum: [COMMIT, PULL_REQUEST, WORKFLOW_RUN] }
+        externalId: { type: string }
+        title: { type: string }
+        actorUserId: { type: integer, format: int64, nullable: true }
+        actorLogin: { type: string, nullable: true }
+        occurredAt: { type: string, format: date-time }
+        htmlUrl: { type: string, format: uri }
+        issueKeys: { type: array, items: { type: string } }
+        linkedTaskIds: { type: array, items: { type: integer, format: int64 } }
+    GitHubAccountLinkRequest:
+      type: object
+      required: [externalAccountId, username]
+      properties:
+        externalAccountId: { type: string, pattern: '^[1-9][0-9]*$' }
+        username: { type: string, minLength: 1, maxLength: 100 }
+    GitHubAccountLinkResponse:
+      type: object
+      properties:
+        userId: { type: integer, format: int64 }
+        externalAccountId: { type: string }
+        username: { type: string }
+        linkedAt: { type: string, format: date-time }
+    PageMetadata:
+      type: object
+      required: [page, size, totalElements, totalPages, first, last]
+      properties:
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer, format: int64 }
+        totalPages: { type: integer }
+        first: { type: boolean }
+        last: { type: boolean }
+    RepositoryPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMetadata'
+        - type: object
+          properties:
+            content: { type: array, items: { $ref: '#/components/schemas/RepositoryResponse' } }
+    CommitPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMetadata'
+        - type: object
+          properties:
+            content: { type: array, items: { $ref: '#/components/schemas/CommitResponse' } }
+    PullRequestPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMetadata'
+        - type: object
+          properties:
+            content: { type: array, items: { $ref: '#/components/schemas/PullRequestResponse' } }
+    ActivityPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMetadata'
+        - type: object
+          properties:
+            content: { type: array, items: { $ref: '#/components/schemas/GitHubActivityResponse' } }
+    ApiError:
+      type: object
+      required: [code, message, correlationId, timestamp]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        correlationId: { type: string }
+        fieldErrors: { type: object, additionalProperties: { type: string } }
+        timestamp: { type: string, format: date-time }
+        retryable: { type: boolean, nullable: true }
+        retryAfterSeconds: { type: integer, format: int64, nullable: true }
+    GitHubConfigApiResponse:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/GitHubConfigResponse' }
+        timestamp: { type: string, format: date-time }
+    GitHubConnectionTestApiResponse:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/GitHubConnectionTestResponse' }
+        timestamp: { type: string, format: date-time }
+    GitHubSyncApiResponse:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/GitHubSyncResponse' }
+        timestamp: { type: string, format: date-time }
+    RepositoryPageApiResponse:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/RepositoryPage' }
+        timestamp: { type: string, format: date-time }
+    CommitPageApiResponse:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/CommitPage' }
+        timestamp: { type: string, format: date-time }
+    PullRequestPageApiResponse:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/PullRequestPage' }
+        timestamp: { type: string, format: date-time }
+    ActivityPageApiResponse:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/ActivityPage' }
+        timestamp: { type: string, format: date-time }
+    GitHubAccountLinkApiResponse:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/GitHubAccountLinkResponse' }
+        timestamp: { type: string, format: date-time }
+
+  responses:
+    BadRequest:
+      description: Request hoặc cấu hình không hợp lệ
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    Unauthorized:
+      description: Chưa đăng nhập vào hệ thống
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    Forbidden:
+      description: Không có quyền trên project
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    NotFound:
+      description: Không tìm thấy dữ liệu local
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    Conflict:
+      description: Sync đang chạy hoặc idempotency key bị dùng sai
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    GitHubAuthenticationFailed:
+      description: GITHUB_AUTHENTICATION_FAILED
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    GitHubAuthorizationFailed:
+      description: GITHUB_AUTHORIZATION_FAILED
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    GitHubRepositoryNotFound:
+      description: GITHUB_REPOSITORY_NOT_FOUND
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    GitHubRateLimited:
+      description: GITHUB_RATE_LIMITED; có retryAfterSeconds khi xác định được
+      headers:
+        Retry-After:
+          schema: { type: integer, format: int64 }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    GitHubUnavailable:
+      description: GITHUB_PROVIDER_UNAVAILABLE
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }

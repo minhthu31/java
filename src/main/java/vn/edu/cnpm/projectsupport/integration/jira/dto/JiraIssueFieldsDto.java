@@ -13,5 +13,6 @@ public record JiraIssueFieldsDto(
         JiraProjectDto project,
         JiraIssueTypeDto issuetype,
         LocalDate duedate,
-        JiraParentIssueDto parent) {
+        JiraParentIssueDto parent,
+        String updated) {
 }

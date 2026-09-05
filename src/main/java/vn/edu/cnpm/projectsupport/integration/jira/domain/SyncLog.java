@@ -18,7 +18,7 @@ public class SyncLog {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "project_id", nullable = false)
+    @Column(name = "project_id")
     private Long projectId;
 
     @Enumerated(EnumType.STRING)
@@ -41,6 +41,12 @@ public class SyncLog {
 
     @Column(name = "retry_count", nullable = false)
     private int retryCount;
+
+    @Column(name = "idempotency_key", length = 100)
+    private String idempotencyKey;
+
+    @Column(name = "request_fingerprint", length = 128)
+    private String requestFingerprint;
 
     @Column(name = "error_code", length = 100)
     private String errorCode;
@@ -108,6 +114,22 @@ public class SyncLog {
 
     public int getRetryCount() {
         return retryCount;
+    }
+
+    public String getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
+    public String getRequestFingerprint() {
+        return requestFingerprint;
+    }
+
+    public void setIdempotencyKey(String idempotencyKey) {
+        this.idempotencyKey = idempotencyKey;
+    }
+
+    public void setRequestFingerprint(String requestFingerprint) {
+        this.requestFingerprint = requestFingerprint;
     }
 
     public String getErrorCode() {
