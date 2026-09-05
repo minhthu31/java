@@ -66,6 +66,7 @@ class GitHubActivityIntegrationTests {
         jdbcTemplate.update("DELETE FROM github_pull_requests");
         jdbcTemplate.update("DELETE FROM github_commits");
         jdbcTemplate.update("DELETE FROM github_repositories");
+        jdbcTemplate.update("DELETE FROM integration_configs WHERE project_id = ?", PROJECT_ID);
         jdbcTemplate.update("DELETE FROM tasks WHERE id = ?", TASK_ID);
         jdbcTemplate.update("DELETE FROM projects WHERE id = ?", PROJECT_ID);
         jdbcTemplate.update("DELETE FROM student_groups WHERE id = ?", GROUP_ID);
