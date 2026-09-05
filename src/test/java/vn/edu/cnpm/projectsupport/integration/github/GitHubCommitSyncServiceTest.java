@@ -38,6 +38,7 @@ class GitHubCommitSyncServiceTest {
     @Mock SyncLogRepository syncLogRepository;
     @Mock GitHubIntegrationConfigRepository integrationConfigRepository;
     @Mock IntegrationSecretService secretService;
+    @Mock GitHubTaskLinkService taskLinkService;
 
     private GitHubCommitSyncService service;
     private GitHubClientConfig config;
@@ -46,7 +47,8 @@ class GitHubCommitSyncServiceTest {
     @BeforeEach
     void setUp() {
         service = new GitHubCommitSyncService(
-                client, commitRepository, repositoryRepository, externalAccountRepository, syncLogRepository, null, null);
+                client, commitRepository, repositoryRepository, externalAccountRepository,
+                syncLogRepository, null, null, taskLinkService);
         config = new GitHubClientConfig(
                 "octocat", "Hello-World", "token", "2026-03-10", Duration.ofSeconds(5));
         localRepository = mock(GitHubRepository.class);
@@ -95,6 +97,7 @@ class GitHubCommitSyncServiceTest {
         assertThat(saved.getGitCommitterName()).isEqualTo("CI");
         assertThat(saved.getGitCommitterEmail()).isEqualTo("ci@example.com");
         assertThat(saved.getCommitterAt()).isEqualTo(committerDate);
+        verify(taskLinkService).linkCommit(1L, saved);
         verify(client).getCommitsPage(config, 1);
         verify(client).getCommitsPage(config, 2);
     }
@@ -184,7 +187,7 @@ class GitHubCommitSyncServiceTest {
     private GitHubCommitSyncService serviceWithConfigRepositories() {
         return new GitHubCommitSyncService(
                 client, commitRepository, repositoryRepository, externalAccountRepository,
-                syncLogRepository, integrationConfigRepository, secretService);
+                syncLogRepository, integrationConfigRepository, secretService, taskLinkService);
     }
 
     private vn.edu.cnpm.projectsupport.integration.github.GitHubRepository remoteRepository() {
