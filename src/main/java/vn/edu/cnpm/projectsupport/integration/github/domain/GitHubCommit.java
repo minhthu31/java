@@ -39,6 +39,15 @@ public class GitHubCommit {
     @Column(name = "git_author_email", length = 320)
     private String gitAuthorEmail;
 
+    @Column(name = "git_committer_name", length = 255)
+    private String gitCommitterName;
+
+    @Column(name = "git_committer_email", length = 320)
+    private String gitCommitterEmail;
+
+    @Column(name = "committer_at")
+    private Instant committerAt;
+
     @Column(name = "sha", nullable = false, length = 64)
     private String sha;
 
@@ -94,6 +103,9 @@ public class GitHubCommit {
     public String getAuthorLogin() { return authorLogin; }
     public String getGitAuthorName() { return gitAuthorName; }
     public String getGitAuthorEmail() { return gitAuthorEmail; }
+    public String getGitCommitterName() { return gitCommitterName; }
+    public String getGitCommitterEmail() { return gitCommitterEmail; }
+    public Instant getCommitterAt() { return committerAt; }
     public String getSha() { return sha; }
     public String getMessage() { return message; }
     public Instant getCommittedAt() { return committedAt; }
@@ -106,10 +118,16 @@ public class GitHubCommit {
     public Instant getCreatedAt() { return createdAt; }
 
     public void setAuthorExternalAccountId(Long value) { this.authorExternalAccountId = value; }
+    public void setMessage(String value) { this.message = value; }
+    public void setCommittedAt(Instant value) { this.committedAt = value; }
+    public void setHtmlUrl(String value) { this.htmlUrl = value; }
     public void setAuthorGithubUserId(Long value) { this.authorGithubUserId = value; }
     public void setAuthorLogin(String value) { this.authorLogin = value; }
     public void setGitAuthorName(String value) { this.gitAuthorName = value; }
     public void setGitAuthorEmail(String value) { this.gitAuthorEmail = value; }
+    public void setGitCommitterName(String value) { this.gitCommitterName = value; }
+    public void setGitCommitterEmail(String value) { this.gitCommitterEmail = value; }
+    public void setCommitterAt(Instant value) { this.committerAt = value; }
     public void setAdditions(Integer additions) { this.additions = additions == null ? 0 : additions; }
     public void setDeletions(Integer deletions) { this.deletions = deletions == null ? 0 : deletions; }
     public void setFilesChanged(Integer filesChanged) { this.filesChanged = filesChanged; }
