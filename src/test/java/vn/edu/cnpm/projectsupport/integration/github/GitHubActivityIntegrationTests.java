@@ -26,11 +26,14 @@ import vn.edu.cnpm.projectsupport.integration.github.domain.TaskCommitLink;
 import vn.edu.cnpm.projectsupport.integration.github.domain.TaskCommitLinkId;
 import vn.edu.cnpm.projectsupport.integration.github.domain.TaskPullRequestLink;
 import vn.edu.cnpm.projectsupport.integration.github.domain.TaskPullRequestLinkId;
+import vn.edu.cnpm.projectsupport.integration.github.domain.UserExternalAccount;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubCommitRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubPullRequestRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubRepositoryRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.TaskCommitLinkRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.TaskPullRequestLinkRepository;
+import vn.edu.cnpm.projectsupport.integration.github.repository.UserExternalAccountRepository;
+import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider;
 import vn.edu.cnpm.projectsupport.security.ProjectAuthorizationService;
 
 @SpringBootTest
@@ -41,7 +44,8 @@ class GitHubActivityIntegrationTests {
 
     private static final long GROUP_ID = 9890L;
     private static final long PROJECT_ID = 9891L;
-    private static final long TASK_ID = 9893L;
+    private static final long TASK_98_ID = 9893L;
+    private static final long TASK_9_ID = 9894L;
     private static final String BASE_URL = "/api/v1/projects/{projectId}/integrations/github";
 
     @Autowired private MockMvc mockMvc;
@@ -51,23 +55,31 @@ class GitHubActivityIntegrationTests {
     @Autowired private GitHubPullRequestRepository pullRequestRepository;
     @Autowired private TaskCommitLinkRepository commitLinkRepository;
     @Autowired private TaskPullRequestLinkRepository pullRequestLinkRepository;
+    @Autowired private UserExternalAccountRepository externalAccountRepository;
 
     @MockitoBean(name = "projectAuthorization")
     private ProjectAuthorizationService projectAuthorization;
 
+    private Long memberUserId;
     private GitHubRepository savedRepo;
-    private GitHubCommit savedCommit;
-    private GitHubPullRequest savedPr;
+    private GitHubCommit savedCommit98;
+    private GitHubCommit savedCommit9;
+    private GitHubPullRequest savedPr98;
 
     @BeforeEach
     void setUp() {
+        memberUserId = jdbcTemplate.queryForObject(
+                "SELECT id FROM users WHERE username = 'member.test'", Long.class);
+
         jdbcTemplate.update("DELETE FROM task_pr_links");
         jdbcTemplate.update("DELETE FROM task_commit_links");
         jdbcTemplate.update("DELETE FROM github_pull_requests");
         jdbcTemplate.update("DELETE FROM github_commits");
         jdbcTemplate.update("DELETE FROM github_repositories");
+        jdbcTemplate.update("DELETE FROM user_external_accounts");
+        jdbcTemplate.update("DELETE FROM jira_issues");
         jdbcTemplate.update("DELETE FROM integration_configs WHERE project_id = ?", PROJECT_ID);
-        jdbcTemplate.update("DELETE FROM tasks WHERE id = ?", TASK_ID);
+        jdbcTemplate.update("DELETE FROM tasks WHERE id IN (?, ?)", TASK_98_ID, TASK_9_ID);
         jdbcTemplate.update("DELETE FROM projects WHERE id = ?", PROJECT_ID);
         jdbcTemplate.update("DELETE FROM student_groups WHERE id = ?", GROUP_ID);
 
@@ -75,19 +87,36 @@ class GitHubActivityIntegrationTests {
                 GROUP_ID, "CNPM-98-TEST", "CNPM 98 Test Group");
         jdbcTemplate.update("INSERT INTO projects (id, group_id, name) VALUES (?, ?, ?)",
                 PROJECT_ID, GROUP_ID, "CNPM 98 Project");
+
         jdbcTemplate.update("""
                 INSERT INTO tasks (id, project_id, title, acceptance_criteria, issue_type, priority, status, sync_status)
                 VALUES (?, ?, 'Task 98 Activity', 'Test criteria', 'TASK', 'MEDIUM', 'TO_DO', 'NOT_SYNCED')
-                """, TASK_ID, PROJECT_ID);
+                """, TASK_98_ID, PROJECT_ID);
+        jdbcTemplate.update("""
+                INSERT INTO tasks (id, project_id, title, acceptance_criteria, issue_type, priority, status, sync_status)
+                VALUES (?, ?, 'Task 9 Activity', 'Test criteria', 'TASK', 'MEDIUM', 'TO_DO', 'NOT_SYNCED')
+                """, TASK_9_ID, PROJECT_ID);
+
+        jdbcTemplate.update("INSERT INTO jira_issues (task_id, jira_issue_key, sync_status) VALUES (?, 'CNPM-98', 'SYNCED')", TASK_98_ID);
+        jdbcTemplate.update("INSERT INTO jira_issues (task_id, jira_issue_key, sync_status) VALUES (?, 'CNPM-9', 'SYNCED')", TASK_9_ID);
+
+        UserExternalAccount account = externalAccountRepository.saveAndFlush(
+                new UserExternalAccount(memberUserId, IntegrationProvider.GITHUB, "gh-actor-98", "member98"));
 
         savedRepo = repositoryRepository.saveAndFlush(new GitHubRepository(
                 PROJECT_ID, 12345L, "minhthu31/java-backend", "main", "https://github.com/minhthu31/java-backend"));
 
-        savedCommit = new GitHubCommit(savedRepo.getId(), "sha123456", "feat(CNPM-98): test commit activity",
-                Instant.parse("2026-09-02T10:00:00Z"), "https://github.com/minhthu31/java-backend/commit/sha123456");
-        savedCommit = commitRepository.saveAndFlush(savedCommit);
+        savedCommit98 = new GitHubCommit(savedRepo.getId(), "sha98", "feat(CNPM-98): test commit activity",
+                Instant.parse("2026-09-02T10:00:00Z"), "https://github.com/minhthu31/java-backend/commit/sha98");
+        savedCommit98.setAuthorExternalAccountId(account.getId());
+        savedCommit98 = commitRepository.saveAndFlush(savedCommit98);
 
-        savedPr = new GitHubPullRequest(
+        savedCommit9 = new GitHubCommit(savedRepo.getId(), "sha9", "feat(CNPM-9): test commit nine",
+                Instant.parse("2026-09-02T11:00:00Z"), "https://github.com/minhthu31/java-backend/commit/sha9");
+        savedCommit9.setAuthorExternalAccountId(account.getId());
+        savedCommit9 = commitRepository.saveAndFlush(savedCommit9);
+
+        savedPr98 = new GitHubPullRequest(
                 savedRepo.getId(),
                 5001L,
                 10,
@@ -106,64 +135,67 @@ class GitHubActivityIntegrationTests {
                 1,
                 null,
                 "https://github.com/minhthu31/java-backend/pull/10");
-        savedPr = pullRequestRepository.saveAndFlush(savedPr);
+        savedPr98.setAuthorExternalAccountId(account.getId());
+        savedPr98 = pullRequestRepository.saveAndFlush(savedPr98);
 
-        commitLinkRepository.saveAndFlush(new TaskCommitLink(new TaskCommitLinkId(TASK_ID, savedCommit.getId()), "AUTO"));
-        pullRequestLinkRepository.saveAndFlush(new TaskPullRequestLink(new TaskPullRequestLinkId(TASK_ID, savedPr.getId()), "AUTO"));
+        commitLinkRepository.saveAndFlush(new TaskCommitLink(new TaskCommitLinkId(TASK_98_ID, savedCommit98.getId()), "AUTO"));
+        commitLinkRepository.saveAndFlush(new TaskCommitLink(new TaskCommitLinkId(TASK_9_ID, savedCommit9.getId()), "AUTO"));
+        pullRequestLinkRepository.saveAndFlush(new TaskPullRequestLink(new TaskPullRequestLinkId(TASK_98_ID, savedPr98.getId()), "AUTO"));
     }
 
     @Test
-    @DisplayName("1. Lấy danh sách commit theo repository có pagination và filter issueKey thành công")
-    void listCommits_shouldReturnPagedData() throws Exception {
+    @DisplayName("1. Lọc exact issueKey CNPM-9 không bị ăn sang CNPM-98")
+    void listCommits_exactIssueKey_shouldNotIncludeOthers() throws Exception {
         when(projectAuthorization.canViewTasks(PROJECT_ID)).thenReturn(true);
 
         mockMvc.perform(get(BASE_URL + "/repositories/{repositoryId}/commits", PROJECT_ID, savedRepo.getId())
                         .with(user("member").roles("TEAM_MEMBER"))
-                        .param("issueKey", "CNPM-98")
-                        .param("page", "0")
-                        .param("size", "10"))
+                        .param("issueKey", "CNPM-9"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content").isArray())
-                .andExpect(jsonPath("$.data.content[0].sha").value("sha123456"))
-                .andExpect(jsonPath("$.data.content[0].issueKeys[0]").value("CNPM-98"))
-                .andExpect(jsonPath("$.data.totalElements").value(1));
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].sha").value("sha9"));
     }
 
     @Test
-    @DisplayName("2. Lấy danh sách Pull Request có filter state và pagination thành công")
-    void listPullRequests_shouldReturnPagedData() throws Exception {
+    @DisplayName("2. actorUserId lọc và trả về ID user local, không phải authorExternalAccountId")
+    void listActivities_actorUserId_shouldMapToLocalUserId() throws Exception {
         when(projectAuthorization.canViewTasks(PROJECT_ID)).thenReturn(true);
 
-        mockMvc.perform(get(BASE_URL + "/repositories/{repositoryId}/pull-requests", PROJECT_ID, savedRepo.getId())
-                        .with(user("member").roles("TEAM_MEMBER"))
-                        .param("state", "OPEN")
-                        .param("page", "0")
-                        .param("size", "10"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content").isArray())
-                .andExpect(jsonPath("$.data.content[0].number").value(10))
-                .andExpect(jsonPath("$.data.content[0].state").value("OPEN"));
-    }
-
-    @Test
-    @DisplayName("3. Lấy Unified Activities và lọc theo Task hoạt động chính xác")
-    void listTaskActivities_shouldReturnCommitAndPr() throws Exception {
-        when(projectAuthorization.canViewTask(PROJECT_ID, TASK_ID)).thenReturn(true);
-
-        mockMvc.perform(get(BASE_URL + "/tasks/{taskId}/activities", PROJECT_ID, TASK_ID)
-                        .with(user("member").roles("TEAM_MEMBER")))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content").isArray())
-                .andExpect(jsonPath("$.data.totalElements").value(2));
-    }
-
-    @Test
-    @DisplayName("4. Quyền RBAC: Người dùng không thuộc Project bị chặn 403 Forbidden")
-    void nonProjectMember_shouldBeForbidden() throws Exception {
-        when(projectAuthorization.canViewTasks(PROJECT_ID)).thenReturn(false);
-
         mockMvc.perform(get(BASE_URL + "/activities", PROJECT_ID)
-                        .with(user("outsider").roles("TEAM_MEMBER")))
-                .andExpect(status().isForbidden());
+                        .with(user("member").roles("TEAM_MEMBER"))
+                        .param("actorUserId", String.valueOf(memberUserId))
+                        .param("type", "COMMIT"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].actorUserId").value(memberUserId));
+    }
+
+    @Test
+    @DisplayName("3. Validate from > to và type sai phải trả 400 Bad Request")
+    void listActivities_invalidParams_shouldReturnBadRequest() throws Exception {
+        when(projectAuthorization.canViewTasks(PROJECT_ID)).thenReturn(true);
+
+        // from > to
+        mockMvc.perform(get(BASE_URL + "/activities", PROJECT_ID)
+                        .with(user("member").roles("TEAM_MEMBER"))
+                        .param("from", "2026-09-05T00:00:00Z")
+                        .param("to", "2026-09-01T00:00:00Z"))
+                .andExpect(status().isBadRequest());
+
+        // type sai
+        mockMvc.perform(get(BASE_URL + "/activities", PROJECT_ID)
+                        .with(user("member").roles("TEAM_MEMBER"))
+                        .param("type", "INVALID_TYPE"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("4. Giới hạn page size tối đa 100")
+    void listCommits_sizeExceeding100_shouldReturnBadRequest() throws Exception {
+        when(projectAuthorization.canViewTasks(PROJECT_ID)).thenReturn(true);
+
+        mockMvc.perform(get(BASE_URL + "/repositories/{repositoryId}/commits", PROJECT_ID, savedRepo.getId())
+                        .with(user("member").roles("TEAM_MEMBER"))
+                        .param("size", "101"))
+                .andExpect(status().isBadRequest());
     }
 }

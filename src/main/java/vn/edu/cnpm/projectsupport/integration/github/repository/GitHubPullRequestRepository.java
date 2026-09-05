@@ -1,7 +1,6 @@
 package vn.edu.cnpm.projectsupport.integration.github.repository;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -24,12 +23,23 @@ public interface GitHubPullRequestRepository extends JpaRepository<GitHubPullReq
             select pr from GitHubPullRequest pr
             where pr.repositoryId = :repositoryId
               and (:state is null or pr.state = :state)
-              and (:issueKey is null or (pr.headRef like concat('%', :issueKey, '%')
-                                     or pr.title like concat('%', :issueKey, '%')
-                                     or pr.body like concat('%', :issueKey, '%')))
             order by pr.createdAt desc, pr.id desc
             """)
-    Page<GitHubPullRequest> findByRepositoryIdAndFilter(
+    Page<GitHubPullRequest> findByRepositoryIdAndState(
+            @Param("repositoryId") Long repositoryId,
+            @Param("state") GitHubPullRequestState state,
+            Pageable pageable);
+
+    @Query("""
+            select pr from GitHubPullRequest pr
+            join TaskPullRequestLink tpl on tpl.id.pullRequestId = pr.id
+            join JiraIssue ji on ji.taskId = tpl.id.taskId
+            where pr.repositoryId = :repositoryId
+              and (:state is null or pr.state = :state)
+              and ji.jiraIssueKey = :issueKey
+            order by pr.createdAt desc, pr.id desc
+            """)
+    Page<GitHubPullRequest> findByRepositoryIdAndStateAndExactIssueKey(
             @Param("repositoryId") Long repositoryId,
             @Param("state") GitHubPullRequestState state,
             @Param("issueKey") String issueKey,
@@ -38,19 +48,39 @@ public interface GitHubPullRequestRepository extends JpaRepository<GitHubPullReq
     @Query("""
             select pr from GitHubPullRequest pr
             join GitHubRepository r on r.id = pr.repositoryId
+            left join UserExternalAccount a on a.id = pr.authorExternalAccountId
             where r.projectId = :projectId
-              and (:actorUserId is null or pr.authorExternalAccountId = :actorUserId)
+              and (:userId is null or a.userId = :userId)
               and (:state is null or pr.state = :state)
-              and (:issueKey is null or (pr.headRef like concat('%', :issueKey, '%')
-                                     or pr.title like concat('%', :issueKey, '%')
-                                     or pr.body like concat('%', :issueKey, '%')))
               and (:from is null or pr.createdAt >= :from)
               and (:to is null or pr.createdAt <= :to)
             order by pr.createdAt desc, pr.id desc
             """)
-    Page<GitHubPullRequest> findUnifiedActivity(
+    Page<GitHubPullRequest> findUnifiedActivityWithoutIssueKey(
             @Param("projectId") Long projectId,
-            @Param("actorUserId") Long actorUserId,
+            @Param("userId") Long userId,
+            @Param("state") GitHubPullRequestState state,
+            @Param("from") Instant from,
+            @Param("to") Instant to,
+            Pageable pageable);
+
+    @Query("""
+            select pr from GitHubPullRequest pr
+            join GitHubRepository r on r.id = pr.repositoryId
+            left join UserExternalAccount a on a.id = pr.authorExternalAccountId
+            join TaskPullRequestLink tpl on tpl.id.pullRequestId = pr.id
+            join JiraIssue ji on ji.taskId = tpl.id.taskId
+            where r.projectId = :projectId
+              and (:userId is null or a.userId = :userId)
+              and (:state is null or pr.state = :state)
+              and ji.jiraIssueKey = :issueKey
+              and (:from is null or pr.createdAt >= :from)
+              and (:to is null or pr.createdAt <= :to)
+            order by pr.createdAt desc, pr.id desc
+            """)
+    Page<GitHubPullRequest> findUnifiedActivityWithIssueKey(
+            @Param("projectId") Long projectId,
+            @Param("userId") Long userId,
             @Param("state") GitHubPullRequestState state,
             @Param("issueKey") String issueKey,
             @Param("from") Instant from,
@@ -63,7 +93,7 @@ public interface GitHubPullRequestRepository extends JpaRepository<GitHubPullReq
             where l.id.taskId = :taskId
             order by pr.createdAt desc, pr.id desc
             """)
-    List<GitHubPullRequest> findByTaskId(@Param("taskId") Long taskId);
+    Page<GitHubPullRequest> findByTaskIdPaged(@Param("taskId") Long taskId, Pageable pageable);
 
     @Query("""
             select pr from GitHubPullRequest pr
