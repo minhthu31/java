@@ -6,10 +6,6 @@ import java.sql.Statement;
 import org.flywaydb.core.api.migration.BaseJavaMigration;
 import org.flywaydb.core.api.migration.Context;
 
-/**
- * Adds the GitHub profile URL and avatar URL required to link a GitHub user
- * to a local member account (provider-stable GitHub user ID mapping).
- */
 public class V10__user_external_account_profile extends BaseJavaMigration {
 
     @Override
