@@ -1,5 +1,6 @@
 package vn.edu.cnpm.projectsupport.integration.github.repository;
 
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -37,4 +38,14 @@ public interface GitHubPullRequestRepository extends JpaRepository<GitHubPullReq
             @Param("projectId") Long projectId,
             @Param("userId") Long userId,
             Pageable pageable);
+
+    @Query("""
+            select distinct pr.authorGithubUserId as githubUserId, pr.authorLogin as login
+            from GitHubPullRequest pr
+            join GitHubRepository r on r.id = pr.repositoryId
+            where r.projectId = :projectId
+              and pr.authorGithubUserId is not null
+              and pr.authorExternalAccountId is null
+            """)
+    List<GitHubUnlinkedAuthorProjection> findUnlinkedAuthors(@Param("projectId") Long projectId);
 }
