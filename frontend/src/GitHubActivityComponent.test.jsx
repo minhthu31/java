@@ -6,9 +6,10 @@ import { GitHubActivityService } from "./GitHubActivityService";
 
 jest.mock("./GitHubActivityService");
 
-const mockActivityData = {
-    commits: [
+const mockUnifiedActivities = {
+    content: [
         {
+            type: "COMMIT",
             sha: "a1b2c3d4e5f67890",
             message: "feat: implement login page",
             authorName: "Nguyen Van A",
@@ -18,6 +19,7 @@ const mockActivityData = {
             relatedTaskKey: "CNPM-101",
         },
         {
+            type: "COMMIT",
             sha: "b2c3d4e5f6789012",
             message: "fix: resolve token expire",
             authorName: "Tran Thi B",
@@ -26,9 +28,8 @@ const mockActivityData = {
                 "https://github.com/my-org/my-repo/commit/b2c3d4e5f6789012",
             relatedTaskKey: null,
         },
-    ],
-    pullRequests: [
         {
+            type: "PULL_REQUEST",
             id: 1,
             number: 12,
             title: "Support GitHub Integration",
@@ -39,6 +40,7 @@ const mockActivityData = {
             relatedTaskKey: "CNPM-102",
         },
         {
+            type: "PULL_REQUEST",
             id: 2,
             number: 11,
             title: "Database Migration Flyway",
@@ -58,7 +60,7 @@ describe("GitHubActivityComponent Acceptance Tests", () => {
 
     test("1. Hiển thị danh sách commit với SHA 7 ký tự, message, tác giả và Task liên quan", async () => {
         GitHubActivityService.getActivity.mockResolvedValueOnce(
-            mockActivityData,
+            mockUnifiedActivities,
         );
         render(<GitHubActivityComponent projectId={1} />);
 
@@ -83,7 +85,7 @@ describe("GitHubActivityComponent Acceptance Tests", () => {
 
     test("2. Hiển thị Pull Request với trạng thái, Task liên quan và URL thật", async () => {
         GitHubActivityService.getActivity.mockResolvedValueOnce(
-            mockActivityData,
+            mockUnifiedActivities,
         );
         render(<GitHubActivityComponent projectId={1} />);
 
@@ -113,7 +115,7 @@ describe("GitHubActivityComponent Acceptance Tests", () => {
 
     test("3. Bộ lọc hoạt động chính xác theo thành viên", async () => {
         GitHubActivityService.getActivity.mockResolvedValueOnce(
-            mockActivityData,
+            mockUnifiedActivities,
         );
         render(<GitHubActivityComponent projectId={1} />);
 
@@ -136,7 +138,7 @@ describe("GitHubActivityComponent Acceptance Tests", () => {
 
     test("4. Hiển thị Empty state khi danh sách lọc không có kết quả", async () => {
         GitHubActivityService.getActivity.mockResolvedValueOnce(
-            mockActivityData,
+            mockUnifiedActivities,
         );
         render(<GitHubActivityComponent projectId={1} />);
 
@@ -159,7 +161,7 @@ describe("GitHubActivityComponent Acceptance Tests", () => {
         );
     });
 
-    test("5. Hiển thị thông báo lỗi thân thiện và che giấu token/thông tin nhạy cảm khi API thất bại", async () => {
+    test("5. Hiển thị thông báo lỗi thân thiện và che giấu token khi API thất bại", async () => {
         GitHubActivityService.getActivity.mockRejectedValueOnce(
             new Error(
                 "500 Internal Server Error: github_pat_secret_token_exposed",
@@ -173,7 +175,7 @@ describe("GitHubActivityComponent Acceptance Tests", () => {
 
         expect(
             screen.getByText(
-                "Không thể tải dữ liệu hoạt động GitHub. Vui lòng thử lại sau.",
+                "Không thể tải dữ liệu hoạt động GitHub từ hệ thống.",
             ),
         ).toBeInTheDocument();
         expect(screen.queryByText(/github_pat_/i)).not.toBeInTheDocument();

@@ -20,12 +20,36 @@ export const GitHubActivityComponent = ({ projectId }) => {
         setError(null);
         try {
             const data = await GitHubActivityService.getActivity(projectId);
-            setCommits(data?.commits || []);
-            setPullRequests(data?.pullRequests || []);
-        } catch (err) {
-            setError(
-                "Không thể tải dữ liệu hoạt động GitHub. Vui lòng thử lại sau.",
+            const activities = Array.isArray(data) ? data : data?.content || [];
+
+            // Phân loại hoạt động theo đúng Unified DTO của Backend
+            setCommits(
+                activities.filter((item) => {
+                    const itemType = (
+                        item.type ||
+                        item.activityType ||
+                        ""
+                    ).toUpperCase();
+                    return itemType === "COMMIT" || (!itemType && item.sha);
+                }),
             );
+
+            setPullRequests(
+                activities.filter((item) => {
+                    const itemType = (
+                        item.type ||
+                        item.activityType ||
+                        ""
+                    ).toUpperCase();
+                    return (
+                        itemType === "PULL_REQUEST" ||
+                        itemType === "PR" ||
+                        (!itemType && item.number)
+                    );
+                }),
+            );
+        } catch (err) {
+            setError("Không thể tải dữ liệu hoạt động GitHub từ hệ thống.");
         } finally {
             setLoading(false);
         }
@@ -153,8 +177,8 @@ export const GitHubActivityComponent = ({ projectId }) => {
                             margin: 0,
                         }}
                     >
-                        Theo dõi lịch sử commits, pull requests và các task liên
-                        quan
+                        Theo dõi lịch sử commits, pull requests và các task Jira
+                        liên kết
                     </p>
                 </div>
 
@@ -170,17 +194,13 @@ export const GitHubActivityComponent = ({ projectId }) => {
                         value={selectedAuthor}
                         onChange={(e) => setSelectedAuthor(e.target.value)}
                         style={{
-                            height: "42px",
-                            padding: "0 14px",
+                            height: "40px",
+                            padding: "0 12px",
                             fontSize: "14px",
-                            fontWeight: "500",
                             borderRadius: "6px",
                             border: "1px solid #dfe1e6",
                             backgroundColor: "#ffffff",
                             color: "#172b4d",
-                            outline: "none",
-                            cursor: "pointer",
-                            minWidth: "180px",
                         }}
                     >
                         <option value="ALL">Tất cả thành viên</option>
@@ -199,17 +219,13 @@ export const GitHubActivityComponent = ({ projectId }) => {
                                 setSelectedPrStatus(e.target.value)
                             }
                             style={{
-                                height: "42px",
-                                padding: "0 14px",
+                                height: "40px",
+                                padding: "0 12px",
                                 fontSize: "14px",
-                                fontWeight: "500",
                                 borderRadius: "6px",
                                 border: "1px solid #dfe1e6",
                                 backgroundColor: "#ffffff",
                                 color: "#172b4d",
-                                outline: "none",
-                                cursor: "pointer",
-                                minWidth: "180px",
                             }}
                         >
                             <option value="ALL">Tất cả trạng thái PR</option>
@@ -225,36 +241,27 @@ export const GitHubActivityComponent = ({ projectId }) => {
                 <div
                     data-testid="error-banner"
                     style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "12px 18px",
+                        padding: "12px 16px",
                         backgroundColor: "#ffebe6",
                         border: "1px solid #ffbdad",
                         borderRadius: "6px",
-                        marginBottom: "20px",
+                        color: "#de350b",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: "16px",
                     }}
                 >
-                    <span
-                        style={{
-                            fontSize: "14px",
-                            color: "#de350b",
-                            fontWeight: "500",
-                        }}
-                    >
-                        {error}
-                    </span>
+                    <span>{error}</span>
                     <button
                         type="button"
                         onClick={fetchData}
                         style={{
-                            padding: "6px 14px",
+                            padding: "4px 10px",
                             backgroundColor: "#de350b",
-                            color: "#ffffff",
+                            color: "#fff",
                             border: "none",
                             borderRadius: "4px",
-                            fontSize: "13px",
-                            fontWeight: "600",
                             cursor: "pointer",
                         }}
                     >
@@ -286,7 +293,6 @@ export const GitHubActivityComponent = ({ projectId }) => {
                         backgroundColor:
                             activeTab === "commits" ? "#0052cc" : "#f4f5f7",
                         color: activeTab === "commits" ? "#ffffff" : "#42526e",
-                        transition: "all 0.15s ease",
                     }}
                 >
                     Commits ({filteredCommits.length})
@@ -310,25 +316,22 @@ export const GitHubActivityComponent = ({ projectId }) => {
                             activeTab === "pull_requests"
                                 ? "#ffffff"
                                 : "#42526e",
-                        transition: "all 0.15s ease",
                     }}
                 >
                     Pull Requests ({filteredPullRequests.length})
                 </button>
             </div>
 
-            {/* Loading */}
             {loading && (
                 <div
                     data-testid="loading-spinner"
                     style={{
-                        padding: "48px 0",
+                        padding: "40px",
                         textAlign: "center",
                         color: "#6b778c",
-                        fontSize: "14px",
                     }}
                 >
-                    Đang tải dữ liệu GitHub...
+                    Đang tải dữ liệu GitHub từ server...
                 </div>
             )}
 
@@ -339,10 +342,9 @@ export const GitHubActivityComponent = ({ projectId }) => {
                             <div
                                 data-testid="empty-commits"
                                 style={{
-                                    padding: "48px 0",
+                                    padding: "40px",
                                     textAlign: "center",
                                     color: "#8993a4",
-                                    fontSize: "14px",
                                 }}
                             >
                                 Không có commit nào phù hợp với bộ lọc.
@@ -352,15 +354,14 @@ export const GitHubActivityComponent = ({ projectId }) => {
                                 style={{
                                     border: "1px solid #dfe1e6",
                                     borderRadius: "6px",
-                                    backgroundColor: "#ffffff",
-                                    overflow: "hidden",
+                                    backgroundColor: "#fff",
                                 }}
                             >
                                 {filteredCommits.map((commit, index) => (
                                     <div
                                         key={commit.sha}
                                         style={{
-                                            padding: "14px 18px",
+                                            padding: "12px 16px",
                                             borderBottom:
                                                 index <
                                                 filteredCommits.length - 1
@@ -368,7 +369,7 @@ export const GitHubActivityComponent = ({ projectId }) => {
                                                     : "none",
                                             display: "flex",
                                             flexDirection: "column",
-                                            gap: "6px",
+                                            gap: "4px",
                                         }}
                                     >
                                         <div
@@ -386,12 +387,11 @@ export const GitHubActivityComponent = ({ projectId }) => {
                                                 style={{
                                                     fontFamily: "monospace",
                                                     fontSize: "12px",
-                                                    fontWeight: "600",
                                                     color: "#0052cc",
-                                                    textDecoration: "none",
                                                     backgroundColor: "#deebff",
-                                                    padding: "3px 8px",
+                                                    padding: "2px 6px",
                                                     borderRadius: "4px",
+                                                    textDecoration: "none",
                                                 }}
                                             >
                                                 {commit.sha
@@ -415,7 +415,7 @@ export const GitHubActivityComponent = ({ projectId }) => {
                                                         backgroundColor:
                                                             "#f4f5f7",
                                                         color: "#42526e",
-                                                        padding: "3px 8px",
+                                                        padding: "2px 6px",
                                                         borderRadius: "4px",
                                                         border: "1px solid #dfe1e6",
                                                     }}
@@ -436,7 +436,8 @@ export const GitHubActivityComponent = ({ projectId }) => {
                                             </span>
                                             <span>
                                                 {new Date(
-                                                    commit.committedAt,
+                                                    commit.committedAt ||
+                                                        commit.timestamp,
                                                 ).toLocaleString("vi-VN")}
                                             </span>
                                         </div>
@@ -450,10 +451,9 @@ export const GitHubActivityComponent = ({ projectId }) => {
                             <div
                                 data-testid="empty-prs"
                                 style={{
-                                    padding: "48px 0",
+                                    padding: "40px",
                                     textAlign: "center",
                                     color: "#8993a4",
-                                    fontSize: "14px",
                                 }}
                             >
                                 Không có Pull Request nào phù hợp với bộ lọc.
@@ -463,15 +463,14 @@ export const GitHubActivityComponent = ({ projectId }) => {
                                 style={{
                                     border: "1px solid #dfe1e6",
                                     borderRadius: "6px",
-                                    backgroundColor: "#ffffff",
-                                    overflow: "hidden",
+                                    backgroundColor: "#fff",
                                 }}
                             >
                                 {filteredPullRequests.map((pr, index) => (
                                     <div
                                         key={pr.id || pr.number}
                                         style={{
-                                            padding: "14px 18px",
+                                            padding: "12px 16px",
                                             borderBottom:
                                                 index <
                                                 filteredPullRequests.length - 1
@@ -479,7 +478,7 @@ export const GitHubActivityComponent = ({ projectId }) => {
                                                     : "none",
                                             display: "flex",
                                             flexDirection: "column",
-                                            gap: "6px",
+                                            gap: "4px",
                                         }}
                                     >
                                         <div
@@ -494,7 +493,7 @@ export const GitHubActivityComponent = ({ projectId }) => {
                                                 style={{
                                                     fontSize: "11px",
                                                     fontWeight: "700",
-                                                    padding: "3px 8px",
+                                                    padding: "2px 6px",
                                                     borderRadius: "4px",
                                                     ...getPrBadgeStyle(
                                                         pr.status,
@@ -524,7 +523,7 @@ export const GitHubActivityComponent = ({ projectId }) => {
                                                         backgroundColor:
                                                             "#f4f5f7",
                                                         color: "#42526e",
-                                                        padding: "3px 8px",
+                                                        padding: "2px 6px",
                                                         borderRadius: "4px",
                                                         border: "1px solid #dfe1e6",
                                                     }}
@@ -545,7 +544,8 @@ export const GitHubActivityComponent = ({ projectId }) => {
                                             </span>
                                             <span>
                                                 {new Date(
-                                                    pr.createdAt,
+                                                    pr.createdAt ||
+                                                        pr.timestamp,
                                                 ).toLocaleString("vi-VN")}
                                             </span>
                                         </div>
