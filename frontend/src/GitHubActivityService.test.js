@@ -8,36 +8,50 @@ describe("GitHubActivityService Contract Tests", () => {
         jest.clearAllMocks();
     });
 
-    test("Gọi đúng endpoint /activities và unwrap content mà không biến đổi DTO", async () => {
-        const mockBackendResponse = {
+    test("Gọi đúng endpoint /integrations/github/activities và unwrap content mà không biến đổi DTO", async () => {
+        const mockResponse = {
             data: {
-                content: [
-                    {
-                        type: "COMMIT",
-                        sha: "c1a2b3d4e5f67890",
-                        message: "feat: sync backend logic",
-                        authorName: "Nguyen Van A",
-                    },
-                    {
-                        type: "PULL_REQUEST",
-                        number: 15,
-                        title: "PR sync backend",
-                        authorName: "Tran Thi B",
-                        status: "OPEN",
-                    },
-                ],
+                success: true,
+                data: {
+                    content: [
+                        {
+                            type: "COMMIT",
+                            externalId: "a1b2c3d4e5f67890",
+                            title: "feat: unified commit",
+                            actorLogin: "developer1",
+                            occurredAt: "2026-09-01T10:00:00Z",
+                            htmlUrl:
+                                "https://github.com/my-org/my-repo/commit/a1b2c3d4e5f67890",
+                            issueKeys: ["CNPM-98"],
+                            linkedTaskIds: [98],
+                        },
+                        {
+                            type: "PULL_REQUEST",
+                            externalId: "pr-12",
+                            title: "feat: unified pr",
+                            actorLogin: "developer2",
+                            occurredAt: "2026-09-02T10:00:00Z",
+                            htmlUrl:
+                                "https://github.com/my-org/my-repo/pull/12",
+                            issueKeys: ["CNPM-99"],
+                            linkedTaskIds: [99],
+                        },
+                    ],
+                },
             },
         };
 
-        api.get.mockResolvedValueOnce(mockBackendResponse);
+        api.get.mockResolvedValueOnce(mockResponse);
 
         const result = await GitHubActivityService.getActivity(1);
 
         expect(api.get).toHaveBeenCalledWith(
-            "/api/v1/projects/1/integrations/github/activities",
+            "/projects/1/integrations/github/activities",
         );
         expect(result.content).toHaveLength(2);
-        expect(result.content[0].type).toBe("COMMIT");
-        expect(result.content[1].type).toBe("PULL_REQUEST");
+        expect(result.content[0].externalId).toBe("a1b2c3d4e5f67890");
+        expect(result.content[0].title).toBe("feat: unified commit");
+        expect(result.content[0].actorLogin).toBe("developer1");
+        expect(result.content[0].occurredAt).toBe("2026-09-01T10:00:00Z");
     });
 });

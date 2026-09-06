@@ -1,7 +1,7 @@
 import React from "react";
 import "@testing-library/jest-dom";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import GitHubActivityComponent from "./GitHubActivityComponent";
+import { GitHubActivityComponent } from "./GitHubActivityComponent";
 import { GitHubActivityService } from "./GitHubActivityService";
 
 jest.mock("./GitHubActivityService");
@@ -10,45 +10,45 @@ const mockUnifiedActivities = {
     content: [
         {
             type: "COMMIT",
-            sha: "a1b2c3d4e5f67890",
-            message: "feat: implement login page",
-            authorName: "Nguyen Van A",
-            committedAt: "2026-09-01T10:00:00Z",
+            externalId: "a1b2c3d4e5f67890",
+            title: "feat: implement login page",
+            actorLogin: "Nguyen Van A",
+            occurredAt: "2026-09-01T10:00:00Z",
             htmlUrl:
                 "https://github.com/my-org/my-repo/commit/a1b2c3d4e5f67890",
-            relatedTaskKey: "CNPM-101",
+            issueKeys: ["CNPM-101"],
+            linkedTaskIds: [101],
         },
         {
             type: "COMMIT",
-            sha: "b2c3d4e5f6789012",
-            message: "fix: resolve token expire",
-            authorName: "Tran Thi B",
-            committedAt: "2026-09-02T14:30:00Z",
+            externalId: "b2c3d4e5f6789012",
+            title: "fix: resolve token expire",
+            actorLogin: "Tran Thi B",
+            occurredAt: "2026-09-02T14:30:00Z",
             htmlUrl:
                 "https://github.com/my-org/my-repo/commit/b2c3d4e5f6789012",
-            relatedTaskKey: null,
+            issueKeys: [],
+            linkedTaskIds: [],
         },
         {
             type: "PULL_REQUEST",
-            id: 1,
-            number: 12,
+            externalId: "pr-12",
             title: "Support GitHub Integration",
-            authorName: "Nguyen Van A",
-            status: "OPEN",
-            createdAt: "2026-09-03T08:00:00Z",
+            actorLogin: "Nguyen Van A",
+            occurredAt: "2026-09-03T08:00:00Z",
             htmlUrl: "https://github.com/my-org/my-repo/pull/12",
-            relatedTaskKey: "CNPM-102",
+            issueKeys: ["CNPM-102"],
+            linkedTaskIds: [102],
         },
         {
             type: "PULL_REQUEST",
-            id: 2,
-            number: 11,
+            externalId: "pr-11",
             title: "Database Migration Flyway",
-            authorName: "Le Van C",
-            status: "MERGED",
-            createdAt: "2026-09-02T11:00:00Z",
+            actorLogin: "Le Van C",
+            occurredAt: "2026-09-02T11:00:00Z",
             htmlUrl: "https://github.com/my-org/my-repo/pull/11",
-            relatedTaskKey: "CNPM-99",
+            issueKeys: ["CNPM-99"],
+            linkedTaskIds: [99],
         },
     ],
 };
@@ -58,7 +58,7 @@ describe("GitHubActivityComponent Acceptance Tests", () => {
         jest.clearAllMocks();
     });
 
-    test("1. Hiển thị danh sách commit với SHA 7 ký tự, message, tác giả và Task liên quan", async () => {
+    test("1. Hiển thị commit với SHA 7 ký tự (externalId), title, tác giả (actorLogin) và Task Jira (issueKeys)", async () => {
         GitHubActivityService.getActivity.mockResolvedValueOnce(
             mockUnifiedActivities,
         );
@@ -83,7 +83,7 @@ describe("GitHubActivityComponent Acceptance Tests", () => {
         );
     });
 
-    test("2. Hiển thị Pull Request với trạng thái, Task liên quan và URL thật", async () => {
+    test("2. Hiển thị Pull Request với title, Task Jira (issueKeys) và link htmlUrl", async () => {
         GitHubActivityService.getActivity.mockResolvedValueOnce(
             mockUnifiedActivities,
         );
@@ -98,14 +98,13 @@ describe("GitHubActivityComponent Acceptance Tests", () => {
         });
         fireEvent.click(prTabButton);
 
-        expect(screen.getByText("OPEN")).toBeInTheDocument();
         expect(
-            screen.getByText("#12 Support GitHub Integration"),
+            screen.getByText("Support GitHub Integration"),
         ).toBeInTheDocument();
         expect(screen.getByText("CNPM-102")).toBeInTheDocument();
 
         const prLink = screen
-            .getByText("#12 Support GitHub Integration")
+            .getByText("Support GitHub Integration")
             .closest("a");
         expect(prLink).toHaveAttribute(
             "href",
@@ -113,7 +112,7 @@ describe("GitHubActivityComponent Acceptance Tests", () => {
         );
     });
 
-    test("3. Bộ lọc hoạt động chính xác theo thành viên", async () => {
+    test("3. Bộ lọc hoạt động chính xác theo tác giả (actorLogin)", async () => {
         GitHubActivityService.getActivity.mockResolvedValueOnce(
             mockUnifiedActivities,
         );

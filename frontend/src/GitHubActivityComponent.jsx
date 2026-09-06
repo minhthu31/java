@@ -1,562 +1,333 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { GitHubActivityService } from "./GitHubActivityService";
 
-export const GitHubActivityComponent = ({ projectId }) => {
-    const [commits, setCommits] = useState([]);
-    const [pullRequests, setPullRequests] = useState([]);
-    const [loading, setLoading] = useState(true);
+export function GitHubActivityComponent({ projectId }) {
+    const [activities, setActivities] = useState([]);
+    const [activeTab, setActiveTab] = useState("COMMIT");
+    const [selectedActor, setSelectedActor] = useState("ALL");
     const [error, setError] = useState(null);
-
-    const [selectedAuthor, setSelectedAuthor] = useState("ALL");
-    const [selectedPrStatus, setSelectedPrStatus] = useState("ALL");
-    const [activeTab, setActiveTab] = useState("commits");
-
-    const fetchData = async () => {
-        if (!projectId) {
-            setLoading(false);
-            return;
-        }
-        setLoading(true);
-        setError(null);
-        try {
-            const data = await GitHubActivityService.getActivity(projectId);
-            const activities = Array.isArray(data) ? data : data?.content || [];
-
-            // Phân loại hoạt động theo đúng Unified DTO của Backend
-            setCommits(
-                activities.filter((item) => {
-                    const itemType = (
-                        item.type ||
-                        item.activityType ||
-                        ""
-                    ).toUpperCase();
-                    return itemType === "COMMIT" || (!itemType && item.sha);
-                }),
-            );
-
-            setPullRequests(
-                activities.filter((item) => {
-                    const itemType = (
-                        item.type ||
-                        item.activityType ||
-                        ""
-                    ).toUpperCase();
-                    return (
-                        itemType === "PULL_REQUEST" ||
-                        itemType === "PR" ||
-                        (!itemType && item.number)
-                    );
-                }),
-            );
-        } catch (err) {
-            setError("Không thể tải dữ liệu hoạt động GitHub từ hệ thống.");
-        } finally {
-            setLoading(false);
-        }
-    };
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetchData();
+        let isMounted = true;
+        const loadActivities = async () => {
+            try {
+                setLoading(true);
+                setError(null);
+                const data = await GitHubActivityService.getActivity(projectId);
+                if (isMounted) {
+                    setActivities(data?.content || []);
+                }
+            } catch (err) {
+                if (isMounted) {
+                    setError(
+                        "Không thể tải dữ liệu hoạt động GitHub từ hệ thống.",
+                    );
+                }
+            } finally {
+                if (isMounted) {
+                    setLoading(false);
+                }
+            }
+        };
+
+        if (projectId) {
+            loadActivities();
+        }
+        return () => {
+            isMounted = false;
+        };
     }, [projectId]);
 
-    const authors = useMemo(() => {
-        const authorSet = new Set();
-        commits.forEach((c) => c.authorName && authorSet.add(c.authorName));
-        pullRequests.forEach(
-            (pr) => pr.authorName && authorSet.add(pr.authorName),
-        );
-        return Array.from(authorSet);
-    }, [commits, pullRequests]);
+    const authors = [
+        ...new Set(activities.map((act) => act.actorLogin).filter(Boolean)),
+    ];
 
-    const filteredCommits = useMemo(() => {
-        return commits.filter((commit) => {
-            if (
-                selectedAuthor !== "ALL" &&
-                commit.authorName !== selectedAuthor
-            ) {
-                return false;
-            }
-            return true;
-        });
-    }, [commits, selectedAuthor]);
-
-    const filteredPullRequests = useMemo(() => {
-        return pullRequests.filter((pr) => {
-            if (selectedAuthor !== "ALL" && pr.authorName !== selectedAuthor) {
-                return false;
-            }
-            if (
-                selectedPrStatus !== "ALL" &&
-                pr.status?.toUpperCase() !== selectedPrStatus
-            ) {
-                return false;
-            }
-            return true;
-        });
-    }, [pullRequests, selectedAuthor, selectedPrStatus]);
-
-    const getPrBadgeStyle = (status) => {
-        switch (status?.toUpperCase()) {
-            case "OPEN":
-                return {
-                    backgroundColor: "#e3fcef",
-                    color: "#006644",
-                    border: "1px solid #abf5d1",
-                };
-            case "MERGED":
-                return {
-                    backgroundColor: "#eae6ff",
-                    color: "#403294",
-                    border: "1px solid #c0b6f2",
-                };
-            case "CLOSED":
-                return {
-                    backgroundColor: "#ffebe6",
-                    color: "#de350b",
-                    border: "1px solid #ffbdad",
-                };
-            default:
-                return {
-                    backgroundColor: "#ebecf0",
-                    color: "#42526e",
-                    border: "1px solid #dfe1e6",
-                };
-        }
-    };
-
-    if (!projectId) {
-        return (
-            <div
-                data-testid="no-project"
-                style={{
-                    padding: "48px 32px",
-                    textAlign: "center",
-                    color: "#6b778c",
-                    fontSize: "14px",
-                }}
-            >
-                Vui lòng chọn dự án để xem dữ liệu GitHub.
-            </div>
-        );
-    }
+    const filteredActivities = activities.filter((act) => {
+        const matchType = act.type === activeTab;
+        const matchActor =
+            selectedActor === "ALL" || act.actorLogin === selectedActor;
+        return matchType && matchActor;
+    });
 
     return (
-        <div
-            style={{
-                width: "100%",
-                padding: "20px 28px 32px 28px",
-                boxSizing: "border-box",
-                fontFamily: "inherit",
-            }}
-        >
-            <div
-                style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                    flexWrap: "wrap",
-                    gap: "16px",
-                    marginBottom: "20px",
-                }}
-            >
-                <div>
-                    <h2
-                        style={{
-                            fontSize: "20px",
-                            fontWeight: "700",
-                            color: "#172b4d",
-                            margin: "0 0 6px 0",
-                        }}
-                    >
-                        Hoạt động GitHub đã đồng bộ
-                    </h2>
-                    <p
-                        style={{
-                            fontSize: "14px",
-                            color: "#6b778c",
-                            margin: 0,
-                        }}
-                    >
-                        Theo dõi lịch sử commits, pull requests và các task Jira
-                        liên kết
-                    </p>
-                </div>
-
-                <div
-                    style={{
-                        display: "flex",
-                        gap: "12px",
-                        alignItems: "center",
-                    }}
-                >
-                    <select
-                        aria-label="Filter by Author"
-                        value={selectedAuthor}
-                        onChange={(e) => setSelectedAuthor(e.target.value)}
-                        style={{
-                            height: "40px",
-                            padding: "0 12px",
-                            fontSize: "14px",
-                            borderRadius: "6px",
-                            border: "1px solid #dfe1e6",
-                            backgroundColor: "#ffffff",
-                            color: "#172b4d",
-                        }}
-                    >
-                        <option value="ALL">Tất cả thành viên</option>
-                        {authors.map((author) => (
-                            <option key={author} value={author}>
-                                {author}
-                            </option>
-                        ))}
-                    </select>
-
-                    {activeTab === "pull_requests" && (
-                        <select
-                            aria-label="Filter by PR Status"
-                            value={selectedPrStatus}
-                            onChange={(e) =>
-                                setSelectedPrStatus(e.target.value)
-                            }
-                            style={{
-                                height: "40px",
-                                padding: "0 12px",
-                                fontSize: "14px",
-                                borderRadius: "6px",
-                                border: "1px solid #dfe1e6",
-                                backgroundColor: "#ffffff",
-                                color: "#172b4d",
-                            }}
-                        >
-                            <option value="ALL">Tất cả trạng thái PR</option>
-                            <option value="OPEN">Open</option>
-                            <option value="MERGED">Merged</option>
-                            <option value="CLOSED">Closed</option>
-                        </select>
-                    )}
-                </div>
-            </div>
-
+        <div style={{ padding: "24px" }}>
             {error && (
                 <div
                     data-testid="error-banner"
                     style={{
+                        display: "flex",
+                        alignItems: "center",
                         padding: "12px 16px",
+                        marginBottom: "20px",
                         backgroundColor: "#ffebe6",
                         border: "1px solid #ffbdad",
                         borderRadius: "6px",
-                        color: "#de350b",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        marginBottom: "16px",
+                        color: "#bf2600",
+                        fontSize: "14px",
+                        fontWeight: 500,
                     }}
                 >
+                    <span style={{ marginRight: "8px", fontSize: "16px" }}>
+                        ⚠️
+                    </span>
                     <span>{error}</span>
-                    <button
-                        type="button"
-                        onClick={fetchData}
-                        style={{
-                            padding: "4px 10px",
-                            backgroundColor: "#de350b",
-                            color: "#fff",
-                            border: "none",
-                            borderRadius: "4px",
-                            cursor: "pointer",
-                        }}
-                    >
-                        Thử lại
-                    </button>
                 </div>
             )}
 
             <div
                 style={{
                     display: "flex",
-                    gap: "10px",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "16px",
                     marginBottom: "20px",
+                    paddingBottom: "16px",
                     borderBottom: "1px solid #ebecf0",
-                    paddingBottom: "12px",
                 }}
             >
-                <button
-                    type="button"
-                    onClick={() => setActiveTab("commits")}
+                <div style={{ display: "flex", gap: "8px" }}>
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab("COMMIT")}
+                        style={{
+                            padding: "8px 16px",
+                            borderRadius: "5px",
+                            fontSize: "14px",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            border: "none",
+                            backgroundColor:
+                                activeTab === "COMMIT" ? "#0052cc" : "#ebecf0",
+                            color:
+                                activeTab === "COMMIT" ? "#ffffff" : "#42526e",
+                        }}
+                    >
+                        Commits
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab("PULL_REQUEST")}
+                        style={{
+                            padding: "8px 16px",
+                            borderRadius: "5px",
+                            fontSize: "14px",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            border: "none",
+                            backgroundColor:
+                                activeTab === "PULL_REQUEST"
+                                    ? "#0052cc"
+                                    : "#ebecf0",
+                            color:
+                                activeTab === "PULL_REQUEST"
+                                    ? "#ffffff"
+                                    : "#42526e",
+                        }}
+                    >
+                        Pull Requests
+                    </button>
+                </div>
+
+                <div
                     style={{
-                        height: "38px",
-                        padding: "0 18px",
-                        fontSize: "14px",
-                        fontWeight: "600",
-                        borderRadius: "5px",
-                        border: "none",
-                        cursor: "pointer",
-                        backgroundColor:
-                            activeTab === "commits" ? "#0052cc" : "#f4f5f7",
-                        color: activeTab === "commits" ? "#ffffff" : "#42526e",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
                     }}
                 >
-                    Commits ({filteredCommits.length})
-                </button>
-                <button
-                    type="button"
-                    onClick={() => setActiveTab("pull_requests")}
-                    style={{
-                        height: "38px",
-                        padding: "0 18px",
-                        fontSize: "14px",
-                        fontWeight: "600",
-                        borderRadius: "5px",
-                        border: "none",
-                        cursor: "pointer",
-                        backgroundColor:
-                            activeTab === "pull_requests"
-                                ? "#0052cc"
-                                : "#f4f5f7",
-                        color:
-                            activeTab === "pull_requests"
-                                ? "#ffffff"
-                                : "#42526e",
-                    }}
-                >
-                    Pull Requests ({filteredPullRequests.length})
-                </button>
+                    <label
+                        htmlFor="author-filter"
+                        style={{
+                            fontSize: "13px",
+                            fontWeight: 600,
+                            color: "#5e6c84",
+                        }}
+                    >
+                        Filter by Author:
+                    </label>
+                    <select
+                        id="author-filter"
+                        aria-label="Filter by Author"
+                        value={selectedActor}
+                        onChange={(e) => setSelectedActor(e.target.value)}
+                        style={{
+                            padding: "6px 12px",
+                            borderRadius: "4px",
+                            border: "1px solid #dfe1e6",
+                            backgroundColor: "#fafbfc",
+                            fontSize: "13px",
+                            color: "#172b4d",
+                            outline: "none",
+                            cursor: "pointer",
+                        }}
+                    >
+                        <option value="ALL">Tất cả</option>
+                        {authors.map((actor) => (
+                            <option key={actor} value={actor}>
+                                {actor}
+                            </option>
+                        ))}
+                    </select>
+                </div>
             </div>
 
-            {loading && (
+            {loading ? (
                 <div
-                    data-testid="loading-spinner"
                     style={{
                         padding: "40px",
                         textAlign: "center",
                         color: "#6b778c",
+                        fontSize: "14px",
                     }}
                 >
-                    Đang tải dữ liệu GitHub từ server...
+                    Đang tải dữ liệu hoạt động...
                 </div>
-            )}
+            ) : filteredActivities.length === 0 ? (
+                <div
+                    data-testid={
+                        activeTab === "COMMIT" ? "empty-commits" : "empty-prs"
+                    }
+                    style={{
+                        padding: "40px 20px",
+                        textAlign: "center",
+                        backgroundColor: "#fafbfc",
+                        border: "1px dashed #dfe1e6",
+                        borderRadius: "6px",
+                        color: "#6b778c",
+                        fontSize: "14px",
+                    }}
+                >
+                    {activeTab === "COMMIT"
+                        ? "Không có Commit nào phù hợp với bộ lọc."
+                        : "Không có Pull Request nào phù hợp với bộ lọc."}
+                </div>
+            ) : (
+                <div
+                    style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "10px",
+                    }}
+                >
+                    {filteredActivities.map((act) => {
+                        const shortId =
+                            act.type === "COMMIT" && act.externalId
+                                ? act.externalId.substring(0, 7)
+                                : "";
 
-            {!loading && !error && (
-                <div>
-                    {activeTab === "commits" &&
-                        (filteredCommits.length === 0 ? (
+                        const jiraTasks = Array.isArray(act.issueKeys)
+                            ? act.issueKeys.join(", ")
+                            : act.issueKeys || "";
+
+                        return (
                             <div
-                                data-testid="empty-commits"
+                                key={act.externalId}
                                 style={{
-                                    padding: "40px",
-                                    textAlign: "center",
-                                    color: "#8993a4",
-                                }}
-                            >
-                                Không có commit nào phù hợp với bộ lọc.
-                            </div>
-                        ) : (
-                            <div
-                                style={{
-                                    border: "1px solid #dfe1e6",
+                                    padding: "14px 18px",
                                     borderRadius: "6px",
-                                    backgroundColor: "#fff",
+                                    border: "1px solid #ebecf0",
+                                    backgroundColor: "#ffffff",
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    boxShadow:
+                                        "0 1px 2px rgba(9, 30, 66, 0.04)",
                                 }}
                             >
-                                {filteredCommits.map((commit, index) => (
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        gap: "6px",
+                                    }}
+                                >
                                     <div
-                                        key={commit.sha}
                                         style={{
-                                            padding: "12px 16px",
-                                            borderBottom:
-                                                index <
-                                                filteredCommits.length - 1
-                                                    ? "1px solid #ebecf0"
-                                                    : "none",
                                             display: "flex",
-                                            flexDirection: "column",
-                                            gap: "4px",
+                                            alignItems: "center",
+                                            gap: "10px",
+                                            flexWrap: "wrap",
                                         }}
                                     >
-                                        <div
-                                            style={{
-                                                display: "flex",
-                                                alignItems: "center",
-                                                gap: "10px",
-                                                flexWrap: "wrap",
-                                            }}
-                                        >
+                                        {shortId && (
                                             <a
-                                                href={commit.htmlUrl}
+                                                href={act.htmlUrl}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
                                                 style={{
                                                     fontFamily: "monospace",
                                                     fontSize: "12px",
+                                                    fontWeight: 700,
                                                     color: "#0052cc",
                                                     backgroundColor: "#deebff",
-                                                    padding: "2px 6px",
+                                                    padding: "2px 8px",
                                                     borderRadius: "4px",
                                                     textDecoration: "none",
                                                 }}
                                             >
-                                                {commit.sha
-                                                    ? commit.sha.substring(0, 7)
-                                                    : "N/A"}
+                                                {shortId}
                                             </a>
-                                            <span
-                                                style={{
-                                                    fontSize: "14px",
-                                                    fontWeight: "600",
-                                                    color: "#172b4d",
-                                                }}
-                                            >
-                                                {commit.message}
-                                            </span>
-                                            {commit.relatedTaskKey && (
-                                                <span
-                                                    style={{
-                                                        fontSize: "11px",
-                                                        fontWeight: "700",
-                                                        backgroundColor:
-                                                            "#f4f5f7",
-                                                        color: "#42526e",
-                                                        padding: "2px 6px",
-                                                        borderRadius: "4px",
-                                                        border: "1px solid #dfe1e6",
-                                                    }}
-                                                >
-                                                    {commit.relatedTaskKey}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div
-                                            style={{
-                                                fontSize: "12px",
-                                                color: "#6b778c",
-                                            }}
-                                        >
-                                            <span>{commit.authorName}</span>
-                                            <span style={{ margin: "0 8px" }}>
-                                                •
-                                            </span>
-                                            <span>
-                                                {new Date(
-                                                    commit.committedAt ||
-                                                        commit.timestamp,
-                                                ).toLocaleString("vi-VN")}
-                                            </span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ))}
+                                        )}
 
-                    {activeTab === "pull_requests" &&
-                        (filteredPullRequests.length === 0 ? (
-                            <div
-                                data-testid="empty-prs"
-                                style={{
-                                    padding: "40px",
-                                    textAlign: "center",
-                                    color: "#8993a4",
-                                }}
-                            >
-                                Không có Pull Request nào phù hợp với bộ lọc.
-                            </div>
-                        ) : (
-                            <div
-                                style={{
-                                    border: "1px solid #dfe1e6",
-                                    borderRadius: "6px",
-                                    backgroundColor: "#fff",
-                                }}
-                            >
-                                {filteredPullRequests.map((pr, index) => (
-                                    <div
-                                        key={pr.id || pr.number}
-                                        style={{
-                                            padding: "12px 16px",
-                                            borderBottom:
-                                                index <
-                                                filteredPullRequests.length - 1
-                                                    ? "1px solid #ebecf0"
-                                                    : "none",
-                                            display: "flex",
-                                            flexDirection: "column",
-                                            gap: "4px",
-                                        }}
-                                    >
-                                        <div
+                                        <a
+                                            href={act.htmlUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
                                             style={{
-                                                display: "flex",
-                                                alignItems: "center",
-                                                gap: "10px",
-                                                flexWrap: "wrap",
+                                                fontSize: "14px",
+                                                fontWeight: 600,
+                                                color: "#172b4d",
+                                                textDecoration: "none",
                                             }}
                                         >
+                                            {act.title}
+                                        </a>
+
+                                        {jiraTasks && (
                                             <span
                                                 style={{
                                                     fontSize: "11px",
-                                                    fontWeight: "700",
+                                                    fontWeight: 700,
                                                     padding: "2px 6px",
-                                                    borderRadius: "4px",
-                                                    ...getPrBadgeStyle(
-                                                        pr.status,
-                                                    ),
+                                                    backgroundColor: "#dfe1e6",
+                                                    color: "#172b4d",
+                                                    borderRadius: "3px",
                                                 }}
                                             >
-                                                {pr.status}
+                                                {jiraTasks}
                                             </span>
-                                            <a
-                                                href={pr.htmlUrl}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                style={{
-                                                    fontSize: "14px",
-                                                    fontWeight: "600",
-                                                    color: "#0052cc",
-                                                    textDecoration: "none",
-                                                }}
-                                            >
-                                                #{pr.number} {pr.title}
-                                            </a>
-                                            {pr.relatedTaskKey && (
-                                                <span
-                                                    style={{
-                                                        fontSize: "11px",
-                                                        fontWeight: "700",
-                                                        backgroundColor:
-                                                            "#f4f5f7",
-                                                        color: "#42526e",
-                                                        padding: "2px 6px",
-                                                        borderRadius: "4px",
-                                                        border: "1px solid #dfe1e6",
-                                                    }}
-                                                >
-                                                    {pr.relatedTaskKey}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div
-                                            style={{
-                                                fontSize: "12px",
-                                                color: "#6b778c",
-                                            }}
-                                        >
-                                            <span>Tạo bởi {pr.authorName}</span>
-                                            <span style={{ margin: "0 8px" }}>
-                                                •
-                                            </span>
-                                            <span>
-                                                {new Date(
-                                                    pr.createdAt ||
-                                                        pr.timestamp,
-                                                ).toLocaleString("vi-VN")}
-                                            </span>
-                                        </div>
+                                        )}
                                     </div>
-                                ))}
+
+                                    <div
+                                        style={{
+                                            fontSize: "12px",
+                                            color: "#6b778c",
+                                        }}
+                                    >
+                                        <span>
+                                            Tác giả:{" "}
+                                            <strong>{act.actorLogin}</strong>
+                                        </span>
+                                        {act.occurredAt && (
+                                            <span style={{ marginLeft: "8px" }}>
+                                                ·{" "}
+                                                {new Date(
+                                                    act.occurredAt,
+                                                ).toLocaleString()}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
-                        ))}
+                        );
+                    })}
                 </div>
             )}
         </div>
     );
-};
+}
 
 export default GitHubActivityComponent;
