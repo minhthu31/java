@@ -19,11 +19,8 @@ public class GitHubConfigService {
     private final GitHubRestClient gitHubRestClient;
     private final IntegrationSecretService secretService;
 
-    public GitHubConfigService(
-            GitHubIntegrationConfigRepository configRepository,
-            ProjectRepository projectRepository,
-            GitHubRestClient gitHubRestClient,
-            IntegrationSecretService secretService) {
+    public GitHubConfigService(GitHubIntegrationConfigRepository configRepository,ProjectRepository projectRepository,
+            GitHubRestClient gitHubRestClient,IntegrationSecretService secretService) {
         this.configRepository = configRepository;
         this.projectRepository = projectRepository;
         this.gitHubRestClient = gitHubRestClient;
@@ -33,28 +30,21 @@ public class GitHubConfigService {
     @Transactional(readOnly = true)
     public GitHubConfigResponse getConfig(Long projectId) {
         validateProjectExists(projectId);
-        return configRepository.findGitHubConfigByProjectId(projectId)
-                .map(config -> {
-                    String status = resolveStatus(config.getStatus());
-                    Boolean lastTestSucceeded = null;
-                    if (config.getLastCheckedAt() != null) {
-                        if ("CONNECTED".equalsIgnoreCase(status)) {
-                            lastTestSucceeded = true;
-                        } else if ("CONNECTION_FAILED".equalsIgnoreCase(status)) {
-                            lastTestSucceeded = false;
-                        }
-                    }
-                    return GitHubConfigResponse.builder()
-                            .projectId(config.getProjectId())
-                            .repositoryFullName(config.getAccountIdentifier())
-                            .configured(true)
-                            .status(status)
-                            .githubLogin(extractOwner(config.getAccountIdentifier()))
-                            .lastTestedAt(config.getLastCheckedAt())
-                            .lastTestSucceeded(lastTestSucceeded)
-                            .build();
-                })
-                .orElseGet(() -> GitHubConfigResponse.builder()
+        return configRepository.findGitHubConfigByProjectId(projectId).map(config -> {
+            String status = resolveStatus(config.getStatus());
+            Boolean lastTestSucceeded = null;
+            if (config.getLastCheckedAt() != null) {
+                if ("CONNECTED".equalsIgnoreCase(status)) {
+                    lastTestSucceeded = true;
+                } else if ("CONNECTION_FAILED".equalsIgnoreCase(status)) {
+                    lastTestSucceeded = false;
+                }
+            }
+            return GitHubConfigResponse.builder().projectId(config.getProjectId()).repositoryFullName(config.getAccountIdentifier())
+            .configured(true).status(status).githubLogin(extractOwner(config.getAccountIdentifier())).lastTestedAt(config.getLastCheckedAt())
+            .lastTestSucceeded(lastTestSucceeded).build();
+        })
+        .orElseGet(() -> GitHubConfigResponse.builder()
                         .projectId(projectId)
                         .repositoryFullName(null)
                         .configured(false)

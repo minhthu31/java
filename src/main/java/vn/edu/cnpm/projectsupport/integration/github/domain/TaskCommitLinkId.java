@@ -26,8 +26,13 @@ public class TaskCommitLinkId implements Serializable {
 
     @Override
     public boolean equals(Object other) {
-        if (this == other) return true;
-        if (!(other instanceof TaskCommitLinkId that)) return false;
+        if (this == other){
+            return true;
+        }
+
+        if (!(other instanceof TaskCommitLinkId that)) {
+            return false;
+        }
         return Objects.equals(taskId, that.taskId) && Objects.equals(commitId, that.commitId);
     }
 

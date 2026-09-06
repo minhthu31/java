@@ -18,11 +18,6 @@ import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLog;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLogStatus;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.SyncLogRepository;
 
-/**
- * Imports the commit snapshot for a configured GitHub repository.
- * Each commit is persisted independently so one bad record does not discard
- * commits that were already saved in the same synchronization run.
- */
 @Service
 public class GitHubCommitSyncService {
 
@@ -57,7 +52,6 @@ public class GitHubCommitSyncService {
         this.taskLinkService = taskLinkService;
     }
 
-    /** Loads the project GitHub secret and repository snapshot from the existing integration configuration. */
     public GitHubCommitSyncResult syncCommits(Long projectId) {
         IntegrationConfig integrationConfig = integrationConfigRepository
                 .findGitHubConfigByProjectId(projectId)
@@ -68,17 +62,12 @@ public class GitHubCommitSyncService {
 
         String fullName = integrationConfig.getAccountIdentifier();
         int separator = fullName == null ? -1 : fullName.indexOf('/');
-        if (separator <= 0 || separator == fullName.length() - 1
-                || fullName.indexOf('/', separator + 1) >= 0) {
+        if (separator <= 0 || separator == fullName.length() - 1 || fullName.indexOf('/', separator + 1) >= 0) {
             throw new IllegalArgumentException("GitHub repository full name is invalid");
         }
         String token = secretService.decrypt(integrationConfig.getEncryptedSecret());
-        GitHubClientConfig config = new GitHubClientConfig(
-                fullName.substring(0, separator),
-                fullName.substring(separator + 1),
-                token,
-                GitHubClientConfig.DEFAULT_API_VERSION,
-                GitHubClientConfig.DEFAULT_TIMEOUT);
+        GitHubClientConfig config = new GitHubClientConfig(fullName.substring(0, separator), fullName.substring(separator + 1),
+                token, GitHubClientConfig.DEFAULT_API_VERSION, GitHubClientConfig.DEFAULT_TIMEOUT);
         return syncCommits(projectId, config);
     }
 
@@ -107,8 +96,7 @@ public class GitHubCommitSyncService {
         Instant syncedAt = Instant.now();
 
         try {
-            vn.edu.cnpm.projectsupport.integration.github.GitHubRepository remoteRepository =
-                    gitHubRestClient.getRepository(config);
+            vn.edu.cnpm.projectsupport.integration.github.GitHubRepository remoteRepository = gitHubRestClient.getRepository(config);
             GitHubRepository localRepository = upsertRepository(projectId, remoteRepository, syncedAt);
 
             int page = 1;
@@ -121,24 +109,18 @@ public class GitHubCommitSyncService {
                             false, null,
                             "GitHub pagination exceeded the safety limit", null);
                 }
-                GitHubPage<vn.edu.cnpm.projectsupport.integration.github.GitHubCommit> pageResult =
-                        gitHubRestClient.getCommitsPage(config, page);
+                GitHubPage<vn.edu.cnpm.projectsupport.integration.github.GitHubCommit> pageResult = gitHubRestClient.getCommitsPage(config, page);
                 for (vn.edu.cnpm.projectsupport.integration.github.GitHubCommit listedCommit : pageResult.items()) {
                     try {
                         if (listedCommit == null || listedCommit.sha() == null || listedCommit.sha().isBlank()) {
                             throw new IllegalArgumentException("GitHub commit list item has no SHA");
                         }
-                        // The list endpoint is intentionally used only for pagination/SHA discovery.
-                        // GitHub's single-commit endpoint provides the complete stats/files payload
-                        // required by contribution reporting.
-                        vn.edu.cnpm.projectsupport.integration.github.GitHubCommit remoteCommit =
-                                gitHubRestClient.getCommit(config, listedCommit.sha());
+                        vn.edu.cnpm.projectsupport.integration.github.GitHubCommit remoteCommit = gitHubRestClient.getCommit(config, listedCommit.sha());
                         GitHubCommit localCommit = upsertCommit(localRepository.getId(), remoteCommit);
                         taskLinkService.linkCommit(projectId, localCommit);
                         synced++;
                     } catch (RuntimeException commitException) {
                         errors++;
-                        // Keep successfully persisted commits and continue with the next item.
                         log.setErrorCode("PARTIAL_SYNC");
                         log.setErrorMessage("Một hoặc nhiều commit không thể đồng bộ");
                     }
@@ -158,13 +140,7 @@ public class GitHubCommitSyncService {
             log.setCompletedAt(Instant.now());
             syncLogRepository.save(log);
 
-            return new GitHubCommitSyncResult(
-                    projectId,
-                    localRepository.getId(),
-                    synced,
-                    errors,
-                    syncedAt,
-                    correlationId);
+            return new GitHubCommitSyncResult(projectId,localRepository.getId(), synced,errors,syncedAt,correlationId);
         } catch (RuntimeException exception) {
             log.setStatus(SyncLogStatus.FAILED);
             log.setErrorCode(errorCode(exception));
@@ -181,8 +157,7 @@ public class GitHubCommitSyncService {
                 || remote.defaultBranch() == null || remote.htmlUrl() == null) {
             throw new IllegalArgumentException("GitHub repository response is incomplete");
         }
-        GitHubRepository local = repositoryRepository
-                .findByProjectIdAndGithubRepositoryId(projectId, remote.id())
+        GitHubRepository local = repositoryRepository.findByProjectIdAndGithubRepositoryId(projectId, remote.id())
                 .orElseGet(() -> new GitHubRepository(
                         projectId,
                         remote.id(),
@@ -215,13 +190,8 @@ public class GitHubCommitSyncService {
                 || remote.htmlUrl() == null) {
             throw new IllegalArgumentException("GitHub commit response is incomplete");
         }
-        GitHubCommit local = commitRepository.findByRepositoryIdAndSha(repositoryId, remote.sha())
-                .orElseGet(() -> new GitHubCommit(
-                        repositoryId,
-                        remote.sha(),
-                        remote.commit().message(),
-                        remote.commit().author().date(),
-                        remote.htmlUrl()));
+        GitHubCommit local = commitRepository.findByRepositoryIdAndSha(repositoryId, remote.sha()).orElseGet(() -> new GitHubCommit(
+            repositoryId,remote.sha(),remote.commit().message(), remote.commit().author().date(), remote.htmlUrl()));
         local.setMessage(remote.commit().message());
         local.setCommittedAt(remote.commit().author().date());
         local.setHtmlUrl(remote.htmlUrl());
@@ -251,11 +221,9 @@ public class GitHubCommitSyncService {
             local.setAuthorExternalAccountId(null);
             return;
         }
-        externalAccountRepository
-                .findByProviderAndExternalUserId(IntegrationProvider.GITHUB, String.valueOf(author.id()))
+        externalAccountRepository.findByProviderAndExternalUserId(IntegrationProvider.GITHUB, String.valueOf(author.id()))
                 .map(UserExternalAccount::getId)
-                .ifPresentOrElse(local::setAuthorExternalAccountId,
-                        () -> local.setAuthorExternalAccountId(null));
+                .ifPresentOrElse(local::setAuthorExternalAccountId,() -> local.setAuthorExternalAccountId(null));
     }
 
     private String errorCode(RuntimeException exception) {

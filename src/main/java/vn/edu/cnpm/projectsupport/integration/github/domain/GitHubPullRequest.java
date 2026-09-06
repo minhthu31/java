@@ -93,8 +93,7 @@ public class GitHubPullRequest extends BaseEntity {
             String baseRef,
             String state,
             String htmlUrl) {
-        this(repositoryId, null, number, title, null, headRef, null, baseRef,
-                parseState(state), false, null, null, 0, 0, 0, null, null, htmlUrl);
+        this(repositoryId, null, number, title, null, headRef, null, baseRef, parseState(state), false, null, null, 0, 0, 0, null, null, htmlUrl);
     }
 
     public GitHubPullRequest(

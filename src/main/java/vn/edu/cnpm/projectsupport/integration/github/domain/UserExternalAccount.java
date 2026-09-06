@@ -12,9 +12,14 @@ import jakarta.persistence.Enumerated;
 @Entity
 @Table(
         name = "user_external_accounts",
-        uniqueConstraints = @UniqueConstraint(
+        uniqueConstraints = {
+            @UniqueConstraint(
                 name = "uk_external_account",
-                columnNames = {"provider", "external_user_id"}))
+                columnNames = {"provider", "external_user_id"}),
+            @UniqueConstraint(
+                name = "uk_user_external_account_provider",
+                columnNames = {"user_id", "provider"})
+        })
 public class UserExternalAccount extends BaseEntity {
 
     @Column(name = "user_id", nullable = false)

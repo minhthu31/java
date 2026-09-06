@@ -30,8 +30,7 @@ public class V10__user_external_account_profile extends BaseJavaMigration {
                 return true;
             }
         }
-        try (ResultSet result = connection.getMetaData().getColumns(
-                null, null, table.toUpperCase(), column.toUpperCase())) {
+        try (ResultSet result = connection.getMetaData().getColumns(null, null, table.toUpperCase(), column.toUpperCase())) {
             return result.next();
         }
     }

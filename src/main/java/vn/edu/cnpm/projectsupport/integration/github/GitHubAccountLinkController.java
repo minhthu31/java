@@ -43,8 +43,7 @@ public class GitHubAccountLinkController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         int safeSize = Math.min(Math.max(size, 1), 100);
-        Page<GitHubUnlinkedAccountResponse> result = gitHubAccountLinkService.listUnlinkedAccounts(
-                projectId, PageRequest.of(Math.max(page, 0), safeSize));
+        Page<GitHubUnlinkedAccountResponse> result = gitHubAccountLinkService.listUnlinkedAccounts(projectId, PageRequest.of(Math.max(page, 0), safeSize));
         return envelope(PageResponse.from(result));
     }
 

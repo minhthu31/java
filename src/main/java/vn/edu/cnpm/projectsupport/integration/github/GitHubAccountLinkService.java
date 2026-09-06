@@ -12,6 +12,8 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import vn.edu.cnpm.projectsupport.audit.domain.ActivityLog;
+import vn.edu.cnpm.projectsupport.audit.repository.ActivityLogRepository;
 import vn.edu.cnpm.projectsupport.common.exception.ResourceInUseException;
 import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
 import vn.edu.cnpm.projectsupport.identity.domain.User;
@@ -24,7 +26,9 @@ import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubUnlinkedAu
 import vn.edu.cnpm.projectsupport.integration.github.repository.UserExternalAccountRepository;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationConfig;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider;
+import vn.edu.cnpm.projectsupport.project.domain.Project;
 import vn.edu.cnpm.projectsupport.project.repository.ProjectRepository;
+import vn.edu.cnpm.projectsupport.security.CurrentUserService;
 import vn.edu.cnpm.projectsupport.security.IntegrationSecretService;
 
 @Service
@@ -38,6 +42,8 @@ public class GitHubAccountLinkService {
     private final GitHubPullRequestRepository pullRequestRepository;
     private final IntegrationSecretService secretService;
     private final GitHubRestClient gitHubRestClient;
+    private final ActivityLogRepository activityLogRepository;
+    private final CurrentUserService currentUserService;
 
     public GitHubAccountLinkService(
             UserExternalAccountRepository externalAccountRepository,
@@ -47,7 +53,9 @@ public class GitHubAccountLinkService {
             GitHubCommitRepository commitRepository,
             GitHubPullRequestRepository pullRequestRepository,
             IntegrationSecretService secretService,
-            GitHubRestClient gitHubRestClient) {
+            GitHubRestClient gitHubRestClient,
+            ActivityLogRepository activityLogRepository,
+            CurrentUserService currentUserService) {
         this.externalAccountRepository = externalAccountRepository;
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
@@ -56,18 +64,16 @@ public class GitHubAccountLinkService {
         this.pullRequestRepository = pullRequestRepository;
         this.secretService = secretService;
         this.gitHubRestClient = gitHubRestClient;
+        this.activityLogRepository = activityLogRepository;
+        this.currentUserService = currentUserService;
     }
 
     @Transactional
     public GitHubAccountLinkResponse linkAccount(Long projectId, Long userId, GitHubAccountLinkRequest request) {
-        if (!projectRepository.existsById(projectId)) {
-            throw new ResourceNotFoundException("Không tìm thấy Project với ID: " + projectId);
-        }
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+        Project project = projectRepository.findById(projectId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy Project với ID: " + projectId));
+        User user = userRepository.findById(userId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với ID: " + userId));
         if (!isProjectParticipant(projectId, userId)) {
-            throw new ResourceNotFoundException(
-                    "Người dùng " + user.getUsername() + " không thuộc Project với ID: " + projectId);
+            throw new ResourceNotFoundException("Người dùng " + user.getUsername() + " không thuộc Project với ID: " + projectId);
         }
 
         GitHubUser remote = fetchRemoteUser(projectId, request.getUsername());
@@ -75,8 +81,8 @@ public class GitHubAccountLinkService {
 
         return externalAccountRepository
                 .findByProviderAndExternalUserId(IntegrationProvider.GITHUB, verifiedExternalId)
-                .map(existing -> reuseOrReject(existing, userId, remote))
-                .orElseGet(() -> createOrRelink(userId, verifiedExternalId, remote));
+                .map(existing -> reuseOrReject(existing, projectId, userId, remote))
+                .orElseGet(() -> createOrRelink(projectId, project, userId, verifiedExternalId, remote));
     }
 
     @Transactional(readOnly = true)
@@ -94,10 +100,8 @@ public class GitHubAccountLinkService {
         }
 
         List<GitHubUnlinkedAccountResponse> all = new ArrayList<>(byGithubUserId.size());
-        byGithubUserId.entrySet().stream()
-                .sorted(Comparator.comparing(Map.Entry::getKey))
-                .forEach(entry -> all.add(new GitHubUnlinkedAccountResponse(
-                        String.valueOf(entry.getKey()), entry.getValue())));
+        byGithubUserId.entrySet().stream().sorted(Comparator.comparing(Map.Entry::getKey))
+                .forEach(entry -> all.add(new GitHubUnlinkedAccountResponse(String.valueOf(entry.getKey()), entry.getValue())));
 
         int start = Math.min((int) pageable.getOffset(), all.size());
         int end = Math.min(start + pageable.getPageSize(), all.size());
@@ -120,8 +124,7 @@ public class GitHubAccountLinkService {
 
         String fullName = integrationConfig.getAccountIdentifier();
         int separator = fullName == null ? -1 : fullName.indexOf('/');
-        if (separator <= 0 || separator == fullName.length() - 1
-                || fullName.indexOf('/', separator + 1) >= 0) {
+        if (separator <= 0 || separator == fullName.length() - 1 || fullName.indexOf('/', separator + 1) >= 0) {
             throw new IllegalArgumentException("GitHub repository full name is invalid");
         }
         String token = secretService.decrypt(integrationConfig.getEncryptedSecret());
@@ -140,8 +143,7 @@ public class GitHubAccountLinkService {
         }
         String remoteId = String.valueOf(remote.id());
         if (!remoteId.equals(request.getExternalAccountId())) {
-            throw new IllegalArgumentException(
-                    "externalAccountId không khớp với GitHub user ID thực tế của username đã cung cấp");
+            throw new IllegalArgumentException("externalAccountId không khớp với GitHub user ID thực tế của username đã cung cấp");
         }
         if (!remote.login().equalsIgnoreCase(request.getUsername().trim())) {
             throw new IllegalArgumentException("username không khớp với GitHub login thực tế");
@@ -149,34 +151,55 @@ public class GitHubAccountLinkService {
         return remoteId;
     }
 
-    private GitHubAccountLinkResponse reuseOrReject(UserExternalAccount existing, Long userId, GitHubUser remote) {
+    private GitHubAccountLinkResponse reuseOrReject(UserExternalAccount existing, Long projectId, Long userId, GitHubUser remote) {
         if (!existing.getUserId().equals(userId)) {
-            throw new ResourceInUseException(
-                    "GitHub account " + existing.getExternalUserId() + " đã liên kết với người dùng khác");
+            throw new ResourceInUseException("GitHub account " + existing.getExternalUserId() + " đã liên kết với người dùng khác");
         }
         existing.setExternalLogin(remote.login());
         existing.setAvatarUrl(remote.avatarUrl());
         existing.setProfileUrl(remote.htmlUrl());
         UserExternalAccount saved = externalAccountRepository.save(existing);
+        backfill(projectId, existing.getExternalUserId(), saved.getId());
         return toResponse(saved);
     }
 
-    private GitHubAccountLinkResponse createOrRelink(Long userId, String externalUserId, GitHubUser remote) {
-        UserExternalAccount account = externalAccountRepository
-                .findByUserIdAndProvider(userId, IntegrationProvider.GITHUB)
-                .map(existingForUser -> {
-                    existingForUser.relink(externalUserId, remote.login(), remote.avatarUrl(), remote.htmlUrl());
-                    return existingForUser;
-                })
-                .orElseGet(() -> new UserExternalAccount(
-                        userId,
-                        IntegrationProvider.GITHUB,
-                        externalUserId,
-                        remote.login(),
-                        remote.avatarUrl(),
-                        remote.htmlUrl()));
-        UserExternalAccount saved = externalAccountRepository.save(account);
+    private GitHubAccountLinkResponse createOrRelink(Long projectId, vn.edu.cnpm.projectsupport.project.domain.Project project,
+        Long userId, String externalUserId, GitHubUser remote) {
+        var existingForUser = externalAccountRepository.findByUserIdAndProvider(userId, IntegrationProvider.GITHUB);
+        UserExternalAccount account;
+        boolean relink = existingForUser.isPresent();
+        String oldExternalUserId = null;
+        String oldLogin = null;
+
+        if (relink) {
+            account = existingForUser.get();
+            oldExternalUserId = account.getExternalUserId();
+            oldLogin = account.getExternalLogin();
+            account.relink(externalUserId, remote.login(), remote.avatarUrl(), remote.htmlUrl());
+        } else {
+            account = new UserExternalAccount(userId, IntegrationProvider.GITHUB, externalUserId, remote.login(), remote.avatarUrl(), remote.htmlUrl());
+        }
+
+        UserExternalAccount saved = externalAccountRepository.saveAndFlush(account);
+        backfill(projectId, externalUserId, saved.getId());
+
+        Long actorUserId = currentUserService.findCurrentUser().map(User::getId).orElse(userId);
+        if (relink && !externalUserId.equals(oldExternalUserId)) {
+            activityLogRepository.save(ActivityLog.githubAccountRelinked(
+                    project.getGroupId(), saved.getId(), actorUserId, userId,
+                    oldExternalUserId, oldLogin, externalUserId, remote.login()));
+        } else if (!relink) {
+            activityLogRepository.save(ActivityLog.githubAccountLinked(
+                    project.getGroupId(), saved.getId(), actorUserId, userId,
+                    externalUserId, remote.login()));
+        }
         return toResponse(saved);
+    }
+
+    private void backfill(Long projectId, String externalUserId, Long accountId) {
+        Long githubUserId = Long.valueOf(externalUserId);
+        commitRepository.backfillAuthorExternalAccountId(projectId, githubUserId, accountId);
+        pullRequestRepository.backfillAuthorExternalAccountId(projectId, githubUserId, accountId);
     }
 
     private GitHubAccountLinkResponse toResponse(UserExternalAccount saved) {

@@ -21,13 +21,21 @@ public class TaskPullRequestLinkId implements Serializable {
         this.pullRequestId = pullRequestId;
     }
 
-    public Long getTaskId() { return taskId; }
-    public Long getPullRequestId() { return pullRequestId; }
+    public Long getTaskId(){
+        return taskId;
+    }
+    public Long getPullRequestId() {
+        return pullRequestId;
+    }
 
     @Override
     public boolean equals(Object other) {
-        if (this == other) return true;
-        if (!(other instanceof TaskPullRequestLinkId that)) return false;
+        if (this == other) {
+            return true;
+        }
+        if (!(other instanceof TaskPullRequestLinkId that)) {
+            return false;
+        }
         return Objects.equals(taskId, that.taskId) && Objects.equals(pullRequestId, that.pullRequestId);
     }
 

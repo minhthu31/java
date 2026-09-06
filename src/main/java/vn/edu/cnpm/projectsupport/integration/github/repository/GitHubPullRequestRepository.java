@@ -116,6 +116,21 @@ public interface GitHubPullRequestRepository extends JpaRepository<GitHubPullReq
             @Param("userId") Long userId,
             Pageable pageable);
 
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("""
+            update GitHubPullRequest pr
+               set pr.authorExternalAccountId = :accountId
+             where pr.authorExternalAccountId is null
+               and pr.authorGithubUserId = :githubUserId
+               and pr.repositoryId in (
+                   select r.id from GitHubRepository r where r.projectId = :projectId
+               )
+            """)
+    int backfillAuthorExternalAccountId(
+            @Param("projectId") Long projectId,
+            @Param("githubUserId") Long githubUserId,
+            @Param("accountId") Long accountId);
+
     @Query("""
             select distinct pr.authorGithubUserId as githubUserId, pr.authorLogin as login
             from GitHubPullRequest pr
@@ -125,5 +140,4 @@ public interface GitHubPullRequestRepository extends JpaRepository<GitHubPullReq
               and pr.authorExternalAccountId is null
             """)
     List<GitHubUnlinkedAuthorProjection> findUnlinkedAuthors(@Param("projectId") Long projectId);
-}
 }

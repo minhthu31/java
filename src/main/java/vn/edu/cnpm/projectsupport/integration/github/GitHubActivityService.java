@@ -67,8 +67,7 @@ public class GitHubActivityService {
         return PageResponse.from(commits.map(this::mapToCommitResponse));
     }
 
-    public PageResponse<PullRequestResponse> listPullRequests(
-            Long projectId, Long repositoryId, String state, String issueKey, Pageable pageable) {
+    public PageResponse<PullRequestResponse> listPullRequests(Long projectId, Long repositoryId, String state, String issueKey, Pageable pageable) {
         validateProjectAndRepository(projectId, repositoryId);
         GitHubPullRequestState parsedState = parseState(state);
         Page<GitHubPullRequest> prs = (issueKey != null && !issueKey.isBlank())
@@ -77,8 +76,7 @@ public class GitHubActivityService {
         return PageResponse.from(prs.map(this::mapToPullRequestResponse));
     }
 
-    public PageResponse<GitHubActivityResponse> listActivities(
-            Long projectId, Long actorUserId, String type, String issueKey, Instant from, Instant to, Pageable pageable) {
+    public PageResponse<GitHubActivityResponse> listActivities(Long projectId, Long actorUserId, String type, String issueKey, Instant from, Instant to, Pageable pageable) {
         validateProject(projectId);
         validateFilters(from, to, type);
 
@@ -128,8 +126,7 @@ public class GitHubActivityService {
 
     public PageResponse<GitHubActivityResponse> listTaskActivities(Long projectId, Long taskId, Pageable pageable) {
         validateProject(projectId);
-        Task task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new NoSuchElementException("Task không tồn tại: " + taskId));
+        Task task = taskRepository.findById(taskId).orElseThrow(() -> new NoSuchElementException("Task không tồn tại: " + taskId));
         if (!projectId.equals(task.getProjectId())) {
             throw new IllegalArgumentException("Task không thuộc project: " + projectId);
         }
