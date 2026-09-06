@@ -63,6 +63,26 @@ const mockCommitPage1 = {
     last: true,
 };
 
+// Mock commit xảy ra vào 23:30 cuối ngày 05/09/2026
+const mockEndOfDayCommit = {
+    content: [
+        {
+            type: "COMMIT",
+            key: "shaEndOfDay99999",
+            summary: "feat(CNPM-99): commit phát sinh cuối ngày",
+            actorUserId: 1,
+            actorLogin: "member98",
+            timestamp: "2026-09-05T23:30:00Z",
+            url: "https://github.com/minhthu31/java-backend/commit/shaEndOfDay99999",
+            issueKeys: ["CNPM-99"],
+            linkedTaskIds: [9999],
+        },
+    ],
+    totalPages: 1,
+    first: true,
+    last: true,
+};
+
 describe("GitHubActivityComponent Acceptance Tests (Task 98 DTO)", () => {
     afterEach(() => {
         jest.clearAllMocks();
@@ -130,21 +150,34 @@ describe("GitHubActivityComponent Acceptance Tests (Task 98 DTO)", () => {
         );
     });
 
-    test("3. Tìm kiếm theo mã Jira issueKey và actorUserId dạng số gọi lại API với query params chuẩn", async () => {
+    test("3. Chỉ gọi API khi bấm nút Lọc, không gọi khi đang gõ phím; param issueKey và actorUserId dạng số", async () => {
         GitHubActivityService.getActivity.mockResolvedValue(mockCommitPage0);
         render(<GitHubActivityComponent projectId={1} />);
 
+        await waitFor(() => {
+            expect(screen.getByText("sha98ab")).toBeInTheDocument();
+        });
+
+        // Lúc khởi tạo gọi API 1 lần
+        expect(GitHubActivityService.getActivity).toHaveBeenCalledTimes(1);
+
+        // Gõ phím vào input nhưng KHÔNG bấm nút Lọc
         const jiraInput = screen.getByLabelText(/Mã Jira:/i);
         fireEvent.change(jiraInput, { target: { value: "CNPM-98" } });
 
         const actorInput = screen.getByLabelText(/User ID:/i);
         fireEvent.change(actorInput, { target: { value: "1" } });
 
+        // Đảm bảo không trigger thêm request nào khi đang nhập
+        expect(GitHubActivityService.getActivity).toHaveBeenCalledTimes(1);
+
+        // Bấm nút Lọc
         const searchButton = screen.getByRole("button", { name: /Lọc/i });
         fireEvent.click(searchButton);
 
         await waitFor(() => {
-            expect(GitHubActivityService.getActivity).toHaveBeenCalledWith(
+            expect(GitHubActivityService.getActivity).toHaveBeenCalledTimes(2);
+            expect(GitHubActivityService.getActivity).toHaveBeenLastCalledWith(
                 1,
                 expect.objectContaining({
                     issueKey: "CNPM-98",
@@ -182,36 +215,43 @@ describe("GitHubActivityComponent Acceptance Tests (Task 98 DTO)", () => {
             expect(screen.getByText("sha9000")).toBeInTheDocument();
         });
     });
-});
-test("5. Lọc theo khoảng thời gian gửi from và to lên API", async () => {
-    GitHubActivityService.getActivity.mockResolvedValue(mockCommitPage0);
 
-    render(<GitHubActivityComponent projectId={1} />);
+    test("5. Lọc theo ngày kết thúc chuyển thành cuối ngày (23:59:59.999) và hiển thị hoạt động cuối ngày", async () => {
+        GitHubActivityService.getActivity
+            .mockResolvedValueOnce(mockCommitPage0)
+            .mockResolvedValueOnce(mockEndOfDayCommit);
 
-    await waitFor(() => {
-        expect(screen.getByText("sha98ab")).toBeInTheDocument();
-    });
+        render(<GitHubActivityComponent projectId={1} />);
 
-    fireEvent.change(screen.getByLabelText(/Từ:/i), {
-        target: { value: "2026-09-01" },
-    });
+        await waitFor(() => {
+            expect(screen.getByText("sha98ab")).toBeInTheDocument();
+        });
 
-    fireEvent.change(screen.getByLabelText(/Đến:/i), {
-        target: { value: "2026-09-05" },
-    });
+        fireEvent.change(screen.getByLabelText(/Từ:/i), {
+            target: { value: "2026-09-01" },
+        });
 
-    fireEvent.click(screen.getByRole("button", { name: /Lọc/i }));
+        fireEvent.change(screen.getByLabelText(/Đến:/i), {
+            target: { value: "2026-09-05" },
+        });
 
-    await waitFor(() => {
-        expect(GitHubActivityService.getActivity).toHaveBeenLastCalledWith(
-            1,
-            expect.objectContaining({
-                type: "COMMIT",
-                from: expect.any(String),
-                to: expect.any(String),
-                page: 0,
-                size: 10,
-            }),
-        );
+        fireEvent.click(screen.getByRole("button", { name: /Lọc/i }));
+
+        await waitFor(() => {
+            expect(GitHubActivityService.getActivity).toHaveBeenLastCalledWith(
+                1,
+                expect.objectContaining({
+                    type: "COMMIT",
+                    from: expect.any(String),
+                    to: expect.stringMatching(/23:59:59\.999Z$/),
+                    page: 0,
+                    size: 10,
+                }),
+            );
+            expect(
+                screen.getByText("feat(CNPM-99): commit phát sinh cuối ngày"),
+            ).toBeInTheDocument();
+            expect(screen.getByText("shaEndO")).toBeInTheDocument();
+        });
     });
 });

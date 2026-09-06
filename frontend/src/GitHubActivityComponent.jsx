@@ -4,10 +4,19 @@ import { GitHubActivityService } from "./GitHubActivityService";
 export function GitHubActivityComponent({ projectId }) {
     const [activities, setActivities] = useState([]);
     const [activeTab, setActiveTab] = useState("COMMIT");
+
     const [issueKeyInput, setIssueKeyInput] = useState("");
     const [actorUserIdInput, setActorUserIdInput] = useState("");
     const [fromInput, setFromInput] = useState("");
     const [toInput, setToInput] = useState("");
+
+    const [appliedFilters, setAppliedFilters] = useState({
+        issueKey: "",
+        actorUserId: "",
+        from: "",
+        to: "",
+    });
+
     const [page, setPage] = useState(0);
     const [totalPages, setTotalPages] = useState(0);
     const [isFirst, setIsFirst] = useState(true);
@@ -27,17 +36,17 @@ export function GitHubActivityComponent({ projectId }) {
                 size: 10,
             };
 
-            if (issueKeyInput.trim()) {
-                params.issueKey = issueKeyInput.trim();
+            if (appliedFilters.issueKey.trim()) {
+                params.issueKey = appliedFilters.issueKey.trim();
             }
-            if (actorUserIdInput.trim()) {
-                params.actorUserId = Number(actorUserIdInput);
+            if (appliedFilters.actorUserId.trim()) {
+                params.actorUserId = Number(appliedFilters.actorUserId);
             }
-            if (fromInput) {
-                params.from = new Date(fromInput).toISOString();
+            if (appliedFilters.from) {
+                params.from = `${appliedFilters.from}T00:00:00.000Z`;
             }
-            if (toInput) {
-                params.to = new Date(toInput).toISOString();
+            if (appliedFilters.to) {
+                params.to = `${appliedFilters.to}T23:59:59.999Z`;
             }
 
             const data = await GitHubActivityService.getActivity(
@@ -57,15 +66,7 @@ export function GitHubActivityComponent({ projectId }) {
         } finally {
             setLoading(false);
         }
-    }, [
-        projectId,
-        activeTab,
-        page,
-        issueKeyInput,
-        actorUserIdInput,
-        fromInput,
-        toInput,
-    ]);
+    }, [projectId, activeTab, page, appliedFilters]);
 
     useEffect(() => {
         fetchActivities();
@@ -78,6 +79,12 @@ export function GitHubActivityComponent({ projectId }) {
 
     const handleSearch = (e) => {
         e.preventDefault();
+        setAppliedFilters({
+            issueKey: issueKeyInput,
+            actorUserId: actorUserIdInput,
+            from: fromInput,
+            to: toInput,
+        });
         setPage(0);
     };
 
@@ -106,7 +113,6 @@ export function GitHubActivityComponent({ projectId }) {
                 </div>
             )}
 
-            {/* Tabs chuyển loại hoạt động */}
             <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
                 <button
                     type="button"
@@ -149,7 +155,6 @@ export function GitHubActivityComponent({ projectId }) {
                 </button>
             </div>
 
-            {/* Bộ lọc Server-side */}
             <form
                 onSubmit={handleSearch}
                 style={{
@@ -287,7 +292,6 @@ export function GitHubActivityComponent({ projectId }) {
                 </button>
             </form>
 
-            {/* Danh sách kết quả */}
             {loading ? (
                 <div
                     style={{
@@ -443,7 +447,6 @@ export function GitHubActivityComponent({ projectId }) {
                 </div>
             )}
 
-            {/* Phân trang Server-side */}
             {totalPages > 1 && (
                 <div
                     style={{
