@@ -1,54 +1,85 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { GitHubActivityService } from "./GitHubActivityService";
 
 export function GitHubActivityComponent({ projectId }) {
     const [activities, setActivities] = useState([]);
     const [activeTab, setActiveTab] = useState("COMMIT");
-    const [selectedActor, setSelectedActor] = useState("ALL");
+    const [issueKeyInput, setIssueKeyInput] = useState("");
+    const [actorUserIdInput, setActorUserIdInput] = useState("");
+    const [fromInput, setFromInput] = useState("");
+    const [toInput, setToInput] = useState("");
+    const [page, setPage] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
+    const [isFirst, setIsFirst] = useState(true);
+    const [isLast, setIsLast] = useState(true);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        let isMounted = true;
-        const loadActivities = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-                const data = await GitHubActivityService.getActivity(projectId);
-                if (isMounted) {
-                    setActivities(data?.content || []);
-                }
-            } catch (err) {
-                if (isMounted) {
-                    setError(
-                        "Không thể tải dữ liệu hoạt động GitHub từ hệ thống.",
-                    );
-                }
-            } finally {
-                if (isMounted) {
-                    setLoading(false);
-                }
+    const fetchActivities = useCallback(async () => {
+        if (!projectId) return;
+        try {
+            setLoading(true);
+            setError(null);
+
+            const params = {
+                type: activeTab,
+                page,
+                size: 10,
+            };
+
+            if (issueKeyInput.trim()) {
+                params.issueKey = issueKeyInput.trim();
             }
-        };
+            if (actorUserIdInput.trim()) {
+                params.actorUserId = Number(actorUserIdInput);
+            }
+            if (fromInput) {
+                params.from = new Date(fromInput).toISOString();
+            }
+            if (toInput) {
+                params.to = new Date(toInput).toISOString();
+            }
 
-        if (projectId) {
-            loadActivities();
+            const data = await GitHubActivityService.getActivity(
+                projectId,
+                params,
+            );
+            setActivities(data?.content || []);
+            setTotalPages(data?.totalPages || 0);
+            setIsFirst(data?.first !== undefined ? data.first : page === 0);
+            setIsLast(
+                data?.last !== undefined
+                    ? data.last
+                    : page >= (data?.totalPages || 1) - 1,
+            );
+        } catch (err) {
+            setError("Không thể tải dữ liệu hoạt động GitHub từ hệ thống.");
+        } finally {
+            setLoading(false);
         }
-        return () => {
-            isMounted = false;
-        };
-    }, [projectId]);
+    }, [
+        projectId,
+        activeTab,
+        page,
+        issueKeyInput,
+        actorUserIdInput,
+        fromInput,
+        toInput,
+    ]);
 
-    const authors = [
-        ...new Set(activities.map((act) => act.actorLogin).filter(Boolean)),
-    ];
+    useEffect(() => {
+        fetchActivities();
+    }, [fetchActivities]);
 
-    const filteredActivities = activities.filter((act) => {
-        const matchType = act.type === activeTab;
-        const matchActor =
-            selectedActor === "ALL" || act.actorLogin === selectedActor;
-        return matchType && matchActor;
-    });
+    const handleTabChange = (type) => {
+        setActiveTab(type);
+        setPage(0);
+    };
+
+    const handleSearch = (e) => {
+        e.preventDefault();
+        setPage(0);
+    };
 
     return (
         <div style={{ padding: "24px" }}>
@@ -75,104 +106,188 @@ export function GitHubActivityComponent({ projectId }) {
                 </div>
             )}
 
-            <div
-                style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    gap: "16px",
-                    marginBottom: "20px",
-                    paddingBottom: "16px",
-                    borderBottom: "1px solid #ebecf0",
-                }}
-            >
-                <div style={{ display: "flex", gap: "8px" }}>
-                    <button
-                        type="button"
-                        onClick={() => setActiveTab("COMMIT")}
-                        style={{
-                            padding: "8px 16px",
-                            borderRadius: "5px",
-                            fontSize: "14px",
-                            fontWeight: 600,
-                            cursor: "pointer",
-                            border: "none",
-                            backgroundColor:
-                                activeTab === "COMMIT" ? "#0052cc" : "#ebecf0",
-                            color:
-                                activeTab === "COMMIT" ? "#ffffff" : "#42526e",
-                        }}
-                    >
-                        Commits
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setActiveTab("PULL_REQUEST")}
-                        style={{
-                            padding: "8px 16px",
-                            borderRadius: "5px",
-                            fontSize: "14px",
-                            fontWeight: 600,
-                            cursor: "pointer",
-                            border: "none",
-                            backgroundColor:
-                                activeTab === "PULL_REQUEST"
-                                    ? "#0052cc"
-                                    : "#ebecf0",
-                            color:
-                                activeTab === "PULL_REQUEST"
-                                    ? "#ffffff"
-                                    : "#42526e",
-                        }}
-                    >
-                        Pull Requests
-                    </button>
-                </div>
-
-                <div
+            {/* Tabs chuyển loại hoạt động */}
+            <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+                <button
+                    type="button"
+                    onClick={() => handleTabChange("COMMIT")}
                     style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
+                        padding: "8px 16px",
+                        borderRadius: "5px",
+                        fontSize: "14px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        border: "none",
+                        backgroundColor:
+                            activeTab === "COMMIT" ? "#0052cc" : "#ebecf0",
+                        color: activeTab === "COMMIT" ? "#ffffff" : "#42526e",
                     }}
                 >
+                    Commits
+                </button>
+                <button
+                    type="button"
+                    onClick={() => handleTabChange("PULL_REQUEST")}
+                    style={{
+                        padding: "8px 16px",
+                        borderRadius: "5px",
+                        fontSize: "14px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        border: "none",
+                        backgroundColor:
+                            activeTab === "PULL_REQUEST"
+                                ? "#0052cc"
+                                : "#ebecf0",
+                        color:
+                            activeTab === "PULL_REQUEST"
+                                ? "#ffffff"
+                                : "#42526e",
+                    }}
+                >
+                    Pull Requests
+                </button>
+            </div>
+
+            {/* Bộ lọc Server-side */}
+            <form
+                onSubmit={handleSearch}
+                style={{
+                    display: "flex",
+                    gap: "12px",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    marginBottom: "20px",
+                    padding: "12px",
+                    backgroundColor: "#f4f5f7",
+                    borderRadius: "6px",
+                }}
+            >
+                <div>
                     <label
-                        htmlFor="author-filter"
+                        htmlFor="filter-issue-key"
                         style={{
                             fontSize: "13px",
                             fontWeight: 600,
                             color: "#5e6c84",
+                            marginRight: "6px",
                         }}
                     >
-                        Filter by Author:
+                        Mã Jira:
                     </label>
-                    <select
-                        id="author-filter"
-                        aria-label="Filter by Author"
-                        value={selectedActor}
-                        onChange={(e) => setSelectedActor(e.target.value)}
+                    <input
+                        id="filter-issue-key"
+                        type="text"
+                        placeholder="VD: CNPM-98"
+                        value={issueKeyInput}
+                        onChange={(e) => setIssueKeyInput(e.target.value)}
                         style={{
-                            padding: "6px 12px",
+                            padding: "6px 10px",
                             borderRadius: "4px",
                             border: "1px solid #dfe1e6",
-                            backgroundColor: "#fafbfc",
                             fontSize: "13px",
-                            color: "#172b4d",
-                            outline: "none",
-                            cursor: "pointer",
+                        }}
+                    />
+                </div>
+
+                <div>
+                    <label
+                        htmlFor="filter-actor-id"
+                        style={{
+                            fontSize: "13px",
+                            fontWeight: 600,
+                            color: "#5e6c84",
+                            marginRight: "6px",
                         }}
                     >
-                        <option value="ALL">Tất cả</option>
-                        {authors.map((actor) => (
-                            <option key={actor} value={actor}>
-                                {actor}
-                            </option>
-                        ))}
-                    </select>
+                        User ID:
+                    </label>
+                    <input
+                        id="filter-actor-id"
+                        type="number"
+                        placeholder="VD: 1"
+                        value={actorUserIdInput}
+                        onChange={(e) => setActorUserIdInput(e.target.value)}
+                        style={{
+                            width: "80px",
+                            padding: "6px 10px",
+                            borderRadius: "4px",
+                            border: "1px solid #dfe1e6",
+                            fontSize: "13px",
+                        }}
+                    />
                 </div>
-            </div>
 
+                <div>
+                    <label
+                        htmlFor="filter-from"
+                        style={{
+                            fontSize: "13px",
+                            fontWeight: 600,
+                            color: "#5e6c84",
+                            marginRight: "6px",
+                        }}
+                    >
+                        Từ:
+                    </label>
+                    <input
+                        id="filter-from"
+                        type="date"
+                        value={fromInput}
+                        onChange={(e) => setFromInput(e.target.value)}
+                        style={{
+                            padding: "5px 8px",
+                            borderRadius: "4px",
+                            border: "1px solid #dfe1e6",
+                            fontSize: "13px",
+                        }}
+                    />
+                </div>
+
+                <div>
+                    <label
+                        htmlFor="filter-to"
+                        style={{
+                            fontSize: "13px",
+                            fontWeight: 600,
+                            color: "#5e6c84",
+                            marginRight: "6px",
+                        }}
+                    >
+                        Đến:
+                    </label>
+                    <input
+                        id="filter-to"
+                        type="date"
+                        value={toInput}
+                        onChange={(e) => setToInput(e.target.value)}
+                        style={{
+                            padding: "5px 8px",
+                            borderRadius: "4px",
+                            border: "1px solid #dfe1e6",
+                            fontSize: "13px",
+                        }}
+                    />
+                </div>
+
+                <button
+                    type="submit"
+                    style={{
+                        padding: "6px 16px",
+                        backgroundColor: "#0052cc",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "4px",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                        fontSize: "13px",
+                    }}
+                >
+                    Lọc
+                </button>
+            </form>
+
+            {/* Danh sách kết quả */}
             {loading ? (
                 <div
                     style={{
@@ -184,7 +299,7 @@ export function GitHubActivityComponent({ projectId }) {
                 >
                     Đang tải dữ liệu hoạt động...
                 </div>
-            ) : filteredActivities.length === 0 ? (
+            ) : activities.length === 0 ? (
                 <div
                     data-testid={
                         activeTab === "COMMIT" ? "empty-commits" : "empty-prs"
@@ -211,19 +326,18 @@ export function GitHubActivityComponent({ projectId }) {
                         gap: "10px",
                     }}
                 >
-                    {filteredActivities.map((act) => {
-                        const shortId =
-                            act.type === "COMMIT" && act.externalId
-                                ? act.externalId.substring(0, 7)
-                                : "";
-
+                    {activities.map((act) => {
+                        const shortKey =
+                            act.type === "COMMIT" && act.key
+                                ? act.key.substring(0, 7)
+                                : act.key;
                         const jiraTasks = Array.isArray(act.issueKeys)
                             ? act.issueKeys.join(", ")
                             : act.issueKeys || "";
 
                         return (
                             <div
-                                key={act.externalId}
+                                key={act.key || act.url}
                                 style={{
                                     padding: "14px 18px",
                                     borderRadius: "6px",
@@ -251,9 +365,9 @@ export function GitHubActivityComponent({ projectId }) {
                                             flexWrap: "wrap",
                                         }}
                                     >
-                                        {shortId && (
+                                        {shortKey && (
                                             <a
-                                                href={act.htmlUrl}
+                                                href={act.url}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
                                                 style={{
@@ -267,12 +381,14 @@ export function GitHubActivityComponent({ projectId }) {
                                                     textDecoration: "none",
                                                 }}
                                             >
-                                                {shortId}
+                                                {act.type === "PULL_REQUEST"
+                                                    ? `#${shortKey}`
+                                                    : shortKey}
                                             </a>
                                         )}
 
                                         <a
-                                            href={act.htmlUrl}
+                                            href={act.url}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             style={{
@@ -282,7 +398,7 @@ export function GitHubActivityComponent({ projectId }) {
                                                 textDecoration: "none",
                                             }}
                                         >
-                                            {act.title}
+                                            {act.summary}
                                         </a>
 
                                         {jiraTasks && (
@@ -311,11 +427,11 @@ export function GitHubActivityComponent({ projectId }) {
                                             Tác giả:{" "}
                                             <strong>{act.actorLogin}</strong>
                                         </span>
-                                        {act.occurredAt && (
+                                        {act.timestamp && (
                                             <span style={{ marginLeft: "8px" }}>
                                                 ·{" "}
                                                 {new Date(
-                                                    act.occurredAt,
+                                                    act.timestamp,
                                                 ).toLocaleString()}
                                             </span>
                                         )}
@@ -324,6 +440,54 @@ export function GitHubActivityComponent({ projectId }) {
                             </div>
                         );
                     })}
+                </div>
+            )}
+
+            {/* Phân trang Server-side */}
+            {totalPages > 1 && (
+                <div
+                    style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginTop: "20px",
+                        paddingTop: "16px",
+                        borderTop: "1px solid #ebecf0",
+                    }}
+                >
+                    <button
+                        type="button"
+                        disabled={isFirst}
+                        onClick={() => setPage((prev) => Math.max(0, prev - 1))}
+                        style={{
+                            padding: "6px 14px",
+                            borderRadius: "4px",
+                            border: "1px solid #dfe1e6",
+                            backgroundColor: isFirst ? "#f4f5f7" : "#fff",
+                            color: isFirst ? "#a5b2c6" : "#172b4d",
+                            cursor: isFirst ? "not-allowed" : "pointer",
+                        }}
+                    >
+                        Trang trước
+                    </button>
+                    <span style={{ fontSize: "13px", color: "#6b778c" }}>
+                        Trang {page + 1} / {totalPages}
+                    </span>
+                    <button
+                        type="button"
+                        disabled={isLast}
+                        onClick={() => setPage((prev) => prev + 1)}
+                        style={{
+                            padding: "6px 14px",
+                            borderRadius: "4px",
+                            border: "1px solid #dfe1e6",
+                            backgroundColor: isLast ? "#f4f5f7" : "#fff",
+                            color: isLast ? "#a5b2c6" : "#172b4d",
+                            cursor: isLast ? "not-allowed" : "pointer",
+                        }}
+                    >
+                        Trang sau
+                    </button>
                 </div>
             )}
         </div>
