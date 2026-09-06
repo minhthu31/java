@@ -1,6 +1,7 @@
 package vn.edu.cnpm.projectsupport.integration.github;
 
 import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -119,30 +120,22 @@ class GitHubActivityIntegrationTests {
         savedCommit98 = commitRepository.saveAndFlush(savedCommit98);
 
         savedCommit9 = new GitHubCommit(savedRepo.getId(), "sha9", "feat(CNPM-9): test commit nine",
-                Instant.parse("2026-09-02T11:00:00Z"), "https://github.com/minhthu31/java-backend/commit/sha9");
+                Instant.parse("2026-09-02T12:00:00Z"), "https://github.com/minhthu31/java-backend/commit/sha9");
         savedCommit9.setAuthorExternalAccountId(account.getId());
         savedCommit9 = commitRepository.saveAndFlush(savedCommit9);
 
         savedPr98 = new GitHubPullRequest(
                 savedRepo.getId(),
-                5001L,
                 10,
                 "feat(CNPM-98): test PR activity",
-                "Body referencing CNPM-98",
                 "feature/CNPM-98-test",
-                "headsha",
                 "main",
-                GitHubPullRequestState.OPEN,
-                false,
-                null,
-                null,
-                1,
-                5,
-                2,
-                1,
-                null,
+                "OPEN",
                 "https://github.com/minhthu31/java-backend/pull/10");
         savedPr98.setAuthorExternalAccountId(account.getId());
+        savedPr98 = pullRequestRepository.saveAndFlush(savedPr98);
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                savedPr98, "createdAt", Instant.parse("2026-09-02T11:00:00Z"));
         savedPr98 = pullRequestRepository.saveAndFlush(savedPr98);
 
         commitLinkRepository.saveAndFlush(new TaskCommitLink(new TaskCommitLinkId(TASK_98_ID, savedCommit98.getId()), "AUTO"));
@@ -180,17 +173,30 @@ class GitHubActivityIntegrationTests {
     }
 
     @Test
-    @DisplayName("3. /activities không truyền type phải hợp nhất cả Commit và PR")
-    void listActivities_withoutType_shouldReturnMergedCommitsAndPrs() throws Exception {
+    @DisplayName("3. Phân trang xen kẽ Commit/PR qua 2 trang, không thiếu và không trùng")
+    void listActivities_interleavedCommitAndPr_paginationShouldNotDuplicateOrMiss() throws Exception {
         when(projectAuthorization.canViewTasks(PROJECT_ID)).thenReturn(true);
 
         mockMvc.perform(get(BASE_URL + "/activities", PROJECT_ID)
-                        .with(user("member").roles("TEAM_MEMBER")))
+                        .with(user("member").roles("TEAM_MEMBER"))
+                        .param("page", "0")
+                        .param("size", "2"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content").isArray())
-                .andExpect(jsonPath("$.data.content[*].type", hasItem("COMMIT")))
-                .andExpect(jsonPath("$.data.content[*].type", hasItem("PULL_REQUEST")))
-                .andExpect(jsonPath("$.data.totalElements").value(3));
+                .andExpect(jsonPath("$.data.totalElements").value(3))
+                .andExpect(jsonPath("$.data.content.length()").value(2))
+                .andExpect(jsonPath("$.data.content[0].key").value("sha9"))
+                .andExpect(jsonPath("$.data.content[1].key").value("10"));
+
+        mockMvc.perform(get(BASE_URL + "/activities", PROJECT_ID)
+                        .with(user("member").roles("TEAM_MEMBER"))
+                        .param("page", "1")
+                        .param("size", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(3))
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].key").value("sha98"))
+                .andExpect(jsonPath("$.data.content[*].key", not(hasItem("sha9"))))
+                .andExpect(jsonPath("$.data.content[*].key", not(hasItem("10"))));
     }
 
     @Test
@@ -256,5 +262,15 @@ class GitHubActivityIntegrationTests {
         mockMvc.perform(get(BASE_URL + "/activities", PROJECT_ID)
                         .with(user("outsider").roles("TEAM_MEMBER")))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("9. Admin không thuộc project vẫn gọi API thành công")
+    void adminUser_shouldAccessEvenIfNotProjectMember() throws Exception {
+        when(projectAuthorization.canViewTasks(PROJECT_ID)).thenReturn(false);
+
+        mockMvc.perform(get(BASE_URL + "/activities", PROJECT_ID)
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk());
     }
 }

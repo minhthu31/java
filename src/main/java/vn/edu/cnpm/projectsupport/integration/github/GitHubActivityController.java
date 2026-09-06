@@ -25,7 +25,7 @@ public class GitHubActivityController {
     }
 
     @GetMapping("/repositories/{repositoryId}/commits")
-    @PreAuthorize("@projectAuthorization.canViewTasks(#projectId)")
+    @PreAuthorize("hasRole('ADMIN') or @projectAuthorization.canViewTasks(#projectId)")
     public ResponseEntity<Map<String, Object>> listCommits(
             @PathVariable Long projectId,
             @PathVariable Long repositoryId,
@@ -38,7 +38,7 @@ public class GitHubActivityController {
     }
 
     @GetMapping("/repositories/{repositoryId}/pull-requests")
-    @PreAuthorize("@projectAuthorization.canViewTasks(#projectId)")
+    @PreAuthorize("hasRole('ADMIN') or @projectAuthorization.canViewTasks(#projectId)")
     public ResponseEntity<Map<String, Object>> listPullRequests(
             @PathVariable Long projectId,
             @PathVariable Long repositoryId,
@@ -52,7 +52,7 @@ public class GitHubActivityController {
     }
 
     @GetMapping("/activities")
-    @PreAuthorize("@projectAuthorization.canViewTasks(#projectId)")
+    @PreAuthorize("hasRole('ADMIN') or @projectAuthorization.canViewTasks(#projectId)")
     public ResponseEntity<Map<String, Object>> listActivities(
             @PathVariable Long projectId,
             @RequestParam(required = false) Long actorUserId,
@@ -68,7 +68,7 @@ public class GitHubActivityController {
     }
 
     @GetMapping("/tasks/{taskId}/activities")
-    @PreAuthorize("@projectAuthorization.canViewTask(#projectId, #taskId)")
+    @PreAuthorize("hasRole('ADMIN') or @projectAuthorization.canViewTask(#projectId, #taskId)")
     public ResponseEntity<Map<String, Object>> listTaskActivities(
             @PathVariable Long projectId,
             @PathVariable Long taskId,

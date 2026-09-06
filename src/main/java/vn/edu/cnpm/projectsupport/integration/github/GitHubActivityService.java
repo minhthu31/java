@@ -2,10 +2,12 @@ package vn.edu.cnpm.projectsupport.integration.github;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.NoSuchElementException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -97,14 +99,17 @@ public class GitHubActivityService {
             return PageResponse.from(prs.map(this::mapPrToActivity));
         }
 
-        // Khi type == null: Hợp nhất cả Commit và PR
+        int offset = (int) pageable.getOffset();
+        int fetchSize = offset + pageable.getPageSize();
+        Pageable mergeQueryPageable = PageRequest.of(0, fetchSize);
+
         Page<GitHubCommit> commitPage = (trimmedKey != null)
-                ? commitRepository.findUnifiedActivityWithIssueKey(projectId, actorUserId, trimmedKey, from, to, pageable)
-                : commitRepository.findUnifiedActivityWithoutIssueKey(projectId, actorUserId, from, to, pageable);
+                ? commitRepository.findUnifiedActivityWithIssueKey(projectId, actorUserId, trimmedKey, from, to, mergeQueryPageable)
+                : commitRepository.findUnifiedActivityWithoutIssueKey(projectId, actorUserId, from, to, mergeQueryPageable);
 
         Page<GitHubPullRequest> prPage = (trimmedKey != null)
-                ? pullRequestRepository.findUnifiedActivityWithIssueKey(projectId, actorUserId, null, trimmedKey, from, to, pageable)
-                : pullRequestRepository.findUnifiedActivityWithoutIssueKey(projectId, actorUserId, null, from, to, pageable);
+                ? pullRequestRepository.findUnifiedActivityWithIssueKey(projectId, actorUserId, null, trimmedKey, from, to, mergeQueryPageable)
+                : pullRequestRepository.findUnifiedActivityWithoutIssueKey(projectId, actorUserId, null, from, to, mergeQueryPageable);
 
         List<GitHubActivityResponse> list = new ArrayList<>();
         list.addAll(commitPage.getContent().stream().map(this::mapCommitToActivity).toList());
@@ -115,9 +120,10 @@ public class GitHubActivityService {
             return t2.compareTo(t1);
         });
 
-        int limit = Math.min(list.size(), pageable.getPageSize());
         long total = commitPage.getTotalElements() + prPage.getTotalElements();
-        return PageResponse.from(new PageImpl<>(list.subList(0, limit), pageable, total));
+        List<GitHubActivityResponse> pagedContent = sliceList(list, offset, pageable.getPageSize());
+
+        return PageResponse.from(new PageImpl<>(pagedContent, pageable, total));
     }
 
     public PageResponse<GitHubActivityResponse> listTaskActivities(Long projectId, Long taskId, Pageable pageable) {
@@ -128,8 +134,12 @@ public class GitHubActivityService {
             throw new IllegalArgumentException("Task không thuộc project: " + projectId);
         }
 
-        Page<GitHubCommit> commits = commitRepository.findByTaskIdPaged(taskId, pageable);
-        Page<GitHubPullRequest> prs = pullRequestRepository.findByTaskIdPaged(taskId, pageable);
+        int offset = (int) pageable.getOffset();
+        int fetchSize = offset + pageable.getPageSize();
+        Pageable mergeQueryPageable = PageRequest.of(0, fetchSize);
+
+        Page<GitHubCommit> commits = commitRepository.findByTaskIdPaged(taskId, mergeQueryPageable);
+        Page<GitHubPullRequest> prs = pullRequestRepository.findByTaskIdPaged(taskId, mergeQueryPageable);
 
         List<GitHubActivityResponse> list = new ArrayList<>();
         list.addAll(commits.getContent().stream().map(this::mapCommitToActivity).toList());
@@ -140,9 +150,18 @@ public class GitHubActivityService {
             return t2.compareTo(t1);
         });
 
-        int limit = Math.min(list.size(), pageable.getPageSize());
         long total = commits.getTotalElements() + prs.getTotalElements();
-        return PageResponse.from(new PageImpl<>(list.subList(0, limit), pageable, total));
+        List<GitHubActivityResponse> pagedContent = sliceList(list, offset, pageable.getPageSize());
+
+        return PageResponse.from(new PageImpl<>(pagedContent, pageable, total));
+    }
+
+    private List<GitHubActivityResponse> sliceList(List<GitHubActivityResponse> list, int offset, int size) {
+        if (offset >= list.size()) {
+            return Collections.emptyList();
+        }
+        int toIndex = Math.min(offset + size, list.size());
+        return list.subList(offset, toIndex);
     }
 
     private void validateFilters(Instant from, Instant to, String type) {
