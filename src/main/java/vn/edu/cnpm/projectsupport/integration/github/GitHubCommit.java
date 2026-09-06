@@ -18,7 +18,8 @@ public record GitHubCommit(
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record CommitMetadata(
             String message,
-            GitAuthor author) {
+            GitAuthor author,
+            GitAuthor committer) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

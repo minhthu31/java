@@ -116,6 +116,35 @@ class GitHubRestClientTest {
     }
 
     @Test
+    void getsCompleteCommitDetailsBySha() throws Exception {
+        String sha = "0123456789abcdef0123456789abcdef01234567";
+
+        when(transport.get(
+                eq("https://api.github.com/repos/octocat/Hello-World/commits/" + sha),
+                any(),
+                any()))
+                .thenReturn(new GitHubHttpResponse(200, """
+                        {"sha":"0123456789abcdef0123456789abcdef01234567",
+                        "html_url":"https://github.com/octocat/Hello-World/commit/0123456789abcdef0123456789abcdef01234567",
+                        "commit":{"message":"complete",
+                                  "author":{"name":"Alice","email":"alice@example.com","date":"2026-09-02T10:00:00Z"},
+                                  "committer":{"name":"CI","email":"ci@example.com","date":"2026-09-02T10:05:00Z"}},
+                        "stats":{"additions":10,"deletions":4,"total":14},
+                        "files":[{"filename":"A.java"},{"filename":"B.java"}],
+                        "parents":[{"sha":"parent1"}]}
+                       """, Map.of()));
+
+    GitHubCommit commit = client.getCommit(config, sha);
+
+    assertThat(commit.sha()).isEqualTo(sha);
+    assertThat(commit.additions()).isEqualTo(10);
+    assertThat(commit.deletions()).isEqualTo(4);
+    assertThat(commit.filesChanged()).isEqualTo(2);
+    assertThat(commit.commit().committer().name()).isEqualTo("CI");
+    assertThat(commit.commit().committer().date())
+            .isEqualTo(Instant.parse("2026-09-02T10:05:00Z"));
+}
+    @Test
     void followsLinkHeaderPaginationForCommits() throws Exception {
         when(transport.get(eq("https://api.github.com/repos/octocat/Hello-World/commits?per_page=100&page=1"), any(), any()))
                 .thenReturn(new GitHubHttpResponse(200, """

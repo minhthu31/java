@@ -46,6 +46,16 @@ public class GitHubRestClient {
         return get(config, BASE_URL + path, GitHubUser.class);
     }
 
+    /** Fetches the complete commit payload for a SHA, including stats and files. */
+    public GitHubCommit getCommit(GitHubClientConfig config, String sha) {
+        if (sha == null || sha.isBlank() || !sha.trim().matches("[0-9a-fA-F]{7,64}")) {
+            throw new IllegalArgumentException("GitHub commit SHA is invalid");
+        }
+        String path = "/repos/" + pathSegment(config.owner()) + "/"
+                + pathSegment(config.repository()) + "/commits/" + pathSegment(sha.trim());
+        return get(config, BASE_URL + path, GitHubCommit.class);
+    }
+
     public GitHubPage<GitHubCommit> getCommitsPage(GitHubClientConfig config, int page) {
         validatePage(page);
         String url = BASE_URL + "/repos/" + pathSegment(config.owner()) + "/"
