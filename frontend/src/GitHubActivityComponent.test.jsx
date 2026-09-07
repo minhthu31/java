@@ -63,7 +63,6 @@ const mockCommitPage1 = {
     last: true,
 };
 
-// Mock commit xảy ra vào 23:30 cuối ngày 05/09/2026
 const mockEndOfDayCommit = {
     content: [
         {
@@ -158,20 +157,16 @@ describe("GitHubActivityComponent Acceptance Tests (Task 98 DTO)", () => {
             expect(screen.getByText("sha98ab")).toBeInTheDocument();
         });
 
-        // Lúc khởi tạo gọi API 1 lần
         expect(GitHubActivityService.getActivity).toHaveBeenCalledTimes(1);
 
-        // Gõ phím vào input nhưng KHÔNG bấm nút Lọc
         const jiraInput = screen.getByLabelText(/Mã Jira:/i);
         fireEvent.change(jiraInput, { target: { value: "CNPM-98" } });
 
         const actorInput = screen.getByLabelText(/User ID:/i);
         fireEvent.change(actorInput, { target: { value: "1" } });
 
-        // Đảm bảo không trigger thêm request nào khi đang nhập
         expect(GitHubActivityService.getActivity).toHaveBeenCalledTimes(1);
 
-        // Bấm nút Lọc
         const searchButton = screen.getByRole("button", { name: /Lọc/i });
         fireEvent.click(searchButton);
 
@@ -253,5 +248,44 @@ describe("GitHubActivityComponent Acceptance Tests (Task 98 DTO)", () => {
             ).toBeInTheDocument();
             expect(screen.getByText("shaEndO")).toBeInTheDocument();
         });
+    });
+
+    test("6. Đổi projectId khi đang ở trang sau: Reset page về 0 cho project mới và xóa dữ liệu cũ khi request thất bại", async () => {
+        GitHubActivityService.getActivity
+            .mockResolvedValueOnce(mockCommitPage0)
+            .mockResolvedValueOnce(mockCommitPage1)
+            .mockRejectedValueOnce(new Error("Network error"));
+
+        const { rerender } = render(<GitHubActivityComponent projectId={1} />);
+
+        await waitFor(() => {
+            expect(screen.getByText("sha98ab")).toBeInTheDocument();
+        });
+
+        const nextButton = screen.getByRole("button", { name: /Trang sau/i });
+        fireEvent.click(nextButton);
+
+        await waitFor(() => {
+            expect(
+                screen.getByText("feat(CNPM-9): test commit nine"),
+            ).toBeInTheDocument();
+        });
+
+        rerender(<GitHubActivityComponent projectId={2} />);
+
+        await waitFor(() => {
+            expect(GitHubActivityService.getActivity).toHaveBeenLastCalledWith(
+                2,
+                expect.objectContaining({ page: 0 }),
+            );
+        });
+
+        await waitFor(() => {
+            expect(screen.getByTestId("error-banner")).toBeInTheDocument();
+        });
+        expect(
+            screen.queryByText("feat(CNPM-9): test commit nine"),
+        ).not.toBeInTheDocument();
+        expect(screen.queryByText("sha9000")).not.toBeInTheDocument();
     });
 });

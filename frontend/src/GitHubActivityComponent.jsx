@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { GitHubActivityService } from "./GitHubActivityService";
 
 export function GitHubActivityComponent({ projectId }) {
@@ -23,6 +23,14 @@ export function GitHubActivityComponent({ projectId }) {
     const [isLast, setIsLast] = useState(true);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(true);
+
+    const prevProjectIdRef = useRef(projectId);
+    useEffect(() => {
+        if (prevProjectIdRef.current !== projectId) {
+            prevProjectIdRef.current = projectId;
+            setPage(0);
+        }
+    }, [projectId]);
 
     const fetchActivities = useCallback(async () => {
         if (!projectId) return;
@@ -62,6 +70,11 @@ export function GitHubActivityComponent({ projectId }) {
                     : page >= (data?.totalPages || 1) - 1,
             );
         } catch (err) {
+            // Khi request thất bại: xóa danh sách hoạt động và trạng thái phân trang cũ
+            setActivities([]);
+            setTotalPages(0);
+            setIsFirst(true);
+            setIsLast(true);
             setError("Không thể tải dữ liệu hoạt động GitHub từ hệ thống.");
         } finally {
             setLoading(false);
