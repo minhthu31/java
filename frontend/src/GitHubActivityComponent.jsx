@@ -1,9 +1,14 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { GitHubActivityService } from "./GitHubActivityService";
 
 export function GitHubActivityComponent({ projectId }) {
     const [activities, setActivities] = useState([]);
     const [activeTab, setActiveTab] = useState("COMMIT");
+
+    const [pagination, setPagination] = useState({
+        projectId,
+        page: 0,
+    });
 
     const [issueKeyInput, setIssueKeyInput] = useState("");
     const [actorUserIdInput, setActorUserIdInput] = useState("");
@@ -17,77 +22,90 @@ export function GitHubActivityComponent({ projectId }) {
         to: "",
     });
 
-    const [page, setPage] = useState(0);
     const [totalPages, setTotalPages] = useState(0);
     const [isFirst, setIsFirst] = useState(true);
     const [isLast, setIsLast] = useState(true);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    const prevProjectIdRef = useRef(projectId);
-    useEffect(() => {
-        if (prevProjectIdRef.current !== projectId) {
-            prevProjectIdRef.current = projectId;
-            setPage(0);
-        }
-    }, [projectId]);
+    const activePage = pagination.projectId === projectId ? pagination.page : 0;
+    if (pagination.projectId !== projectId) {
+        setPagination({
+            projectId,
+            page: 0,
+        });
+    }
 
-    const fetchActivities = useCallback(async () => {
+    useEffect(() => {
         if (!projectId) return;
-        try {
-            setLoading(true);
-            setError(null);
 
-            const params = {
-                type: activeTab,
-                page,
-                size: 10,
-            };
+        let isCurrent = true;
 
-            if (appliedFilters.issueKey.trim()) {
-                params.issueKey = appliedFilters.issueKey.trim();
-            }
-            if (appliedFilters.actorUserId.trim()) {
-                params.actorUserId = Number(appliedFilters.actorUserId);
-            }
-            if (appliedFilters.from) {
-                params.from = `${appliedFilters.from}T00:00:00.000Z`;
-            }
-            if (appliedFilters.to) {
-                params.to = `${appliedFilters.to}T23:59:59.999Z`;
-            }
+        const loadData = async () => {
+            try {
+                setLoading(true);
+                setError(null);
 
-            const data = await GitHubActivityService.getActivity(
-                projectId,
-                params,
-            );
-            setActivities(data?.content || []);
-            setTotalPages(data?.totalPages || 0);
-            setIsFirst(data?.first !== undefined ? data.first : page === 0);
-            setIsLast(
-                data?.last !== undefined
-                    ? data.last
-                    : page >= (data?.totalPages || 1) - 1,
-            );
-        } catch (err) {
-            // Khi request thất bại: xóa danh sách hoạt động và trạng thái phân trang cũ
-            setActivities([]);
-            setTotalPages(0);
-            setIsFirst(true);
-            setIsLast(true);
-            setError("Không thể tải dữ liệu hoạt động GitHub từ hệ thống.");
-        } finally {
-            setLoading(false);
-        }
-    }, [projectId, activeTab, page, appliedFilters]);
+                const params = {
+                    type: activeTab,
+                    page: activePage,
+                    size: 10,
+                };
 
-    useEffect(() => {
-        fetchActivities();
-    }, [fetchActivities]);
+                if (appliedFilters.issueKey.trim()) {
+                    params.issueKey = appliedFilters.issueKey.trim();
+                }
+                if (appliedFilters.actorUserId.trim()) {
+                    params.actorUserId = Number(appliedFilters.actorUserId);
+                }
+                if (appliedFilters.from) {
+                    params.from = `${appliedFilters.from}T00:00:00.000Z`;
+                }
+                if (appliedFilters.to) {
+                    params.to = `${appliedFilters.to}T23:59:59.999Z`;
+                }
+
+                const data = await GitHubActivityService.getActivity(
+                    projectId,
+                    params,
+                );
+
+                if (!isCurrent) return;
+
+                setActivities(data?.content || []);
+                setTotalPages(data?.totalPages || 0);
+                setIsFirst(
+                    data?.first !== undefined ? data.first : activePage === 0,
+                );
+                setIsLast(
+                    data?.last !== undefined
+                        ? data.last
+                        : activePage >= (data?.totalPages || 1) - 1,
+                );
+            } catch (err) {
+                if (!isCurrent) return;
+                setActivities([]);
+                setTotalPages(0);
+                setIsFirst(true);
+                setIsLast(true);
+                setError("Không thể tải dữ liệu hoạt động GitHub từ hệ thống.");
+            } finally {
+                if (isCurrent) {
+                    setLoading(false);
+                }
+            }
+        };
+
+        loadData();
+
+        return () => {
+            isCurrent = false;
+        };
+    }, [projectId, activePage, activeTab, appliedFilters]);
 
     const handleTabChange = (type) => {
         setActiveTab(type);
-        setPage(0);
+        setPagination((prev) => ({ ...prev, page: 0 }));
     };
 
     const handleSearch = (e) => {
@@ -98,7 +116,7 @@ export function GitHubActivityComponent({ projectId }) {
             from: fromInput,
             to: toInput,
         });
-        setPage(0);
+        setPagination((prev) => ({ ...prev, page: 0 }));
     };
 
     return (
@@ -474,7 +492,12 @@ export function GitHubActivityComponent({ projectId }) {
                     <button
                         type="button"
                         disabled={isFirst}
-                        onClick={() => setPage((prev) => Math.max(0, prev - 1))}
+                        onClick={() =>
+                            setPagination((prev) => ({
+                                ...prev,
+                                page: Math.max(0, prev.page - 1),
+                            }))
+                        }
                         style={{
                             padding: "6px 14px",
                             borderRadius: "4px",
@@ -487,12 +510,17 @@ export function GitHubActivityComponent({ projectId }) {
                         Trang trước
                     </button>
                     <span style={{ fontSize: "13px", color: "#6b778c" }}>
-                        Trang {page + 1} / {totalPages}
+                        Trang {activePage + 1} / {totalPages}
                     </span>
                     <button
                         type="button"
                         disabled={isLast}
-                        onClick={() => setPage((prev) => prev + 1)}
+                        onClick={() =>
+                            setPagination((prev) => ({
+                                ...prev,
+                                page: prev.page + 1,
+                            }))
+                        }
                         style={{
                             padding: "6px 14px",
                             borderRadius: "4px",

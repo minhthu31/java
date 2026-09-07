@@ -250,11 +250,44 @@ describe("GitHubActivityComponent Acceptance Tests (Task 98 DTO)", () => {
         });
     });
 
-    test("6. Đổi projectId khi đang ở trang sau: Reset page về 0 cho project mới và xóa dữ liệu cũ khi request thất bại", async () => {
-        GitHubActivityService.getActivity
-            .mockResolvedValueOnce(mockCommitPage0)
-            .mockResolvedValueOnce(mockCommitPage1)
-            .mockRejectedValueOnce(new Error("Network error"));
+    test("6. Đổi projectId khi đang ở trang sau: Không gọi page khác 0 cho project mới và ngăn request cũ ghi đè", async () => {
+        let resolveProject1Page1;
+        const project1Page1Promise = new Promise((resolve) => {
+            resolveProject1Page1 = resolve;
+        });
+
+        GitHubActivityService.getActivity.mockImplementation(
+            (projId, params) => {
+                if (projId === 1 && params.page === 0) {
+                    return Promise.resolve(mockCommitPage0);
+                }
+                if (projId === 1 && params.page === 1) {
+                    return project1Page1Promise;
+                }
+                if (projId === 2) {
+                    return Promise.resolve({
+                        content: [
+                            {
+                                type: "COMMIT",
+                                key: "shaProject2Success",
+                                summary:
+                                    "feat(PROJ-2): commit mới của project 2",
+                                actorUserId: 2,
+                                actorLogin: "member2",
+                                timestamp: "2026-09-06T10:00:00Z",
+                                url: "https://github.com/test/project2/commit/shaProject2Success",
+                                issueKeys: ["PROJ-2"],
+                                linkedTaskIds: [202],
+                            },
+                        ],
+                        totalPages: 1,
+                        first: true,
+                        last: true,
+                    });
+                }
+                return Promise.reject(new Error("Unknown call"));
+            },
+        );
 
         const { rerender } = render(<GitHubActivityComponent projectId={1} />);
 
@@ -265,27 +298,39 @@ describe("GitHubActivityComponent Acceptance Tests (Task 98 DTO)", () => {
         const nextButton = screen.getByRole("button", { name: /Trang sau/i });
         fireEvent.click(nextButton);
 
-        await waitFor(() => {
-            expect(
-                screen.getByText("feat(CNPM-9): test commit nine"),
-            ).toBeInTheDocument();
-        });
-
         rerender(<GitHubActivityComponent projectId={2} />);
 
         await waitFor(() => {
-            expect(GitHubActivityService.getActivity).toHaveBeenLastCalledWith(
-                2,
-                expect.objectContaining({ page: 0 }),
-            );
+            expect(
+                screen.getByText("feat(PROJ-2): commit mới của project 2"),
+            ).toBeInTheDocument();
         });
 
-        await waitFor(() => {
-            expect(screen.getByTestId("error-banner")).toBeInTheDocument();
-        });
+        resolveProject1Page1(mockCommitPage1);
+
+        await new Promise((r) => setTimeout(r, 50));
+        expect(
+            screen.getByText("feat(PROJ-2): commit mới của project 2"),
+        ).toBeInTheDocument();
         expect(
             screen.queryByText("feat(CNPM-9): test commit nine"),
         ).not.toBeInTheDocument();
-        expect(screen.queryByText("sha9000")).not.toBeInTheDocument();
+
+        const callsForProject2 =
+            GitHubActivityService.getActivity.mock.calls.filter(
+                (call) => call[0] === 2,
+            );
+        expect(callsForProject2.length).toBeGreaterThanOrEqual(1);
+
+        callsForProject2.forEach((call) => {
+            expect(call[1].page).toBe(0);
+            expect(call[1].page).not.toBe(1);
+        });
+
+        expect(
+            GitHubActivityService.getActivity.mock.calls.some(
+                ([projId, params]) => projId === 2 && params.page !== 0,
+            ),
+        ).toBe(false);
     });
 });
