@@ -1,6 +1,5 @@
 package vn.edu.cnpm.projectsupport.integration.github;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -11,6 +10,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 
 @Component
@@ -47,7 +47,8 @@ public class GitHubClient {
             throw new RuntimeException("GitHub API Error: " + response.statusCode() + " - " + response.body());
         }
 
-        return objectMapper.readValue(response.body(), new TypeReference<List<GitHubPullRequestDto>>() {});
+        GitHubPullRequestDto[] prArray = objectMapper.readValue(response.body(), GitHubPullRequestDto[].class);
+        return Arrays.asList(prArray);
     }
 
     public List<GitHubCommitDto> getPullRequestCommits(String owner, String repo, int pullNumber, String token) throws Exception {
@@ -68,6 +69,7 @@ public class GitHubClient {
             throw new RuntimeException("GitHub API Error (Commits): " + response.statusCode() + " - " + response.body());
         }
 
-        return objectMapper.readValue(response.body(), new TypeReference<List<GitHubCommitDto>>() {});
+        GitHubCommitDto[] commitArray = objectMapper.readValue(response.body(), GitHubCommitDto[].class);
+        return Arrays.asList(commitArray);
     }
 }
