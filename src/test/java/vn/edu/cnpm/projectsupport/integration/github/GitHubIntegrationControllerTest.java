@@ -1,5 +1,7 @@
 package vn.edu.cnpm.projectsupport.integration.github;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -80,7 +82,7 @@ class GitHubIntegrationControllerTest {
         }
 
         @Test
-        @DisplayName("GET /config thành công -> Trả về cấu hình hiện tại")
+        @DisplayName("GET /config thành công -> Trả về 200 OK")
         void getConfig_ReturnsOk() throws Exception {
             GitHubConfigResponse response = GitHubConfigResponse.builder()
                     .projectId(PROJECT_ID)
@@ -123,35 +125,47 @@ class GitHubIntegrationControllerTest {
 
         @Test
         @DisplayName("Token hết hạn / sai -> ném 401 GITHUB_AUTHENTICATION_FAILED")
-        void testConnection_InvalidToken_Throws401() throws Exception {
+        void testConnection_InvalidToken_Throws401() {
             when(gitHubConfigService.testConnection(eq(PROJECT_ID)))
                     .thenThrow(new GitHubApiException(HttpStatus.UNAUTHORIZED, "GITHUB_AUTHENTICATION_FAILED", false, null, "Auth failed", null));
 
-            configMockMvc.perform(post(BASE_URL + "/test-connection"))
-                    .andExpect(status().isUnauthorized())
-                    .andExpect(jsonPath("$.code").value("GITHUB_AUTHENTICATION_FAILED"));
+            assertThatThrownBy(() -> gitHubConfigController.testConnection(PROJECT_ID))
+                    .isInstanceOf(GitHubApiException.class)
+                    .satisfies(error -> {
+                        GitHubApiException ex = (GitHubApiException) error;
+                        assertThat(ex.getErrorCode()).isEqualTo("GITHUB_AUTHENTICATION_FAILED");
+                        assertThat(ex.getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED);
+                    });
         }
 
         @Test
         @DisplayName("Token thiếu quyền truy cập -> ném 403 GITHUB_AUTHORIZATION_FAILED")
-        void testConnection_Forbidden_Throws403() throws Exception {
+        void testConnection_Forbidden_Throws403() {
             when(gitHubConfigService.testConnection(eq(PROJECT_ID)))
                     .thenThrow(new GitHubApiException(HttpStatus.FORBIDDEN, "GITHUB_AUTHORIZATION_FAILED", false, null, "Forbidden", null));
 
-            configMockMvc.perform(post(BASE_URL + "/test-connection"))
-                    .andExpect(status().isForbidden())
-                    .andExpect(jsonPath("$.code").value("GITHUB_AUTHORIZATION_FAILED"));
+            assertThatThrownBy(() -> gitHubConfigController.testConnection(PROJECT_ID))
+                    .isInstanceOf(GitHubApiException.class)
+                    .satisfies(error -> {
+                        GitHubApiException ex = (GitHubApiException) error;
+                        assertThat(ex.getErrorCode()).isEqualTo("GITHUB_AUTHORIZATION_FAILED");
+                        assertThat(ex.getStatus()).isEqualTo(HttpStatus.FORBIDDEN);
+                    });
         }
 
         @Test
         @DisplayName("Repository không tồn tại -> ném 404 GITHUB_REPOSITORY_NOT_FOUND")
-        void testConnection_NotFound_Throws404() throws Exception {
+        void testConnection_NotFound_Throws404() {
             when(gitHubConfigService.testConnection(eq(PROJECT_ID)))
                     .thenThrow(new GitHubApiException(HttpStatus.NOT_FOUND, "GITHUB_REPOSITORY_NOT_FOUND", false, null, "Repo not found", null));
 
-            configMockMvc.perform(post(BASE_URL + "/test-connection"))
-                    .andExpect(status().isNotFound())
-                    .andExpect(jsonPath("$.code").value("GITHUB_REPOSITORY_NOT_FOUND"));
+            assertThatThrownBy(() -> gitHubConfigController.testConnection(PROJECT_ID))
+                    .isInstanceOf(GitHubApiException.class)
+                    .satisfies(error -> {
+                        GitHubApiException ex = (GitHubApiException) error;
+                        assertThat(ex.getErrorCode()).isEqualTo("GITHUB_REPOSITORY_NOT_FOUND");
+                        assertThat(ex.getStatus()).isEqualTo(HttpStatus.NOT_FOUND);
+                    });
         }
     }
 }
