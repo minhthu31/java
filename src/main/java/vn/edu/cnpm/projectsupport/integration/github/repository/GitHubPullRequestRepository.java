@@ -1,5 +1,6 @@
 package vn.edu.cnpm.projectsupport.integration.github.repository;
 
+import java.util.List;
 import java.time.Instant;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -114,4 +115,29 @@ public interface GitHubPullRequestRepository extends JpaRepository<GitHubPullReq
             @Param("projectId") Long projectId,
             @Param("userId") Long userId,
             Pageable pageable);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("""
+            update GitHubPullRequest pr
+               set pr.authorExternalAccountId = :accountId
+             where pr.authorExternalAccountId is null
+               and pr.authorGithubUserId = :githubUserId
+               and pr.repositoryId in (
+                   select r.id from GitHubRepository r where r.projectId = :projectId
+               )
+            """)
+    int backfillAuthorExternalAccountId(
+            @Param("projectId") Long projectId,
+            @Param("githubUserId") Long githubUserId,
+            @Param("accountId") Long accountId);
+
+    @Query("""
+            select distinct pr.authorGithubUserId as githubUserId, pr.authorLogin as login
+            from GitHubPullRequest pr
+            join GitHubRepository r on r.id = pr.repositoryId
+            where r.projectId = :projectId
+              and pr.authorGithubUserId is not null
+              and pr.authorExternalAccountId is null
+            """)
+    List<GitHubUnlinkedAuthorProjection> findUnlinkedAuthors(@Param("projectId") Long projectId);
 }

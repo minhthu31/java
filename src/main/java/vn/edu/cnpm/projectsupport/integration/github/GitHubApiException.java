@@ -19,17 +19,13 @@ public class GitHubApiException extends RuntimeException {
             Long retryAfterSeconds,
             String message,
             Throwable cause) {
-        super(message == null || message.isBlank()
-                ? "GitHub API request failed"
-                : message, cause);
+        super(message == null || message.isBlank() ? "GitHub API request failed" : message, cause);
         this.status = status;
         this.errorCode = errorCode;
         this.retryable = retryable;
         this.retryAfterSeconds = retryAfterSeconds;
         String currentCorrelationId = MDC.get("correlationId");
-        this.correlationId = currentCorrelationId == null || currentCorrelationId.isBlank()
-                ? UUID.randomUUID().toString()
-                : currentCorrelationId;
+        this.correlationId = currentCorrelationId == null || currentCorrelationId.isBlank() ? UUID.randomUUID().toString() : currentCorrelationId;
     }
 
     public HttpStatus getStatus() {

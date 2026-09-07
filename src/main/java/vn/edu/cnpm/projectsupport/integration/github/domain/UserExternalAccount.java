@@ -12,9 +12,14 @@ import jakarta.persistence.Enumerated;
 @Entity
 @Table(
         name = "user_external_accounts",
-        uniqueConstraints = @UniqueConstraint(
+        uniqueConstraints = {
+            @UniqueConstraint(
                 name = "uk_external_account",
-                columnNames = {"provider", "external_user_id"}))
+                columnNames = {"provider", "external_user_id"}),
+            @UniqueConstraint(
+                name = "uk_user_external_account_provider",
+                columnNames = {"user_id", "provider"})
+        })
 public class UserExternalAccount extends BaseEntity {
 
     @Column(name = "user_id", nullable = false)
@@ -30,6 +35,12 @@ public class UserExternalAccount extends BaseEntity {
     @Column(name = "external_login", length = 255)
     private String externalLogin;
 
+    @Column(name = "avatar_url", length = 500)
+    private String avatarUrl;
+
+    @Column(name = "profile_url", length = 500)
+    private String profileUrl;
+
     protected UserExternalAccount() {
     }
 
@@ -44,12 +55,41 @@ public class UserExternalAccount extends BaseEntity {
         this.externalLogin = externalLogin;
     }
 
+    public UserExternalAccount(
+            Long userId,
+            IntegrationProvider provider,
+            String externalUserId,
+            String externalLogin,
+            String avatarUrl,
+            String profileUrl) {
+        this(userId, provider, externalUserId, externalLogin);
+        this.avatarUrl = avatarUrl;
+        this.profileUrl = profileUrl;
+    }
+
     public Long getUserId() { return userId; }
     public IntegrationProvider getProvider() { return provider; }
     public String getExternalUserId() { return externalUserId; }
     public String getExternalLogin() { return externalLogin; }
+    public String getAvatarUrl() { return avatarUrl; }
+    public String getProfileUrl() { return profileUrl; }
 
     public void setExternalLogin(String externalLogin) {
         this.externalLogin = externalLogin;
+    }
+
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
+    }
+
+    public void setProfileUrl(String profileUrl) {
+        this.profileUrl = profileUrl;
+    }
+
+    public void relink(String externalUserId, String externalLogin, String avatarUrl, String profileUrl) {
+        this.externalUserId = externalUserId;
+        this.externalLogin = externalLogin;
+        this.avatarUrl = avatarUrl;
+        this.profileUrl = profileUrl;
     }
 }

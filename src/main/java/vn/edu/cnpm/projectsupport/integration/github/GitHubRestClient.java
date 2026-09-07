@@ -11,15 +11,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import tools.jackson.databind.ObjectMapper;
 
-/** Client for the GitHub REST endpoints required by CNPM-90. */
 public class GitHubRestClient {
 
     private static final String BASE_URL = "https://api.github.com";
     private static final String ACCEPT = "application/vnd.github+json";
     private static final String USER_AGENT = "ProjectSupport-Backend";
     private static final int MAX_PAGE_SIZE = 100;
-    private static final Pattern NEXT_LINK_PATTERN =
-            Pattern.compile("<([^>]+)>\\s*;\\s*rel=\\\"next\\\"", Pattern.CASE_INSENSITIVE);
+    private static final Pattern NEXT_LINK_PATTERN = Pattern.compile("<([^>]+)>\\s*;\\s*rel=\\\"next\\\"", Pattern.CASE_INSENSITIVE);
 
     private final GitHubHttpTransport transport;
     private final ObjectMapper objectMapper;
@@ -46,13 +44,11 @@ public class GitHubRestClient {
         return get(config, BASE_URL + path, GitHubUser.class);
     }
 
-    /** Fetches the complete commit payload for a SHA, including stats and files. */
     public GitHubCommit getCommit(GitHubClientConfig config, String sha) {
         if (sha == null || sha.isBlank() || !sha.trim().matches("[0-9a-fA-F]{7,64}")) {
             throw new IllegalArgumentException("GitHub commit SHA is invalid");
         }
-        String path = "/repos/" + pathSegment(config.owner()) + "/"
-                + pathSegment(config.repository()) + "/commits/" + pathSegment(sha.trim());
+        String path = "/repos/" + pathSegment(config.owner()) + "/" + pathSegment(config.repository()) + "/commits/" + pathSegment(sha.trim());
         return get(config, BASE_URL + path, GitHubCommit.class);
     }
 
@@ -63,10 +59,7 @@ public class GitHubRestClient {
         return getPage(config, url, GitHubCommit[].class);
     }
 
-    public GitHubPage<GitHubPullRequest> getPullRequestsPage(
-            GitHubClientConfig config,
-            String state,
-            int page) {
+    public GitHubPage<GitHubPullRequest> getPullRequestsPage(GitHubClientConfig config, String state, int page) {
         validatePage(page);
         String normalizedState = state == null || state.isBlank() ? "open" : state.trim().toLowerCase();
         if (!List.of("open", "closed", "all").contains(normalizedState)) {
@@ -78,14 +71,11 @@ public class GitHubRestClient {
         return getPage(config, url, GitHubPullRequest[].class);
     }
 
-    /** Fetches every GitHub pagination page using the provider's Link rel=next header. */
     public List<GitHubCommit> getAllCommits(GitHubClientConfig config) {
         return collectPages(config, BASE_URL + "/repos/" + pathSegment(config.owner()) + "/"
-                + pathSegment(config.repository()) + "/commits?per_page=" + MAX_PAGE_SIZE + "&page=1",
-                GitHubCommit[].class);
+                + pathSegment(config.repository()) + "/commits?per_page=" + MAX_PAGE_SIZE + "&page=1", GitHubCommit[].class);
     }
 
-    /** Fetches every GitHub pagination page using the provider's Link rel=next header. */
     public List<GitHubPullRequest> getAllPullRequests(GitHubClientConfig config, String state) {
         String normalizedState = state == null || state.isBlank() ? "open" : state.trim().toLowerCase();
         if (!List.of("open", "closed", "all").contains(normalizedState)) {
@@ -104,14 +94,11 @@ public class GitHubRestClient {
         GitHubUser user = parse(userResponse, GitHubUser.class);
         rate.capture(userResponse);
 
-        GitHubHttpResponse repositoryResponse = execute(config, BASE_URL + "/repos/"
-                    + pathSegment(config.owner()) + "/" + pathSegment(config.repository()));
+        GitHubHttpResponse repositoryResponse = execute(config, BASE_URL + "/repos/" + pathSegment(config.owner()) + "/" + pathSegment(config.repository()));
         GitHubRepository repository = parse(repositoryResponse, GitHubRepository.class);
         rate.capture(repositoryResponse);
 
-        String permission = repository.permissions() == null
-                ? null
-                : repository.permissions().effectivePermission();
+        String permission = repository.permissions() == null ? null : repository.permissions().effectivePermission();
 
         return new GitHubConnectionResult(
                 true,
@@ -132,15 +119,10 @@ public class GitHubRestClient {
     private <T> GitHubPage<T> getPage(GitHubClientConfig config, String url, Class<T[]> arrayType) {
         GitHubHttpResponse response = execute(config, url);
         T[] array = parse(response, arrayType);
-        return new GitHubPage<>(List.of(array),
-                parseNextUrl(GitHubErrorHandler.header(response, "link")),
-                rateLimitInfo(response));
+        return new GitHubPage<>(List.of(array), parseNextUrl(GitHubErrorHandler.header(response, "link")), rateLimitInfo(response));
     }
 
-    private <T> List<T> collectPages(
-            GitHubClientConfig config,
-            String firstUrl,
-            Class<T[]> arrayType) {
+    private <T> List<T> collectPages(GitHubClientConfig config,String firstUrl,Class<T[]> arrayType) {
         List<T> result = new ArrayList<>();
         String nextUrl = firstUrl;
         int safetyPageCounter = 0;

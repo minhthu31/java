@@ -14,18 +14,11 @@ public final class GitHubClientConfig {
     private final String apiVersion;
     private final Duration timeout;
 
-    public GitHubClientConfig(
-            String owner,
-            String repository,
-            String accessToken,
-            String apiVersion,
-            Duration timeout) {
+    public GitHubClientConfig(String owner, String repository, String accessToken, String apiVersion, Duration timeout) {
         this.owner = requireSegment(owner, "GitHub owner");
         this.repository = requireSegment(repository, "GitHub repository");
         this.accessToken = requireToken(accessToken);
-        this.apiVersion = apiVersion == null || apiVersion.isBlank()
-                ? DEFAULT_API_VERSION
-                : apiVersion.trim();
+        this.apiVersion = apiVersion == null || apiVersion.isBlank() ? DEFAULT_API_VERSION : apiVersion.trim();
         this.timeout = timeout == null ? DEFAULT_TIMEOUT : timeout;
         if (this.timeout.isZero() || this.timeout.isNegative()) {
             throw new IllegalArgumentException("GitHub timeout must be positive");

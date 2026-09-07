@@ -25,12 +25,10 @@ import vn.edu.cnpm.projectsupport.integration.jira.repository.JiraIssueRepositor
 import vn.edu.cnpm.projectsupport.task.domain.Task;
 import vn.edu.cnpm.projectsupport.task.repository.TaskRepository;
 
-/** Detects Jira issue keys in GitHub activity and creates idempotent Task links. */
 @Service
 public class GitHubTaskLinkService {
 
-    static final Pattern ISSUE_KEY_PATTERN = Pattern.compile(
-            "(?<![A-Za-z0-9_])([A-Z][A-Z0-9_]{1,29}-[1-9][0-9]*)(?![A-Za-z0-9_])");
+    static final Pattern ISSUE_KEY_PATTERN = Pattern.compile("(?<![A-Za-z0-9_])([A-Z][A-Z0-9_]{1,29}-[1-9][0-9]*)(?![A-Za-z0-9_])");
 
     private final JiraIssueRepository jiraIssueRepository;
     private final TaskRepository taskRepository;
@@ -52,10 +50,6 @@ public class GitHubTaskLinkService {
         return linkCommit(projectId, commit, null);
     }
 
-    /**
-     * Links a commit using branch first when the caller knows it, then commit message.
-     * GitHub's commit list does not expose a unique branch, so branchName may be null.
-     */
     public GitHubTaskLinkResult linkCommit(Long projectId, GitHubCommit commit, String branchName) {
         requireProjectId(projectId);
         if (commit == null || commit.getId() == null) {
@@ -85,7 +79,6 @@ public class GitHubTaskLinkService {
         });
     }
 
-    /** Links a PR using the contract order: head branch, title, then body. */
     public GitHubTaskLinkResult linkPullRequest(Long projectId, GitHubPullRequest pullRequest) {
         requireProjectId(projectId);
         if (pullRequest == null || pullRequest.getId() == null) {
@@ -128,19 +121,13 @@ public class GitHubTaskLinkService {
         return keys;
     }
 
-    private void collect(
-            Map<String, TaskLinkMatchedFrom> matches,
-            String text,
-            TaskLinkMatchedFrom matchedFrom) {
+    private void collect(Map<String, TaskLinkMatchedFrom> matches, String text, TaskLinkMatchedFrom matchedFrom) {
         for (String key : extractIssueKeys(text)) {
             matches.putIfAbsent(key, matchedFrom);
         }
     }
 
-    private GitHubTaskLinkResult createLinks(
-            Long projectId,
-            Map<String, TaskLinkMatchedFrom> matches,
-            LinkCreator linkCreator) {
+    private GitHubTaskLinkResult createLinks(Long projectId, Map<String, TaskLinkMatchedFrom> matches, LinkCreator linkCreator) {
         int created = 0;
         int duplicates = 0;
         List<String> warnings = new ArrayList<>();

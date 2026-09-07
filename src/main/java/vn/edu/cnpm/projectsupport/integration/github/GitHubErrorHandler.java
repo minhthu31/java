@@ -16,49 +16,39 @@ public final class GitHubErrorHandler {
         String reset = header(response, "x-ratelimit-reset");
 
         if (status == 400 || status == 422) {
-            return failure(HttpStatus.BAD_REQUEST, "GITHUB_CONFIG_INVALID", false, null,
-                    "GitHub request is invalid", null);
+            return failure(HttpStatus.BAD_REQUEST, "GITHUB_CONFIG_INVALID", false, null,"GitHub request is invalid", null);
         }
         if (status == 401) {
-            return failure(HttpStatus.UNAUTHORIZED, "GITHUB_AUTHENTICATION_FAILED", false, null,
-                    "GitHub authentication failed", null);
+            return failure(HttpStatus.UNAUTHORIZED, "GITHUB_AUTHENTICATION_FAILED", false, null,"GitHub authentication failed", null);
         }
         if (status == 403 && isRateLimited(retryAfter, remaining)) {
             return failure(HttpStatus.TOO_MANY_REQUESTS, "GITHUB_RATE_LIMITED", true,
                     retryAfterSeconds(retryAfter, reset), "GitHub rate limit exceeded", null);
         }
         if (status == 403) {
-            return failure(HttpStatus.FORBIDDEN, "GITHUB_AUTHORIZATION_FAILED", false, null,
-                    "GitHub authorization failed", null);
+            return failure(HttpStatus.FORBIDDEN, "GITHUB_AUTHORIZATION_FAILED", false, null,"GitHub authorization failed", null);
         }
         if (status == 404) {
-            return failure(HttpStatus.NOT_FOUND, "GITHUB_REPOSITORY_NOT_FOUND", false, null,
-                    "GitHub repository was not found or is not visible", null);
+            return failure(HttpStatus.NOT_FOUND, "GITHUB_REPOSITORY_NOT_FOUND", false, null,"GitHub repository was not found or is not visible", null);
         }
         if (status == 429) {
-            return failure(HttpStatus.TOO_MANY_REQUESTS, "GITHUB_RATE_LIMITED", true,
-                    retryAfterSeconds(retryAfter, reset), "GitHub rate limit exceeded", null);
+            return failure(HttpStatus.TOO_MANY_REQUESTS, "GITHUB_RATE_LIMITED", true, retryAfterSeconds(retryAfter, reset), "GitHub rate limit exceeded", null);
         }
         if (status >= 500) {
-            return failure(HttpStatus.BAD_GATEWAY, "GITHUB_PROVIDER_UNAVAILABLE", true, null,
-                    "GitHub is temporarily unavailable", null);
+            return failure(HttpStatus.BAD_GATEWAY, "GITHUB_PROVIDER_UNAVAILABLE", true, null,"GitHub is temporarily unavailable", null);
         }
-        return failure(HttpStatus.BAD_GATEWAY, "GITHUB_PROVIDER_UNAVAILABLE", false, null,
-                "GitHub API request failed", null);
+        return failure(HttpStatus.BAD_GATEWAY, "GITHUB_PROVIDER_UNAVAILABLE", false, null, "GitHub API request failed", null);
     }
 
     public static GitHubApiException fromThrowable(Throwable cause) {
         if (cause instanceof InterruptedException) {
             Thread.currentThread().interrupt();
-            return failure(HttpStatus.BAD_GATEWAY, "GITHUB_PROVIDER_UNAVAILABLE", true, null,
-                    "GitHub provider request was interrupted", cause);
+            return failure(HttpStatus.BAD_GATEWAY, "GITHUB_PROVIDER_UNAVAILABLE", true, null, "GitHub provider request was interrupted", cause);
         }
         if (cause instanceof IOException || cause instanceof java.net.http.HttpTimeoutException) {
-            return failure(HttpStatus.BAD_GATEWAY, "GITHUB_PROVIDER_UNAVAILABLE", true, null,
-                    "GitHub provider is unavailable", cause);
+            return failure(HttpStatus.BAD_GATEWAY, "GITHUB_PROVIDER_UNAVAILABLE", true, null, "GitHub provider is unavailable", cause);
         }
-        return failure(HttpStatus.BAD_GATEWAY, "GITHUB_PROVIDER_UNAVAILABLE", false, null,
-                "GitHub API request failed", cause);
+        return failure(HttpStatus.BAD_GATEWAY, "GITHUB_PROVIDER_UNAVAILABLE", false, null, "GitHub API request failed", cause);
     }
 
     static Long retryAfterSeconds(String retryAfter, String resetEpochSeconds) {
@@ -67,7 +57,6 @@ public final class GitHubErrorHandler {
                 long value = Long.parseLong(retryAfter.trim());
                 return value >= 0 ? value : null;
             } catch (NumberFormatException ignored) {
-                // Fall through to X-RateLimit-Reset.
             }
         }
         if (resetEpochSeconds != null && !resetEpochSeconds.isBlank()) {
@@ -101,8 +90,7 @@ public final class GitHubErrorHandler {
             return null;
         }
         return response.headers().entrySet().stream()
-                .filter(entry -> entry.getKey() != null
-                        && entry.getKey().equalsIgnoreCase(name))
+                .filter(entry -> entry.getKey() != null && entry.getKey().equalsIgnoreCase(name))
                 .map(java.util.Map.Entry::getValue)
                 .findFirst()
                 .orElse(null);
