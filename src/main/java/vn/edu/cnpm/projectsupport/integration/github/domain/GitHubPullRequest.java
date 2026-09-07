@@ -257,4 +257,11 @@ public class GitHubPullRequest extends BaseEntity {
             state = GitHubPullRequestState.MERGED;
         }
     }
+    public void setGithubPullRequestId(Long githubPullRequestId) {
+        this.githubPullRequestId = githubPullRequestId;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
 }

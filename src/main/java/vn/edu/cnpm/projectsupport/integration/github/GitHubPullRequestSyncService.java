@@ -33,7 +33,7 @@ public class GitHubPullRequestSyncService {
     public void syncPullRequests(Long projectId, Long repositoryId, String owner, String repoName, String token, String correlationId) {
         SyncLog syncLog = new SyncLog(
                 projectId, IntegrationProvider.GITHUB, "PULL_REQUEST", owner + "/" + repoName,
-                SyncDirection.INBOUND, correlationId, Instant.now()
+                SyncDirection.IMPORT, correlationId, Instant.now()
         );
         syncLogRepository.save(syncLog);
 
