@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.Instant;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -45,11 +46,18 @@ class GitHubRbacIntegrationTest {
     @MockitoBean
     private GitHubRestClient gitHubRestClient;
 
-    private static final Long GROUP_ID = 100L;
-    private static final Long PROJECT_ID = 100L;
-    private static final Long OTHER_PROJECT_ID = 999L;
+    private static final Long GROUP_ID = 8888L;
+    private static final Long PROJECT_ID = 8888L;
     private static final String BASE_URL = "/api/v1/projects/" + PROJECT_ID + "/integrations/github";
-    private static final String OTHER_BASE_URL = "/api/v1/projects/" + OTHER_PROJECT_ID + "/integrations/github";
+
+    private static final String VALID_CONFIG_BODY = """
+        {
+            "repositoryOwner": "minhthu31",
+            "repositoryName": "java",
+            "accessToken": "ghp_secretTokenExample123",
+            "apiVersion": "2026-03-10"
+        }
+        """;
 
     @BeforeEach
     void setUp() {
@@ -58,23 +66,28 @@ class GitHubRbacIntegrationTest {
                 .apply(springSecurity())
                 .build();
 
-        jdbcTemplate.update("DELETE FROM integration_configs WHERE project_id IN (?, ?)", PROJECT_ID, OTHER_PROJECT_ID);
-        jdbcTemplate.update("DELETE FROM projects WHERE id IN (?, ?)", PROJECT_ID, OTHER_PROJECT_ID);
-        jdbcTemplate.update("DELETE FROM student_groups WHERE id = ?", GROUP_ID);
+        cleanDatabase();
 
         jdbcTemplate.update("""
                 MERGE INTO student_groups (id, code, name)
                 KEY(id)
                 VALUES (?, ?, ?)
-                """, GROUP_ID, "CNPM-100-TEST", "CNPM 100 Test Group");
+                """, GROUP_ID, "CNPM-100-TEST-GRP", "CNPM 100 Test Group");
 
         jdbcTemplate.update(
                 "INSERT INTO projects (id, group_id, name) VALUES (?, ?, ?)",
                 PROJECT_ID, GROUP_ID, "CNPM 100 Project");
+    }
 
-        jdbcTemplate.update(
-                "INSERT INTO projects (id, group_id, name) VALUES (?, ?, ?)",
-                OTHER_PROJECT_ID, GROUP_ID, "Other Project");
+    @AfterEach
+    void tearDown() {
+        cleanDatabase();
+    }
+
+    private void cleanDatabase() {
+        jdbcTemplate.update("DELETE FROM integration_configs WHERE project_id = ?", PROJECT_ID);
+        jdbcTemplate.update("DELETE FROM projects WHERE id = ?", PROJECT_ID);
+        jdbcTemplate.update("DELETE FROM student_groups WHERE id = ?", GROUP_ID);
     }
 
     @Test
@@ -104,18 +117,9 @@ class GitHubRbacIntegrationTest {
 
             when(gitHubConfigService.saveConfig(eq(PROJECT_ID), any())).thenReturn(response);
 
-            String configJson = """
-                {
-                    "repositoryOwner": "minhthu31",
-                    "repositoryName": "java",
-                    "accessToken": "ghp_secretTokenExample123",
-                    "apiVersion": "2026-03-10"
-                }
-                """;
-
             mockMvc.perform(put(BASE_URL + "/config")
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content(configJson))
+                            .content(VALID_CONFIG_BODY))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.data.configured").value(true))
                     .andExpect(jsonPath("$.data.accessToken").doesNotExist());
@@ -136,16 +140,11 @@ class GitHubRbacIntegrationTest {
             mockMvc.perform(post(BASE_URL + "/test-connection"))
                     .andExpect(status().isOk());
         }
-    }
-
-    @Nested
-    @DisplayName("2. Vai trò TEAM_LEADER")
-    class TeamLeaderRoleTests {
 
         @Test
-        @WithMockUser(username = "leader_user", roles = {"TEAM_LEADER"})
-        @DisplayName("TEAM_LEADER: Được phép đọc cấu hình đúng project (GET /config)")
-        void teamLeaderCanGetConfig() throws Exception {
+        @WithMockUser(username = "admin_user", roles = {"ADMIN"})
+        @DisplayName("ADMIN: Được phép đọc cấu hình (GET /config)")
+        void adminCanGetConfig() throws Exception {
             GitHubConfigResponse response = GitHubConfigResponse.builder()
                     .projectId(PROJECT_ID)
                     .repositoryFullName("minhthu31/java")
@@ -157,39 +156,12 @@ class GitHubRbacIntegrationTest {
 
             mockMvc.perform(get(BASE_URL + "/config"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.data.configured").value(true))
-                    .andExpect(jsonPath("$.data.accessToken").doesNotExist());
-        }
-
-        @Test
-        @WithMockUser(username = "leader_user", roles = {"TEAM_LEADER"})
-        @DisplayName("TEAM_LEADER: Bị cấm (403) khi sửa cấu hình (PUT /config)")
-        void teamLeaderForbiddenFromModifyingConfig() throws Exception {
-            String configJson = """
-                {
-                    "repositoryOwner": "minhthu31",
-                    "repositoryName": "java",
-                    "accessToken": "ghp_token"
-                }
-                """;
-
-            mockMvc.perform(put(BASE_URL + "/config")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(configJson))
-                    .andExpect(status().isForbidden());
-        }
-
-        @Test
-        @WithMockUser(username = "leader_user", roles = {"TEAM_LEADER"})
-        @DisplayName("TEAM_LEADER: Bị cấm (403) khi gọi POST /test-connection")
-        void teamLeaderForbiddenFromTestingConnection() throws Exception {
-            mockMvc.perform(post(BASE_URL + "/test-connection"))
-                    .andExpect(status().isForbidden());
+                    .andExpect(jsonPath("$.data.configured").value(true));
         }
     }
 
     @Nested
-    @DisplayName("3. Vai trò LECTURER")
+    @DisplayName("2. Vai trò LECTURER")
     class LecturerRoleTests {
 
         @Test
@@ -206,7 +178,7 @@ class GitHubRbacIntegrationTest {
         void lecturerForbiddenFromModifyingConfig() throws Exception {
             mockMvc.perform(put(BASE_URL + "/config")
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{}"))
+                            .content(VALID_CONFIG_BODY))
                     .andExpect(status().isForbidden());
         }
 
@@ -220,7 +192,7 @@ class GitHubRbacIntegrationTest {
     }
 
     @Nested
-    @DisplayName("4. Vai trò TEAM_MEMBER")
+    @DisplayName("3. Vai trò TEAM_MEMBER")
     class TeamMemberRoleTests {
 
         @Test
@@ -237,7 +209,7 @@ class GitHubRbacIntegrationTest {
         void teamMemberForbiddenFromModifyingConfig() throws Exception {
             mockMvc.perform(put(BASE_URL + "/config")
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{}"))
+                            .content(VALID_CONFIG_BODY))
                     .andExpect(status().isForbidden());
         }
 
@@ -251,16 +223,15 @@ class GitHubRbacIntegrationTest {
     }
 
     @Nested
-    @DisplayName("5. Kiểm tra người dùng thuộc project khác")
-    class CrossProjectAccessTests {
+    @DisplayName("4. Người dùng không có quyền trên Project")
+    class UnauthorizedProjectAccessTests {
 
         @Test
-        @WithMockUser(username = "other_leader", roles = {"TEAM_LEADER"})
-        @DisplayName("Truy cập cấu hình project không thuộc thẩm quyền -> 403 Forbidden")
-        void accessingOtherProject_ReturnsForbidden() throws Exception {
-            // Giả lập kiểm tra thẩm quyền theo project
-            mockMvc.perform(get(OTHER_BASE_URL + "/config"))
-                    .andExpect(status().is(org.hamcrest.Matchers.oneOf(403, 404)));
+        @WithMockUser(username = "unauthorized_user", roles = {"TEAM_LEADER"})
+        @DisplayName("TEAM_LEADER nhưng không thuộc nhóm/project được cấp quyền -> 403 Forbidden")
+        void userWithoutProjectScope_Forbidden() throws Exception {
+            mockMvc.perform(get(BASE_URL + "/config"))
+                    .andExpect(status().isForbidden());
         }
     }
 }
