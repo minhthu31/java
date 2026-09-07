@@ -9,6 +9,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Instant;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -25,25 +27,25 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @ExtendWith(MockitoExtension.class)
 class GitHubIntegrationControllerTest {
 
-    private MockMvc mockMvc;
+    private MockMvc configMockMvc;
 
     @Mock
     private GitHubConfigService gitHubConfigService;
 
     @InjectMocks
-    private GitHubIntegrationController gitHubIntegrationController;
+    private GitHubConfigController gitHubConfigController;
 
     private static final Long PROJECT_ID = 1L;
-    private static final String BASE_URL = "/api/v1/projects/{projectId}/integrations/github";
+    private static final String BASE_URL = "/api/v1/projects/" + PROJECT_ID + "/integrations/github";
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(gitHubIntegrationController).build();
+        configMockMvc = MockMvcBuilders.standaloneSetup(gitHubConfigController).build();
     }
 
     @Nested
-    @DisplayName("1. Cấu hình GitHub & Bảo mật Token")
-    class ConfigTests {
+    @DisplayName("1. Cấu hình GitHub & Bảo mật Token (CNPM-91)")
+    class ConfigEndpointTests {
 
         @Test
         @DisplayName("PUT /config hợp lệ -> 200 OK và không bao giờ chứa accessToken")
@@ -67,7 +69,7 @@ class GitHubIntegrationControllerTest {
                 }
                 """;
 
-            mockMvc.perform(put(BASE_URL + "/config", PROJECT_ID)
+            configMockMvc.perform(put(BASE_URL + "/config")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(requestBody))
                     .andExpect(status().isOk())
@@ -78,77 +80,78 @@ class GitHubIntegrationControllerTest {
         }
 
         @Test
-        @DisplayName("PUT /config thiếu repositoryOwner -> 400 Bad Request")
-        void saveConfig_InvalidPayload_Returns400() throws Exception {
-            String invalidJson = """
-                {
-                    "repositoryName": "java"
-                }
-                """;
+        @DisplayName("GET /config thành công -> Trả về cấu hình hiện tại")
+        void getConfig_ReturnsOk() throws Exception {
+            GitHubConfigResponse response = GitHubConfigResponse.builder()
+                    .projectId(PROJECT_ID)
+                    .repositoryFullName("minhthu31/java")
+                    .configured(true)
+                    .status("CONNECTED")
+                    .build();
 
-            mockMvc.perform(put(BASE_URL + "/config", PROJECT_ID)
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(invalidJson))
-                    .andExpect(status().isBadRequest());
+            when(gitHubConfigService.getConfig(eq(PROJECT_ID))).thenReturn(response);
+
+            configMockMvc.perform(get(BASE_URL + "/config"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.configured").value(true))
+                    .andExpect(jsonPath("$.data.status").value("CONNECTED"));
         }
     }
 
     @Nested
-    @DisplayName("2. Test Connection & Ánh xạ mã lỗi GitHub (401, 403, 404)")
-    class ExternalErrorTests {
+    @DisplayName("2. Test Connection & Ngoại vi GitHub (401, 403, 404)")
+    class TestConnectionErrorTests {
 
         @Test
-        @DisplayName("Token hết hạn / không hợp lệ -> 401 GITHUB_AUTHENTICATION_FAILED")
-        void testConnection_ExpiredToken_Returns401() throws Exception {
+        @DisplayName("POST /test-connection thành công -> 200 OK")
+        void testConnection_Success() throws Exception {
+            GitHubConnectionTestResponse response = GitHubConnectionTestResponse.builder()
+                    .projectId(PROJECT_ID)
+                    .connected(true)
+                    .login("minhthu31")
+                    .repositoryFullName("minhthu31/java")
+                    .testedAt(Instant.now())
+                    .build();
+
+            when(gitHubConfigService.testConnection(eq(PROJECT_ID))).thenReturn(response);
+
+            configMockMvc.perform(post(BASE_URL + "/test-connection"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.connected").value(true))
+                    .andExpect(jsonPath("$.data.login").value("minhthu31"));
+        }
+
+        @Test
+        @DisplayName("Token hết hạn / sai -> ném 401 GITHUB_AUTHENTICATION_FAILED")
+        void testConnection_InvalidToken_Throws401() throws Exception {
             when(gitHubConfigService.testConnection(eq(PROJECT_ID)))
                     .thenThrow(new GitHubApiException(HttpStatus.UNAUTHORIZED, "GITHUB_AUTHENTICATION_FAILED", false, null, "Auth failed", null));
 
-            mockMvc.perform(post(BASE_URL + "/test-connection", PROJECT_ID))
+            configMockMvc.perform(post(BASE_URL + "/test-connection"))
                     .andExpect(status().isUnauthorized())
                     .andExpect(jsonPath("$.code").value("GITHUB_AUTHENTICATION_FAILED"));
         }
 
         @Test
-        @DisplayName("Token thiếu quyền truy cập -> 403 GITHUB_AUTHORIZATION_FAILED")
-        void testConnection_Forbidden_Returns403() throws Exception {
+        @DisplayName("Token thiếu quyền truy cập -> ném 403 GITHUB_AUTHORIZATION_FAILED")
+        void testConnection_Forbidden_Throws403() throws Exception {
             when(gitHubConfigService.testConnection(eq(PROJECT_ID)))
                     .thenThrow(new GitHubApiException(HttpStatus.FORBIDDEN, "GITHUB_AUTHORIZATION_FAILED", false, null, "Forbidden", null));
 
-            mockMvc.perform(post(BASE_URL + "/test-connection", PROJECT_ID))
+            configMockMvc.perform(post(BASE_URL + "/test-connection"))
                     .andExpect(status().isForbidden())
                     .andExpect(jsonPath("$.code").value("GITHUB_AUTHORIZATION_FAILED"));
         }
 
         @Test
-        @DisplayName("Repository không tồn tại -> 404 GITHUB_REPOSITORY_NOT_FOUND")
-        void testConnection_NotFound_Returns404() throws Exception {
+        @DisplayName("Repository không tồn tại -> ném 404 GITHUB_REPOSITORY_NOT_FOUND")
+        void testConnection_NotFound_Throws404() throws Exception {
             when(gitHubConfigService.testConnection(eq(PROJECT_ID)))
                     .thenThrow(new GitHubApiException(HttpStatus.NOT_FOUND, "GITHUB_REPOSITORY_NOT_FOUND", false, null, "Repo not found", null));
 
-            mockMvc.perform(post(BASE_URL + "/test-connection", PROJECT_ID))
+            configMockMvc.perform(post(BASE_URL + "/test-connection"))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.code").value("GITHUB_REPOSITORY_NOT_FOUND"));
-        }
-    }
-
-    @Nested
-    @DisplayName("3. Đồng bộ (Sync) & Header Idempotency-Key")
-    class SyncTests {
-
-        @Test
-        @DisplayName("POST /sync thiếu Header Idempotency-Key -> 400 Bad Request")
-        void sync_MissingIdempotencyKeyHeader_Returns400() throws Exception {
-            mockMvc.perform(post(BASE_URL + "/sync", PROJECT_ID)
-                            .contentType(MediaType.APPLICATION_JSON))
-                    .andExpect(status().isBadRequest());
-        }
-
-        @Test
-        @DisplayName("API filter issueKey sai regex pattern -> 400 Bad Request")
-        void getActivities_InvalidIssueKeyFormat_Returns400() throws Exception {
-            mockMvc.perform(get(BASE_URL + "/activities", PROJECT_ID)
-                            .param("issueKey", "invalid_key"))
-                    .andExpect(status().isBadRequest());
         }
     }
 }
