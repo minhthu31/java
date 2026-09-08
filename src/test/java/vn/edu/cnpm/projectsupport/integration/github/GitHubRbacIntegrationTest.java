@@ -104,7 +104,7 @@ class GitHubRbacIntegrationTest {
 
         @Test
         @WithMockUser(username = "admin_user", roles = {"ADMIN"})
-        @DisplayName("ADMIN: Toàn quyền cấu hình và xem activities")
+        @DisplayName("ADMIN: Toàn quyền cấu hình và xem activities không giới hạn")
         void adminFullPermissions() throws Exception {
             GitHubConfigResponse configResponse = GitHubConfigResponse.builder()
                     .projectId(MY_PROJECT_ID)
@@ -133,7 +133,7 @@ class GitHubRbacIntegrationTest {
 
         @Test
         @WithMockUser(username = "leader_user", roles = {"TEAM_LEADER"})
-        @DisplayName("TEAM_LEADER đúng project: Xem cấu hình và activities")
+        @DisplayName("TEAM_LEADER đúng project: Xem cấu hình và toàn bộ activities nhóm")
         void teamLeaderInProject_Success() throws Exception {
             when(projectAuthorization.canViewTasks(MY_PROJECT_ID)).thenReturn(true);
             when(projectAuthorization.canViewRequirements(MY_PROJECT_ID)).thenReturn(true);
@@ -201,18 +201,17 @@ class GitHubRbacIntegrationTest {
     }
 
     @Nested
-    @DisplayName("4. Vai trò TEAM_MEMBER: Kiểm tra chặt chẽ truy cập chéo và danh tính")
+    @DisplayName("4. Vai trò TEAM_MEMBER: Kiểm tra truy cập chéo")
     class TeamMemberScopeTests {
 
         @BeforeEach
         void setupMemberA() {
             when(projectAuthorization.canViewTasks(MY_PROJECT_ID)).thenReturn(true);
-            when(projectAuthorization.canViewRequirements(MY_PROJECT_ID)).thenReturn(false); // Member không phải Leader/Lecturer
+            when(projectAuthorization.canViewRequirements(MY_PROJECT_ID)).thenReturn(false);
 
             when(projectAuthorization.currentUserId()).thenReturn(MEMBER_A_ID);
             when(projectAuthorization.isCurrentUser(MEMBER_A_ID)).thenReturn(true);
             when(projectAuthorization.isCurrentUser(MEMBER_B_ID)).thenReturn(false);
-            when(projectAuthorization.isCurrentUser(null)).thenReturn(false);
 
             when(projectAuthorization.canViewTask(MY_PROJECT_ID, ASSIGNED_TASK_ID)).thenReturn(true);
             when(projectAuthorization.canViewTask(MY_PROJECT_ID, UNASSIGNED_TASK_ID)).thenReturn(false);
@@ -220,7 +219,7 @@ class GitHubRbacIntegrationTest {
 
         @Test
         @WithMockUser(username = "member_a", roles = {"TEAM_MEMBER"})
-        @DisplayName("Member A xem commit/hoạt động của chính mình (actorUserId=11) -> 200 OK")
+        @DisplayName("Member A xem activities của chính mình (actorUserId=11) -> 200 OK")
         void memberA_ViewsOwnActivities_Success() throws Exception {
             mockMvc.perform(get(BASE_URL + "/activities")
                             .param("actorUserId", String.valueOf(MEMBER_A_ID)))
@@ -231,7 +230,7 @@ class GitHubRbacIntegrationTest {
 
         @Test
         @WithMockUser(username = "member_a", roles = {"TEAM_MEMBER"})
-        @DisplayName("Member A gọi sang Member B (actorUserId=22) -> 403 Forbidden và verify service không được gọi")
+        @DisplayName("Member A truy cập sang Member B (actorUserId=22) -> 403 Forbidden")
         void memberA_ViewsMemberBActivities_Forbidden() throws Exception {
             mockMvc.perform(get(BASE_URL + "/activities")
                             .param("actorUserId", String.valueOf(MEMBER_B_ID)))
