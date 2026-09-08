@@ -20,7 +20,7 @@ The architecture follows a modular monolith for the Spring Boot backend. This is
 - **Jira Cloud REST API** provides projects, issues, backlog and sprint information.
 - **GitHub REST API** provides repositories, commits, pull requests, users and workflow runs.
 
-## 3. Container view
+## 3. Application view
 
 ```mermaid
 flowchart LR
@@ -101,7 +101,7 @@ Flyway is the only mechanism allowed to change the production schema. Hibernate 
 
 ## 8. Deployment view
 
-For local development, React, Spring Boot and MySQL run as three processes on one workstation. The repository also contains `compose.yml` for a reproducible MySQL service. A later deployment may serve the React build through a web server, run the Spring Boot JAR as one application service and use a managed MySQL instance.
+For local development, React, Spring Boot and the installed MySQL 8.4 service run directly on one Windows workstation. A later deployment may serve the React build through a web server, run the Spring Boot JAR as one application service and use a managed MySQL instance.
 
 ## 9. Acceptance checklist
 
@@ -111,4 +111,3 @@ For local development, React, Spring Boot and MySQL run as three processes on on
 - [x] Documents authentication and synchronization flows.
 - [x] Defines data ownership, security and deployment decisions.
 - [x] Provides an editable draw.io diagram.
-
