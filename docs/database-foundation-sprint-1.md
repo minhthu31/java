@@ -13,7 +13,7 @@ DB_PASSWORD=<local password>
 INTEGRATION_ENCRYPTION_KEY=<at least 32 random characters>
 ```
 
-Developers can either use an installed MySQL 8.4 service or start the provided Docker Compose service. Secrets must remain in local environment variables or an untracked `.env` file.
+Developers use an installed MySQL 8.4 service on the workstation. On Windows, verify the `MySQL84` service is running before starting Spring Boot. Secrets must remain in local environment variables or an untracked `.env` file.
 
 ## CNPM-36 — Initial Flyway migration
 
