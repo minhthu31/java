@@ -1,0 +1,183 @@
+openapi: 3.0.3
+info:
+  title: CNPM Reporting API
+  version: 1.0.0
+  description: Contract báo cáo tiến độ và đóng góp được chốt bởi CNPM-102.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: Reporting
+
+paths:
+  /projects/{projectId}/reports/summary:
+    get:
+      tags: [Reporting]
+      operationId: getProjectReportSummary
+      summary: Lấy báo cáo tiến độ Task và đóng góp GitHub
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/SprintId'
+        - $ref: '#/components/parameters/MemberId'
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+      responses:
+        '200':
+          description: Báo cáo được trả cả khi không có dữ liệu hoặc dữ liệu mới đồng bộ một phần
+          headers:
+            X-Correlation-ID:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportSummaryApiResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
+    SprintId:
+      name: sprintId
+      in: query
+      schema: { type: integer, format: int64, minimum: 1 }
+    MemberId:
+      name: memberId
+      in: query
+      description: TEAM_MEMBER bị backend ép về user hiện tại.
+      schema: { type: integer, format: int64, minimum: 1 }
+    From:
+      name: from
+      in: query
+      description: Mốc đầu inclusive của kỳ báo cáo.
+      schema: { type: string, format: date-time }
+    To:
+      name: to
+      in: query
+      description: Mốc cuối exclusive; phải lớn hơn from.
+      schema: { type: string, format: date-time }
+
+  responses:
+    BadRequest:
+      description: Bộ lọc báo cáo không hợp lệ
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    Unauthorized:
+      description: Chưa xác thực hoặc JWT không hợp lệ
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    Forbidden:
+      description: Không có quyền xem phạm vi báo cáo
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    NotFound:
+      description: Project, Sprint hoặc member không tồn tại trong phạm vi
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+
+  schemas:
+    ReportSummaryApiResponse:
+      type: object
+      required: [data, timestamp]
+      properties:
+        data: { $ref: '#/components/schemas/ReportSummaryResponse' }
+        timestamp: { type: string, format: date-time }
+
+    ReportSummaryResponse:
+      type: object
+      required: [projectId, asOf, taskMetrics, memberContributions, dataStatus, sources, warnings]
+      properties:
+        projectId: { type: integer, format: int64 }
+        sprintId: { type: integer, format: int64, nullable: true }
+        memberId: { type: integer, format: int64, nullable: true }
+        from: { type: string, format: date-time, nullable: true }
+        to: { type: string, format: date-time, nullable: true }
+        asOf: { type: string, format: date-time }
+        taskMetrics: { $ref: '#/components/schemas/TaskMetricsResponse' }
+        memberContributions:
+          type: array
+          items: { $ref: '#/components/schemas/MemberContributionResponse' }
+        dataStatus:
+          type: string
+          enum: [COMPLETE, PARTIAL, NOT_SYNCED]
+        sources:
+          type: array
+          items: { $ref: '#/components/schemas/ReportSourceFreshnessResponse' }
+        warnings:
+          type: array
+          items: { type: string }
+
+    TaskMetricsResponse:
+      type: object
+      required: [totalTasks, completedTasks, overdueTasks, tasksByStatus]
+      properties:
+        totalTasks: { type: integer, format: int64, minimum: 0 }
+        completedTasks: { type: integer, format: int64, minimum: 0 }
+        overdueTasks: { type: integer, format: int64, minimum: 0 }
+        tasksByStatus:
+          type: object
+          required: [TO_DO, IN_PROGRESS, IN_REVIEW, DONE, BLOCKED, CANCELLED]
+          properties:
+            TO_DO: { type: integer, format: int64, minimum: 0 }
+            IN_PROGRESS: { type: integer, format: int64, minimum: 0 }
+            IN_REVIEW: { type: integer, format: int64, minimum: 0 }
+            DONE: { type: integer, format: int64, minimum: 0 }
+            BLOCKED: { type: integer, format: int64, minimum: 0 }
+            CANCELLED: { type: integer, format: int64, minimum: 0 }
+
+    MemberContributionResponse:
+      type: object
+      required: [memberId, username, fullName, commits, pullRequests, linkedTasks]
+      properties:
+        memberId: { type: integer, format: int64 }
+        username: { type: string }
+        fullName: { type: string }
+        commits: { type: integer, format: int64, minimum: 0 }
+        pullRequests: { type: integer, format: int64, minimum: 0 }
+        linkedTasks: { type: integer, format: int64, minimum: 0 }
+
+    ReportSourceFreshnessResponse:
+      type: object
+      required: [source, status]
+      properties:
+        source:
+          type: string
+          enum: [LOCAL_TASK, JIRA, GITHUB]
+        status:
+          type: string
+          enum: [CURRENT, STALE, NOT_SYNCED, SYNC_FAILED]
+        lastSyncedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ApiError:
+      type: object
+      required: [code, message, correlationId, timestamp]
+      properties:
+        code:
+          type: string
+          enum: [REPORT_FILTER_INVALID, UNAUTHORIZED, REPORT_ACCESS_DENIED, PROJECT_NOT_FOUND, SPRINT_NOT_FOUND, MEMBER_NOT_FOUND]
+        message: { type: string }
+        correlationId: { type: string }
+        fieldErrors:
+          type: object
+          additionalProperties: { type: string }
+        timestamp: { type: string, format: date-time }
