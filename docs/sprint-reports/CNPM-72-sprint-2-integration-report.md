@@ -38,7 +38,7 @@ Mốc nền dùng để tích hợp: `origin/main` tại commit `5721b9e` ngày 
 ### Chuẩn bị
 
 1. Tạo `.env` cục bộ từ `.env.example` và thay toàn bộ placeholder bằng giá trị local. Không commit file này.
-2. Chạy MySQL bằng `docker compose --env-file .env up -d mysql`.
+2. Kiểm tra Windows service `MySQL84` đang chạy và database `cnpm_project_support` đã được tạo.
 3. Chạy backend bằng `mvnw.cmd spring-boot:run`.
 4. Trong `frontend`, giữ `REACT_APP_API_URL=http://localhost:8080/api/v1`, sau đó chạy `npm start`.
 
