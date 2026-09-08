@@ -47,6 +47,12 @@ class GitHubRbacIntegrationTest {
     @MockitoBean
     private GitHubRestClient gitHubRestClient;
 
+    @MockitoBean
+    private GitHubCommitSyncService gitHubCommitSyncService;
+
+    @MockitoBean
+    private GitHubPullRequestSyncService gitHubPullRequestSyncService;
+
     @MockitoBean(name = "projectAuthorization")
     private ProjectAuthorizationService projectAuthorization;
 
@@ -63,7 +69,7 @@ class GitHubRbacIntegrationTest {
         {
             "repositoryOwner": "minhthu31",
             "repositoryName": "java",
-            "accessToken": "ghp_secretTokenExample123",
+            "accessToken": "test-token-not-a-secret",
             "apiVersion": "2026-03-10"
         }
         """;
@@ -109,6 +115,10 @@ class GitHubRbacIntegrationTest {
 
             when(gitHubConfigService.saveConfig(eq(MY_PROJECT_ID), any())).thenReturn(configResponse);
             when(gitHubConfigService.getConfig(eq(MY_PROJECT_ID))).thenReturn(configResponse);
+            when(gitHubCommitSyncService.syncCommits(MY_PROJECT_ID)).thenReturn(
+                    new GitHubCommitSyncResult(MY_PROJECT_ID, 1L, 2, 1, 1, 0, java.time.Instant.now(), "commit-correlation"));
+            when(gitHubPullRequestSyncService.syncPullRequests(MY_PROJECT_ID)).thenReturn(
+                    new GitHubPullRequestSyncResult(MY_PROJECT_ID, 1L, 1, 1, 0, 0, java.time.Instant.now(), "pr-correlation"));
 
             mockMvc.perform(put(BASE_URL + "/config")
                             .contentType(MediaType.APPLICATION_JSON)
@@ -118,6 +128,12 @@ class GitHubRbacIntegrationTest {
 
             mockMvc.perform(get(BASE_URL + "/activities"))
                     .andExpect(status().isOk());
+
+            mockMvc.perform(post(BASE_URL + "/sync"))
+                    .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.commitsSynced").value(2))
+                .andExpect(jsonPath("$.data.pullRequestsSynced").value(1))
+                .andExpect(jsonPath("$.data.linksCreated").value(2));
         }
     }
 
@@ -169,6 +185,9 @@ class GitHubRbacIntegrationTest {
             mockMvc.perform(put(BASE_URL + "/config")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(VALID_CONFIG_BODY))
+                    .andExpect(status().isForbidden());
+
+            mockMvc.perform(post(BASE_URL + "/sync"))
                     .andExpect(status().isForbidden());
         }
     }

@@ -2,10 +2,10 @@ package vn.edu.cnpm.projectsupport.integration.github;
 
 import java.time.Instant;
 
-public record GitHubCommitSyncResult(
+public record GitHubPullRequestSyncResult(
         Long projectId,
         Long repositoryId,
-        int commitsSynced,
+        int pullRequestsSynced,
         int linksCreated,
         int unlinkedActivities,
         int errors,

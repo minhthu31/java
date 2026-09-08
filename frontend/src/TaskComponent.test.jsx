@@ -16,6 +16,11 @@ import * as authService from "./authService";
 jest.mock("./TaskService");
 jest.mock("./JiraIntegrationService");
 jest.mock("./authService");
+jest.mock("./GitHubTaskActivityPanel", () => ({
+    GitHubTaskActivityPanel: ({ taskId }) => (
+        <div data-testid="github-task-activity-panel">GitHub Task {taskId}</div>
+    ),
+}));
 
 // Backend contract thật của Task: chỉ có jiraIssueKey, syncStatus
 const mockComprehensiveTasks = {

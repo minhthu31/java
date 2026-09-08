@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { TaskService } from "./TaskService";
 import { currentUser } from "./authService";
 import { JiraIntegrationService } from "./JiraIntegrationService";
+import { GitHubTaskActivityPanel } from "./GitHubTaskActivityPanel";
 
 const FORM_ISSUE_TYPES = ["TASK", "EPIC", "STORY", "BUG"];
 const PRIORITIES = ["HIGHEST", "HIGH", "MEDIUM", "LOW", "LOWEST"];
@@ -1994,6 +1995,11 @@ export default function TaskComponent({ projectId }) {
                                     "Không có tiêu chí nghiệm thu."}
                             </div>
                         </div>
+
+                        <GitHubTaskActivityPanel
+                            projectId={projectId}
+                            taskId={selectedTask.id}
+                        />
 
                         {selectedTask.syncStatus === "SYNC_FAILED" && (
                             <div

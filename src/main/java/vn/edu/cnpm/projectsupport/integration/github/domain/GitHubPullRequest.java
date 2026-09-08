@@ -209,11 +209,17 @@ public class GitHubPullRequest extends BaseEntity {
     public void setAuthorExternalAccountId(Long value) { 
         this.authorExternalAccountId = value; 
     }
+    public void setGithubPullRequestId(Long value) {
+        this.githubPullRequestId = value;
+    }
     public void setAuthorGithubUserId(Long value) { 
         this.authorGithubUserId = value; 
     }
     public void setAuthorLogin(String value) { 
         this.authorLogin = value; 
+    }
+    public void setTitle(String value) {
+        this.title = value;
     }
     public void setState(GitHubPullRequestState state) { 
         this.state = state; 
@@ -224,8 +230,14 @@ public class GitHubPullRequest extends BaseEntity {
     public void setBody(String body) { 
         this.body = body; 
     }
+    public void setHeadRef(String value) {
+        this.headRef = value;
+    }
     public void setHeadSha(String headSha) { 
         this.headSha = headSha; 
+    }
+    public void setBaseRef(String value) {
+        this.baseRef = value;
     }
     public void setDraft(boolean draft) { 
         this.draft = draft; 
@@ -250,6 +262,9 @@ public class GitHubPullRequest extends BaseEntity {
     }
     public void setClosedAt(Instant closedAt) { 
         this.closedAt = closedAt; 
+    }
+    public void setHtmlUrl(String value) {
+        this.htmlUrl = value;
     }
 
     public void applyMergedAtState() {

@@ -22,6 +22,12 @@ export const GitHubConfigService = {
         );
         return response.data?.data;
     },
+    sync: async (projectId) => {
+        const response = await api.post(
+            `${BASE_PROJECT_URL}/${projectId}/integrations/github/sync`,
+        );
+        return response.data?.data;
+    },
 };
 
 export default GitHubConfigService;

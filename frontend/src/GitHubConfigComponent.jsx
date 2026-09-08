@@ -18,6 +18,7 @@ export const GitHubConfigComponent = ({ currentUserRole, projectId }) => {
     const [loadError, setLoadError] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
     const [isTesting, setIsTesting] = useState(false);
+    const [isSyncing, setIsSyncing] = useState(false);
     const [message, setMessage] = useState(null);
 
     const fetchExistingConfig = async () => {
@@ -211,11 +212,39 @@ export const GitHubConfigComponent = ({ currentUserRole, projectId }) => {
         }
     };
 
-    const isBusy = initialLoading || isSaving || isTesting;
+    const handleSync = async () => {
+        if (connectionStatus !== "CONNECTED" || isDirty || loadError || isBusy) {
+            return;
+        }
+        try {
+            setIsSyncing(true);
+            setMessage(null);
+            const result = await GitHubConfigService.sync(projectId);
+            const commitCount = result?.commitsSynced ?? 0;
+            const pullRequestCount = result?.pullRequestsSynced ?? 0;
+            setMessage({
+                type: "success",
+                text: `Đồng bộ thành công ${commitCount} commit và ${pullRequestCount} Pull Request.`,
+            });
+        } catch (err) {
+            setMessage({
+                type: "error",
+                text:
+                    err.response?.data?.message ||
+                    "Đồng bộ GitHub thất bại. Vui lòng kiểm tra kết nối và thử lại.",
+            });
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    const isBusy = initialLoading || isSaving || isTesting || isSyncing;
 
     const canTest = isConfigured && !isDirty && !loadError && !isBusy;
 
     const canSave = !loadError && !isBusy;
+
+    const canSync = connectionStatus === "CONNECTED" && !isDirty && !loadError && !isBusy;
 
     const statusBadgeStyle = {
         CONNECTED: { bg: "#e3fcef", color: "#006644", text: "Connected" },
@@ -381,7 +410,7 @@ export const GitHubConfigComponent = ({ currentUserRole, projectId }) => {
                         placeholder={
                             isConfigured
                                 ? "•••••••••••••••• (Đã cấu hình, để trống nếu không muốn đổi)"
-                                : "ghp_xxxxxxxxxxxxxxxxxxxx"
+                                : "Nhập GitHub Personal Access Token"
                         }
                         value={accessToken}
                         onChange={(e) => {
@@ -532,6 +561,30 @@ export const GitHubConfigComponent = ({ currentUserRole, projectId }) => {
                         gap: "12px",
                     }}
                 >
+                    <button
+                        type="button"
+                        onClick={handleSync}
+                        disabled={!canSync}
+                        title={
+                            connectionStatus !== "CONNECTED" || isDirty
+                                ? "Hãy lưu cấu hình và kiểm tra kết nối trước khi đồng bộ"
+                                : ""
+                        }
+                        style={{
+                            padding: "9px 16px",
+                            fontSize: "14px",
+                            fontWeight: 500,
+                            backgroundColor: "#e3fcef",
+                            color: "#006644",
+                            border: "1px solid #abf5d1",
+                            borderRadius: "4px",
+                            cursor: !canSync ? "not-allowed" : "pointer",
+                            opacity: !canSync ? 0.6 : 1,
+                        }}
+                    >
+                        {isSyncing ? "Đang đồng bộ..." : "Đồng bộ GitHub"}
+                    </button>
+
                     <button
                         type="button"
                         onClick={handleTestConnection}
