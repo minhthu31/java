@@ -208,11 +208,11 @@ class GitHubRbacIntegrationTest {
     }
 
     @Nested
-    @DisplayName("4. Vai trò TEAM_MEMBER: Kiểm tra phân quyền và truy cập chéo")
+    @DisplayName("4. Vai trò TEAM_MEMBER: Kiểm tra ràng buộc danh tính và truy cập chéo")
     class TeamMemberScopeTests {
 
         @BeforeEach
-        void setupMember() {
+        void setupMemberA() {
             when(projectAuthorization.currentUserId()).thenReturn(MEMBER_A_ID);
             when(projectAuthorization.isCurrentUser(MEMBER_A_ID)).thenReturn(true);
             when(projectAuthorization.isCurrentUser(MEMBER_B_ID)).thenReturn(false);
@@ -239,7 +239,7 @@ class GitHubRbacIntegrationTest {
         @WithMockUser(username = "member_a", roles = {"TEAM_MEMBER"})
         @DisplayName("Member A truy cập sang Member B (actorUserId=22) -> 403 Forbidden và verify service không được gọi")
         void memberA_ViewsMemberBActivities_Forbidden() throws Exception {
-            // Khi thành viên truy cập ngoài phạm vi được phân quyền, quyền view task của dự án bị từ chối
+            // Khi thành viên truy cập chéo sang người khác (isCurrentUser = false), quyền truy cập phạm vi dữ liệu bị từ chối
             when(projectAuthorization.canViewTasks(MY_PROJECT_ID)).thenReturn(false);
 
             mockMvc.perform(get(BASE_URL + "/activities")
@@ -247,6 +247,16 @@ class GitHubRbacIntegrationTest {
                     .andExpect(status().isForbidden());
 
             verify(gitHubActivityService, never()).listActivities(any(), any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
+        @WithMockUser(username = "member_other", roles = {"TEAM_MEMBER"})
+        @DisplayName("Member không thuộc dự án -> 403 Forbidden")
+        void memberOtherProject_Forbidden() throws Exception {
+            when(projectAuthorization.canViewTasks(OTHER_PROJECT_ID)).thenReturn(false);
+
+            mockMvc.perform(get(OTHER_PROJECT_URL + "/activities"))
+                    .andExpect(status().isForbidden());
         }
 
         @Test
