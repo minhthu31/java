@@ -152,6 +152,9 @@
 					"request": {
 						"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
 						"method": "POST",
+						"header": [
+							{ "key": "Idempotency-Key", "value": "{{$guid}}" }
+						],
 						"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/tasks/{{taskId}}/sync", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "integrations", "jira", "tasks", "{{taskId}}", "sync" ] }
 					}
 				},
@@ -229,57 +232,72 @@
 			]
 		},
 		{
-			"name": "3. Project Data Sync & Logs",
-			"item": [
-				{
-					"name": "Đồng bộ Issue/Backlog từ Jira",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
-									"var jsonData = pm.response.json();",
-									"pm.test(\"Response có cấu trúc data và timestamp\", function () {",
-									"    pm.expect(jsonData).to.have.property('data');",
-									"    pm.expect(jsonData).to.have.property('timestamp');",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
-						"method": "POST",
-						"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/sync", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "integrations", "jira", "sync" ] }
-					}
-				},
-				{
-					"name": "Đọc danh sách SyncLog",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
-									"var jsonData = pm.response.json();",
-									"pm.test(\"Response có data là một danh sách (array)\", function () {",
-									"    pm.expect(jsonData.data).to.be.an('array');",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
-						"method": "GET",
-						"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/sync-logs", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "integrations", "jira", "sync-logs" ] }
-					}
-				}
-			]
-		},
+"name": "3. Project Data Sync & Logs",
+"item": [
+{
+	"name": "Đồng bộ Issue/Backlog/Sprint từ Jira",
+	"event": [
+		{
+			"listen": "test",
+			"script": {
+				"exec": [
+					"pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+					"var jsonData = pm.response.json();",
+					"pm.test(\"Response có cấu trúc data và timestamp\", function () {",
+					"    pm.expect(jsonData).to.have.property('data');",
+					"    pm.expect(jsonData).to.have.property('timestamp');",
+					"});"
+				],
+				"type": "text/javascript"
+			}
+		}
+	],
+	"request": {
+		"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
+		"method": "POST",
+		"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/sync", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "integrations", "jira", "sync" ] }
+	}
+},
+{
+	"name": "Đọc Log đồng bộ thất bại mới nhất",
+	"event": [
+		{
+			"listen": "test",
+			"script": {
+				"exec": [
+					"pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });"
+				],
+				"type": "text/javascript"
+			}
+		}
+	],
+	"request": {
+		"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
+		"method": "GET",
+		"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/sync/failed/latest", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "integrations", "jira", "sync", "failed", "latest" ] }
+	}
+},
+{
+	"name": "Lấy thông tin Issue từ Jira",
+	"event": [
+		{
+			"listen": "test",
+			"script": {
+				"exec": [
+					"pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });"
+				],
+				"type": "text/javascript"
+			}
+		}
+	],
+	"request": {
+		"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
+		"method": "GET",
+		"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/issues/{{jiraIssueKey}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "integrations", "jira", "issues", "{{jiraIssueKey}}" ] }
+	}
+}
+]
+},
 		{
 			"name": "4. [Tùy chọn] Retry Sync Task",
 			"description": "Chỉ thực thi khi cố tình giả lập trạng thái SYNC_FAILED cho một Task.",

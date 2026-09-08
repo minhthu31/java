@@ -16,6 +16,8 @@ Tài liệu này cung cấp hướng dẫn thiết lập môi trường và ch�
 | `jira_email` | Email tài khoản quản trị Jira | `admin@example.com` |
 | `jira_api_token`| API Token được tạo từ hệ thống Atlassian | `ATATT3xFfGF0...` |
 | `taskId` | ID của Task (Tự động lấy khi chạy request Tạo Task) | *(Tự động điền)* |
+| `member_user_id`| ID của user thành viên trong dự án để test assign | `2` |
+| `jiraIssueKey`  | Mã Issue trên Jira để test API lấy thông tin | `CNPM-123` |
 
 ## 2. Kịch bản Kiểm thử (Test Scenarios)
 Bộ Collection chạy nối tiếp nhau theo đúng thứ tự logic hệ thống:
