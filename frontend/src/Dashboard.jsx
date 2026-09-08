@@ -6,6 +6,7 @@ import SrsPreview from "./SrsPreview";
 import TaskComponent from "./TaskComponent";
 import JiraConfigComponent from "./JiraConfigComponent";
 import { GitHubConfigComponent } from "./GitHubConfigComponent";
+import { GitHubActivityComponent } from "./GitHubActivityComponent";
 
 const getRoleTitle = (role) => {
     switch (role) {
@@ -549,21 +550,34 @@ export default function Dashboard({ title }) {
                         </div>
                     )}
 
-                    {activeTab === "github" && (
-                        <div
-                            style={{
-                                padding: "40px 24px",
-                                textAlign: "center",
-                                color: "#6b778c",
-                            }}
-                        >
-                            <h3>Hoạt động GitHub</h3>
-                            <p style={{ margin: 0, fontSize: "14px" }}>
-                                Theo dõi lịch sử commits, pull requests và đóng
-                                góp mã nguồn.
-                            </p>
-                        </div>
-                    )}
+                    {activeTab === "github" &&
+                        (!selectedProjectId ? (
+                            <div
+                                data-testid="no-project-message"
+                                style={{
+                                    padding: "40px 24px",
+                                    textAlign: "center",
+                                    color: "#6b778c",
+                                }}
+                            >
+                                <h3
+                                    style={{
+                                        color: "#172b4d",
+                                        marginBottom: "8px",
+                                    }}
+                                >
+                                    Chưa chọn dự án
+                                </h3>
+                                <p style={{ margin: 0, fontSize: "14px" }}>
+                                    Vui lòng chọn một project trước khi xem hoạt
+                                    động GitHub.
+                                </p>
+                            </div>
+                        ) : (
+                            <GitHubActivityComponent
+                                projectId={selectedProjectId}
+                            />
+                        ))}
                 </section>
             </div>
         </main>

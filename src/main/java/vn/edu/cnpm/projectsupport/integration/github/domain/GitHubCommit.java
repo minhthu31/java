@@ -12,9 +12,7 @@ import java.time.Instant;
 @Entity
 @Table(
         name = "github_commits",
-        uniqueConstraints = @UniqueConstraint(
-                name = "uk_repository_commit",
-                columnNames = {"repository_id", "sha"}))
+        uniqueConstraints = @UniqueConstraint(name = "uk_repository_commit", columnNames = {"repository_id", "sha"}))
 public class GitHubCommit {
 
     @Id
@@ -81,12 +79,7 @@ public class GitHubCommit {
     protected GitHubCommit() {
     }
 
-    public GitHubCommit(
-            Long repositoryId,
-            String sha,
-            String message,
-            Instant committedAt,
-            String htmlUrl) {
+    public GitHubCommit(Long repositoryId, String sha, String message, Instant committedAt, String htmlUrl) {
         this.repositoryId = repositoryId;
         this.sha = sha;
         this.message = message;
@@ -96,41 +89,113 @@ public class GitHubCommit {
         this.deletions = 0;
     }
 
-    public Long getId() { return id; }
-    public Long getRepositoryId() { return repositoryId; }
-    public Long getAuthorExternalAccountId() { return authorExternalAccountId; }
-    public Long getAuthorGithubUserId() { return authorGithubUserId; }
-    public String getAuthorLogin() { return authorLogin; }
-    public String getGitAuthorName() { return gitAuthorName; }
-    public String getGitAuthorEmail() { return gitAuthorEmail; }
-    public String getGitCommitterName() { return gitCommitterName; }
-    public String getGitCommitterEmail() { return gitCommitterEmail; }
-    public Instant getCommitterAt() { return committerAt; }
-    public String getSha() { return sha; }
-    public String getMessage() { return message; }
-    public Instant getCommittedAt() { return committedAt; }
-    public String getHtmlUrl() { return htmlUrl; }
-    public Integer getAdditions() { return additions; }
-    public Integer getDeletions() { return deletions; }
-    public Integer getFilesChanged() { return filesChanged; }
-    public String getParentShas() { return parentShas; }
-    public boolean isReverted() { return reverted; }
-    public Instant getCreatedAt() { return createdAt; }
+    public Long getId() {
+        return id;
+    }
+    public Long getRepositoryId() {
+        return repositoryId;
+    }
+    public Long getAuthorExternalAccountId() {
+        return authorExternalAccountId;
+    }
+    public Long getAuthorGithubUserId() {
+        return authorGithubUserId;
+    }
+    public String getAuthorLogin() {
+        return authorLogin;
+    }
+    public String getGitAuthorName() {
+        return gitAuthorName;
+    }
+    public String getGitAuthorEmail() {
+        return gitAuthorEmail;
+    }
+    public String getGitCommitterName() {
+        return gitCommitterName;
+    }
+    public String getGitCommitterEmail() {
+        return gitCommitterEmail;
+    }
+    public Instant getCommitterAt() {
+        return committerAt;
+    }
+    public String getSha() {
+        return sha;
+    }
+    public String getMessage() {
+        return message;
+    }
+    public Instant getCommittedAt() {
+        return committedAt;
+    }
+    public String getHtmlUrl() {
+        return htmlUrl;
+    }
+    public Integer getAdditions() {
+        return additions;
+    }
+    public Integer getDeletions() {
+        return deletions;
+    }
+    public Integer getFilesChanged() {
+        return filesChanged;
+    }
+    public String getParentShas() {
+        return parentShas;
+    }
+    public boolean isReverted() {
+        return reverted;
+    }
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
 
-    public void setAuthorExternalAccountId(Long value) { this.authorExternalAccountId = value; }
-    public void setMessage(String value) { this.message = value; }
-    public void setCommittedAt(Instant value) { this.committedAt = value; }
-    public void setHtmlUrl(String value) { this.htmlUrl = value; }
-    public void setAuthorGithubUserId(Long value) { this.authorGithubUserId = value; }
-    public void setAuthorLogin(String value) { this.authorLogin = value; }
-    public void setGitAuthorName(String value) { this.gitAuthorName = value; }
-    public void setGitAuthorEmail(String value) { this.gitAuthorEmail = value; }
-    public void setGitCommitterName(String value) { this.gitCommitterName = value; }
-    public void setGitCommitterEmail(String value) { this.gitCommitterEmail = value; }
-    public void setCommitterAt(Instant value) { this.committerAt = value; }
-    public void setAdditions(Integer additions) { this.additions = additions == null ? 0 : additions; }
-    public void setDeletions(Integer deletions) { this.deletions = deletions == null ? 0 : deletions; }
-    public void setFilesChanged(Integer filesChanged) { this.filesChanged = filesChanged; }
-    public void setParentShas(String parentShas) { this.parentShas = parentShas; }
-    public void setReverted(boolean reverted) { this.reverted = reverted; }
+    public void setAuthorExternalAccountId(Long value) {
+        this.authorExternalAccountId = value;
+    }
+    public void setMessage(String value) {
+        this.message = value;
+    }
+    public void setCommittedAt(Instant value) {
+        this.committedAt = value;
+    }
+    public void setHtmlUrl(String value) {
+        this.htmlUrl = value;
+    }
+    public void setAuthorGithubUserId(Long value) {
+        this.authorGithubUserId = value;
+    }
+    public void setAuthorLogin(String value) {
+        this.authorLogin = value;
+    }
+    public void setGitAuthorName(String value) {
+        this.gitAuthorName = value;
+    }
+    public void setGitAuthorEmail(String value) {
+        this.gitAuthorEmail = value;
+    }
+    public void setGitCommitterName(String value) {
+        this.gitCommitterName = value;
+    }
+    public void setGitCommitterEmail(String value) {
+        this.gitCommitterEmail = value;
+    }
+    public void setCommitterAt(Instant value) {
+        this.committerAt = value;
+    }
+    public void setAdditions(Integer additions) {
+        this.additions = additions == null ? 0 : additions;
+    }
+    public void setDeletions(Integer deletions) {
+        this.deletions = deletions == null ? 0 : deletions;
+    }
+    public void setFilesChanged(Integer filesChanged) {
+        this.filesChanged = filesChanged;
+    }
+    public void setParentShas(String parentShas) {
+        this.parentShas = parentShas;
+    }
+    public void setReverted(boolean reverted) {
+        this.reverted = reverted;
+    }
 }

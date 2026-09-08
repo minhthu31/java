@@ -72,9 +72,7 @@ public class ActivityLog {
             String reason) {
         ActivityLog log = base(groupId, taskId, actorUserId, "STATUS_CHANGED");
         log.oldValue = Map.of("status", oldStatus);
-        log.newValue = reason == null || reason.isBlank()
-                ? Map.of("status", newStatus)
-                : Map.of("status", newStatus, "reason", reason);
+        log.newValue = reason == null || reason.isBlank() ? Map.of("status", newStatus) : Map.of("status", newStatus, "reason", reason);
         return log;
     }
 
@@ -106,10 +104,59 @@ public class ActivityLog {
         return log;
     }
 
+    public static ActivityLog githubAccountLinked(
+            Long groupId,
+            Long accountId,
+            Long actorUserId,
+            Long userId,
+            String externalUserId,
+            String login) {
+        ActivityLog log = baseExternalAccount(groupId, accountId, actorUserId, "GITHUB_ACCOUNT_LINKED");
+        log.newValue = externalAccountValue(userId, externalUserId, login);
+        return log;
+    }
+
+    public static ActivityLog githubAccountRelinked(
+            Long groupId,
+            Long accountId,
+            Long actorUserId,
+            Long userId,
+            String oldExternalUserId,
+            String oldLogin,
+            String newExternalUserId,
+            String newLogin) {
+        ActivityLog log = baseExternalAccount(groupId, accountId, actorUserId, "GITHUB_ACCOUNT_RELINKED");
+        log.oldValue = externalAccountValue(userId, oldExternalUserId, oldLogin);
+        log.newValue = externalAccountValue(userId, newExternalUserId, newLogin);
+        return log;
+    }
+
     private static Map<String, Object> nullableValue(String key, Object value) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put(key, value);
         return result;
+    }
+
+    private static Map<String, Object> externalAccountValue(Long userId, String externalUserId, String login) {
+        Map<String, Object> value = new LinkedHashMap<>();
+        value.put("userId", userId);
+        value.put("provider", "GITHUB");
+        value.put("externalUserId", externalUserId);
+        value.put("login", login);
+        return value;
+    }
+
+    private static ActivityLog baseExternalAccount(Long groupId, Long accountId, Long actorUserId, String action) {
+        ActivityLog log = new ActivityLog();
+        log.groupId = groupId;
+        log.entityType = "USER_EXTERNAL_ACCOUNT";
+        log.entityId = String.valueOf(accountId);
+        log.actorUserId = actorUserId;
+        log.action = action;
+        log.result = "SUCCESS";
+        String currentCorrelationId = MDC.get("correlationId");
+        log.correlationId = currentCorrelationId == null || currentCorrelationId.isBlank() ? UUID.randomUUID().toString() : currentCorrelationId;
+        return log;
     }
 
     private static ActivityLog base(Long groupId, Long taskId, Long actorUserId, String action) {
@@ -121,21 +168,41 @@ public class ActivityLog {
         log.action = action;
         log.result = "SUCCESS";
         String currentCorrelationId = MDC.get("correlationId");
-        log.correlationId = currentCorrelationId == null || currentCorrelationId.isBlank()
-                ? UUID.randomUUID().toString()
-                : currentCorrelationId;
+        log.correlationId = currentCorrelationId == null || currentCorrelationId.isBlank() ? UUID.randomUUID().toString() : currentCorrelationId;
         return log;
     }
 
-    public Long getId() { return id; }
-    public Long getActorUserId() { return actorUserId; }
-    public Long getGroupId() { return groupId; }
-    public String getEntityType() { return entityType; }
-    public String getEntityId() { return entityId; }
-    public String getAction() { return action; }
-    public Map<String, Object> getOldValue() { return oldValue; }
-    public Map<String, Object> getNewValue() { return newValue; }
-    public String getResult() { return result; }
-    public String getCorrelationId() { return correlationId; }
-    public Instant getCreatedAt() { return createdAt; }
+    public Long getId() {
+        return id;
+    }
+    public Long getActorUserId() {
+        return actorUserId;
+    }
+    public Long getGroupId() {
+        return groupId;
+    }
+    public String getEntityType() {
+        return entityType;
+    }
+    public String getEntityId() {
+        return entityId;
+    }
+    public String getAction() {
+        return action;
+    }
+    public Map<String, Object> getOldValue() {
+        return oldValue;
+    }
+    public Map<String, Object> getNewValue() {
+        return newValue;
+    }
+    public String getResult() {
+        return result;
+    }
+    public String getCorrelationId() {
+        return correlationId;
+    }
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
 }
