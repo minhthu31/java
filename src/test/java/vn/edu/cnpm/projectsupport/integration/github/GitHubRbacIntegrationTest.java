@@ -13,7 +13,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.Collections;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -27,7 +26,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
-
 import vn.edu.cnpm.projectsupport.common.api.PageResponse;
 import vn.edu.cnpm.projectsupport.security.ProjectAuthorizationService;
 
@@ -58,7 +56,6 @@ class GitHubRbacIntegrationTest {
     private static final Long MEMBER_B_ID = 22L;
     private static final Long ASSIGNED_TASK_ID = 101L;
     private static final Long UNASSIGNED_TASK_ID = 202L;
-
     private static final String BASE_URL = "/api/v1/projects/" + MY_PROJECT_ID + "/integrations/github";
     private static final String OTHER_PROJECT_URL = "/api/v1/projects/" + OTHER_PROJECT_ID + "/integrations/github";
 
@@ -80,7 +77,6 @@ class GitHubRbacIntegrationTest {
 
         when(gitHubActivityService.listActivities(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(new PageResponse<>(Collections.emptyList(), 0, 20, 0, 0, true, true));
-
         when(gitHubActivityService.listTaskActivities(any(), any(), any()))
                 .thenReturn(new PageResponse<>(Collections.emptyList(), 0, 20, 0, 0, true, true));
     }
@@ -90,10 +86,8 @@ class GitHubRbacIntegrationTest {
     void unauthenticatedAccess_Returns401() throws Exception {
         mockMvc.perform(get(BASE_URL + "/config"))
                 .andExpect(status().isUnauthorized());
-
         mockMvc.perform(get(BASE_URL + "/activities"))
                 .andExpect(status().isUnauthorized());
-
         mockMvc.perform(post(BASE_URL + "/test-connection"))
                 .andExpect(status().isUnauthorized());
     }
@@ -144,6 +138,7 @@ class GitHubRbacIntegrationTest {
                     .configured(true)
                     .status("CONNECTED")
                     .build();
+
             when(gitHubConfigService.getConfig(eq(MY_PROJECT_ID))).thenReturn(configResponse);
 
             mockMvc.perform(get(BASE_URL + "/config"))
@@ -163,7 +158,6 @@ class GitHubRbacIntegrationTest {
 
             mockMvc.perform(get(OTHER_PROJECT_URL + "/config"))
                     .andExpect(status().isForbidden());
-
             mockMvc.perform(get(OTHER_PROJECT_URL + "/activities"))
                     .andExpect(status().isForbidden());
         }
@@ -217,9 +211,21 @@ class GitHubRbacIntegrationTest {
             when(projectAuthorization.isCurrentUser(MEMBER_A_ID)).thenReturn(true);
             when(projectAuthorization.isCurrentUser(MEMBER_B_ID)).thenReturn(false);
             when(projectAuthorization.isCurrentUser(null)).thenReturn(false);
-
             when(projectAuthorization.canViewTask(MY_PROJECT_ID, ASSIGNED_TASK_ID)).thenReturn(true);
             when(projectAuthorization.canViewTask(MY_PROJECT_ID, UNASSIGNED_TASK_ID)).thenReturn(false);
+        }
+
+        @Test
+        @WithMockUser(username = "member_a", roles = {"TEAM_MEMBER"})
+        @DisplayName("Member A không truyền actorUserId -> Tự động dùng currentUserId của Member A (200 OK)")
+        void memberA_NoParam_UsesCurrentUserId_Success() throws Exception {
+            when(projectAuthorization.canViewTasks(MY_PROJECT_ID)).thenReturn(true);
+            when(projectAuthorization.isCurrentUserLeader(MY_PROJECT_ID)).thenReturn(false);
+
+            mockMvc.perform(get(BASE_URL + "/activities"))
+                    .andExpect(status().isOk());
+
+            verify(gitHubActivityService).listActivities(eq(MY_PROJECT_ID), eq(MEMBER_A_ID), any(), any(), any(), any(), any());
         }
 
         @Test
@@ -227,6 +233,7 @@ class GitHubRbacIntegrationTest {
         @DisplayName("Member A xem commit/hoạt động của chính mình (actorUserId=11) -> 200 OK")
         void memberA_ViewsOwnActivities_Success() throws Exception {
             when(projectAuthorization.canViewTasks(MY_PROJECT_ID)).thenReturn(true);
+            when(projectAuthorization.isCurrentUserLeader(MY_PROJECT_ID)).thenReturn(false);
 
             mockMvc.perform(get(BASE_URL + "/activities")
                             .param("actorUserId", String.valueOf(MEMBER_A_ID)))
@@ -239,13 +246,16 @@ class GitHubRbacIntegrationTest {
         @WithMockUser(username = "member_a", roles = {"TEAM_MEMBER"})
         @DisplayName("Member A truy cập sang Member B (actorUserId=22) -> 403 Forbidden và verify service không được gọi")
         void memberA_ViewsMemberBActivities_Forbidden() throws Exception {
-            // Khi thành viên truy cập chéo sang người khác (isCurrentUser = false), quyền truy cập phạm vi dữ liệu bị từ chối
-            when(projectAuthorization.canViewTasks(MY_PROJECT_ID)).thenReturn(false);
+            // SỬA THEO LEADER: canViewTasks vẫn giữ bằng true (Member A vẫn thuộc project này)
+            when(projectAuthorization.canViewTasks(MY_PROJECT_ID)).thenReturn(true);
+            when(projectAuthorization.isCurrentUserLeader(MY_PROJECT_ID)).thenReturn(false);
 
+            // Member A gọi API nhưng truyền actorUserId của Member B
             mockMvc.perform(get(BASE_URL + "/activities")
                             .param("actorUserId", String.valueOf(MEMBER_B_ID)))
                     .andExpect(status().isForbidden());
 
+            // SỬA THEO LEADER: Xác nhận service không bị gọi khi truy cập chéo
             verify(gitHubActivityService, never()).listActivities(any(), any(), any(), any(), any(), any(), any());
         }
 
