@@ -84,3 +84,25 @@ https://api.github.com/repos/{{owner}}/{{repo}}/commits
 | `github_token` | Lưu GitHub Personal Access Token dùng để xác thực. |
 | `owner` | Tên chủ sở hữu repository. |
 | `repo` | Tên repository cần truy cập. |
+
+## 5. Kiểm thử luồng tích hợp của hệ thống
+
+Sau khi Admin lưu cấu hình và Test Connection thành công, gọi endpoint nội bộ:
+
+```http
+POST {{base_url}}/api/v1/projects/{{project_id}}/integrations/github/sync
+Authorization: Bearer {{app_access_token}}
+```
+
+Endpoint chỉ dành cho Admin. Hệ thống đọc toàn bộ trang commit và Pull Request, cập nhật dữ liệu theo cơ chế upsert, nhận diện Jira Issue Key dạng `CNPM-xx`, tạo liên kết với Task và ghi SyncLog. Chạy lại request không được tạo bản ghi hoặc liên kết trùng.
+
+Response thành công dùng envelope chuẩn `{ data, timestamp }`. Trong `data` cần kiểm tra `commitsSynced`, `pullRequestsSynced`, `linksCreated`, `unlinkedActivities`, `errors`, `lastSyncedAt` và `correlationId`.
+
+Sau khi đồng bộ, kiểm tra hoạt động đã gắn với Task:
+
+```http
+GET {{base_url}}/api/v1/projects/{{project_id}}/tasks/{{task_id}}/activities?page=0&size=20
+Authorization: Bearer {{app_access_token}}
+```
+
+Không lưu `github_token` hoặc `app_access_token` trong collection được commit. Dùng Postman environment cục bộ và tắt chia sẻ giá trị bí mật.
