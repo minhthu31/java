@@ -2,6 +2,7 @@ package vn.edu.cnpm.projectsupport.integration.github;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -53,7 +54,6 @@ class GitHubRbacIntegrationTest {
     private static final Long MY_PROJECT_ID = 100L;
     private static final Long OTHER_PROJECT_ID = 999L;
     private static final Long MEMBER_A_ID = 11L;
-    private static final Long MEMBER_B_ID = 22L;
     private static final Long ASSIGNED_TASK_ID = 101L;
     private static final Long UNASSIGNED_TASK_ID = 202L;
 
@@ -126,15 +126,14 @@ class GitHubRbacIntegrationTest {
     }
 
     @Nested
-    @DisplayName("2. Vai trò TEAM_LEADER")
+    @DisplayName("2. Vai trò TEAM_LEADER: Đúng project vs Khác project")
     class TeamLeaderRoleTests {
 
         @Test
         @WithMockUser(username = "leader_user", roles = {"TEAM_LEADER"})
-        @DisplayName("TEAM_LEADER đúng project: Xem được cấu hình và toàn bộ activities nhóm")
+        @DisplayName("TEAM_LEADER đúng project: Xem được cấu hình và activities")
         void teamLeaderInProject_Success() throws Exception {
             when(projectAuthorization.canViewTasks(MY_PROJECT_ID)).thenReturn(true);
-            when(projectAuthorization.canManageTasks(MY_PROJECT_ID)).thenReturn(true);
             when(projectAuthorization.isCurrentUserLeader(MY_PROJECT_ID)).thenReturn(true);
 
             GitHubConfigResponse configResponse = GitHubConfigResponse.builder()
@@ -146,7 +145,8 @@ class GitHubRbacIntegrationTest {
             when(gitHubConfigService.getConfig(eq(MY_PROJECT_ID))).thenReturn(configResponse);
 
             mockMvc.perform(get(BASE_URL + "/config"))
-                    .andExpect(status().isOk());
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.accessToken").doesNotExist());
 
             mockMvc.perform(get(BASE_URL + "/activities"))
                     .andExpect(status().isOk());
@@ -157,7 +157,6 @@ class GitHubRbacIntegrationTest {
         @DisplayName("TEAM_LEADER khác project -> 403 Forbidden")
         void teamLeaderOtherProject_Forbidden() throws Exception {
             when(projectAuthorization.canViewTasks(OTHER_PROJECT_ID)).thenReturn(false);
-            when(projectAuthorization.canManageTasks(OTHER_PROJECT_ID)).thenReturn(false);
             when(projectAuthorization.isCurrentUserLeader(OTHER_PROJECT_ID)).thenReturn(false);
 
             mockMvc.perform(get(OTHER_PROJECT_URL + "/config"))
@@ -166,10 +165,20 @@ class GitHubRbacIntegrationTest {
             mockMvc.perform(get(OTHER_PROJECT_URL + "/activities"))
                     .andExpect(status().isForbidden());
         }
+
+        @Test
+        @WithMockUser(username = "leader_user", roles = {"TEAM_LEADER"})
+        @DisplayName("TEAM_LEADER: Cấm sửa cấu hình (PUT /config) -> 403 Forbidden")
+        void teamLeaderCannotModifyConfig() throws Exception {
+            mockMvc.perform(put(BASE_URL + "/config")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(VALID_CONFIG_BODY))
+                    .andExpect(status().isForbidden());
+        }
     }
 
     @Nested
-    @DisplayName("3. Vai trò LECTURER")
+    @DisplayName("3. Vai trò LECTURER: Đúng project vs Khác project")
     class LecturerRoleTests {
 
         @Test
@@ -177,7 +186,6 @@ class GitHubRbacIntegrationTest {
         @DisplayName("LECTURER đúng project: Được xem activities, cấm GET /config")
         void lecturerInProject_Permissions() throws Exception {
             when(projectAuthorization.canViewTasks(MY_PROJECT_ID)).thenReturn(true);
-            when(projectAuthorization.canManageTasks(MY_PROJECT_ID)).thenReturn(true);
 
             mockMvc.perform(get(BASE_URL + "/activities"))
                     .andExpect(status().isOk());
@@ -185,47 +193,42 @@ class GitHubRbacIntegrationTest {
             mockMvc.perform(get(BASE_URL + "/config"))
                     .andExpect(status().isForbidden());
         }
+
+        @Test
+        @WithMockUser(username = "lecturer_other", roles = {"LECTURER"})
+        @DisplayName("LECTURER khác project -> 403 Forbidden")
+        void lecturerOtherProject_Forbidden() throws Exception {
+            when(projectAuthorization.canViewTasks(OTHER_PROJECT_ID)).thenReturn(false);
+
+            mockMvc.perform(get(OTHER_PROJECT_URL + "/activities"))
+                    .andExpect(status().isForbidden());
+        }
     }
 
     @Nested
-    @DisplayName("4. Vai trò TEAM_MEMBER: Kiểm soát chặt chẽ phạm vi activities cá nhân")
+    @DisplayName("4. Vai trò TEAM_MEMBER: Phân quyền theo Task và Giới hạn truy cập")
     class TeamMemberScopeTests {
-
-        @BeforeEach
-        void setupMemberA() {
-            when(projectAuthorization.canViewTasks(MY_PROJECT_ID)).thenReturn(true);
-            when(projectAuthorization.canManageTasks(MY_PROJECT_ID)).thenReturn(false); // Member không có quyền quản lý task
-            when(projectAuthorization.isCurrentUser(MEMBER_A_ID)).thenReturn(true);
-            when(projectAuthorization.isCurrentUser(MEMBER_B_ID)).thenReturn(false);
-            when(projectAuthorization.isCurrentUser(null)).thenReturn(false);
-
-            when(projectAuthorization.canViewTask(MY_PROJECT_ID, ASSIGNED_TASK_ID)).thenReturn(true);
-            when(projectAuthorization.canViewTask(MY_PROJECT_ID, UNASSIGNED_TASK_ID)).thenReturn(false);
-        }
 
         @Test
         @WithMockUser(username = "member_a", roles = {"TEAM_MEMBER"})
-        @DisplayName("Member A xem commit/hoạt động của chính mình -> 200 OK")
+        @DisplayName("Member A xem commit/hoạt động cá nhân với actorUserId -> 200 OK")
         void memberA_ViewsOwnActivities_Success() throws Exception {
+            when(projectAuthorization.canViewTasks(MY_PROJECT_ID)).thenReturn(true);
+
             mockMvc.perform(get(BASE_URL + "/activities")
                             .param("actorUserId", String.valueOf(MEMBER_A_ID)))
                     .andExpect(status().isOk());
+
+            verify(gitHubActivityService).listActivities(eq(MY_PROJECT_ID), eq(MEMBER_A_ID), any(), any(), any(), any(), any());
         }
 
         @Test
-        @WithMockUser(username = "member_a", roles = {"TEAM_MEMBER"})
-        @DisplayName("Member A cố truyền actorUserId của thành viên khác -> 403 Forbidden")
-        void memberA_ViewsMemberBActivities_Forbidden() throws Exception {
-            mockMvc.perform(get(BASE_URL + "/activities")
-                            .param("actorUserId", String.valueOf(MEMBER_B_ID)))
-                    .andExpect(status().isForbidden());
-        }
+        @WithMockUser(username = "member_other", roles = {"TEAM_MEMBER"})
+        @DisplayName("Member không thuộc dự án gọi GET /activities -> 403 Forbidden")
+        void memberOtherProject_Forbidden() throws Exception {
+            when(projectAuthorization.canViewTasks(OTHER_PROJECT_ID)).thenReturn(false);
 
-        @Test
-        @WithMockUser(username = "member_a", roles = {"TEAM_MEMBER"})
-        @DisplayName("Member A bỏ actorUserId để cố xem hoạt động toàn nhóm -> 403 Forbidden")
-        void memberA_OmitsActorUserIdToViewAll_Forbidden() throws Exception {
-            mockMvc.perform(get(BASE_URL + "/activities"))
+            mockMvc.perform(get(OTHER_PROJECT_URL + "/activities"))
                     .andExpect(status().isForbidden());
         }
 
@@ -233,15 +236,37 @@ class GitHubRbacIntegrationTest {
         @WithMockUser(username = "member_a", roles = {"TEAM_MEMBER"})
         @DisplayName("Member A xem hoạt động task được giao -> 200 OK")
         void memberA_ViewsAssignedTask_Success() throws Exception {
+            when(projectAuthorization.canViewTask(MY_PROJECT_ID, ASSIGNED_TASK_ID)).thenReturn(true);
+
             mockMvc.perform(get(BASE_URL + "/tasks/" + ASSIGNED_TASK_ID + "/activities"))
                     .andExpect(status().isOk());
         }
 
         @Test
         @WithMockUser(username = "member_a", roles = {"TEAM_MEMBER"})
-        @DisplayName("Member A xem hoạt động task chưa được giao -> 403 Forbidden")
+        @DisplayName("Member A xem hoạt động task chưa được giao / của người khác -> 403 Forbidden")
         void memberA_ViewsUnassignedTask_Forbidden() throws Exception {
+            when(projectAuthorization.canViewTask(MY_PROJECT_ID, UNASSIGNED_TASK_ID)).thenReturn(false);
+
             mockMvc.perform(get(BASE_URL + "/tasks/" + UNASSIGNED_TASK_ID + "/activities"))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        @WithMockUser(username = "member_a", roles = {"TEAM_MEMBER"})
+        @DisplayName("TEAM_MEMBER: Cấm xem GET /config -> 403 Forbidden")
+        void teamMember_CannotGetConfig() throws Exception {
+            mockMvc.perform(get(BASE_URL + "/config"))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        @WithMockUser(username = "member_a", roles = {"TEAM_MEMBER"})
+        @DisplayName("TEAM_MEMBER: Cấm sửa PUT /config -> 403 Forbidden")
+        void teamMember_CannotModifyConfig() throws Exception {
+            mockMvc.perform(put(BASE_URL + "/config")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(VALID_CONFIG_BODY))
                     .andExpect(status().isForbidden());
         }
     }
