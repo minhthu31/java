@@ -271,3 +271,4 @@ class GitHubRbacIntegrationTest {
                     .andExpect(status().isForbidden());
         }
     }
+}
