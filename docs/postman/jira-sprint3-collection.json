@@ -210,12 +210,12 @@
 						{
 							"listen": "test",
 							"script": {
-"exec": [
+								"exec": [
 									"pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
 									"const jsonData = pm.response.json();",
 									"pm.test(\"Kiểm tra jiraIssueKey và syncStatus\", function () {",
 									"    pm.expect(jsonData.data.jiraIssueKey).to.be.a(\"string\").and.not.empty;",
-									"    pm.expect(jsonData.data).to.have.property(\"syncStatus\");",
+									"    pm.expect(jsonData.data.syncStatus).to.equal(\"SYNCED\");",
 									"    pm.environment.set(\"jiraIssueKey\", jsonData.data.jiraIssueKey);",
 									"});"
 								],
