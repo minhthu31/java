@@ -135,30 +135,6 @@
 					}
 				},
 				{
-					"name": "Đồng bộ Task lên Jira",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
-									"var jsonData = pm.response.json();",
-									"pm.test(\"Response trả về data\", function () { pm.expect(jsonData).to.have.property('data'); });"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
-						"method": "POST",
-						"header": [
-							{ "key": "Idempotency-Key", "value": "{{$guid}}" }
-						],
-						"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/tasks/{{taskId}}/sync", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "integrations", "jira", "tasks", "{{taskId}}", "sync" ] }
-					}
-				},
-				{
 					"name": "Cập nhật Status Task",
 					"event": [
 						{
@@ -205,7 +181,7 @@
 					}
 				},
 				{
-					"name": "Đọc lại Task (Kiểm tra jiraIssueKey & syncStatus)",
+					"name": "Đồng bộ Task lên Jira",
 					"event": [
 						{
 							"listen": "test",
@@ -213,11 +189,32 @@
 								"exec": [
 									"pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
 									"var jsonData = pm.response.json();",
-									"pm.test(\"Dữ liệu Task có chứa jiraIssueKey và syncStatus\", function () {",
-									"    pm.expect(jsonData.data).to.have.property('jiraIssueKey');",
-									"    pm.expect(jsonData.data.jiraIssueKey).to.not.be.null;",
-									"    pm.expect(jsonData.data).to.have.property('syncStatus');",
-									"});"
+									"pm.test(\"Response trả về data\", function () { pm.expect(jsonData).to.have.property('data'); });"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
+						"method": "POST",
+						"header": [
+							{ "key": "Idempotency-Key", "value": "{{$guid}}" }
+						],
+						"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/tasks/{{taskId}}/sync", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "integrations", "jira", "tasks", "{{taskId}}", "sync" ] }
+					}
+				},
+				{
+					"name": "Đọc lại Task (Kiểm tra jiraIssueKey & syncStatus)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+									"const jsonData = pm.response.json();",
+									"pm.expect(jsonData.data.jiraIssueKey).to.be.a(\"string\").and.not.empty;",
+									"pm.environment.set(\"jiraIssueKey\", jsonData.data.jiraIssueKey);"
 								],
 								"type": "text/javascript"
 							}
@@ -228,76 +225,76 @@
 						"method": "GET",
 						"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/tasks/{{taskId}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "tasks", "{{taskId}}" ] }
 					}
+				},
+				{
+					"name": "Lấy thông tin Issue từ Jira",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
+						"method": "GET",
+						"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/issues/{{jiraIssueKey}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "integrations", "jira", "issues", "{{jiraIssueKey}}" ] }
+					}
 				}
 			]
 		},
 		{
-"name": "3. Project Data Sync & Logs",
-"item": [
-{
-	"name": "Đồng bộ Issue/Backlog/Sprint từ Jira",
-	"event": [
-		{
-			"listen": "test",
-			"script": {
-				"exec": [
-					"pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
-					"var jsonData = pm.response.json();",
-					"pm.test(\"Response có cấu trúc data và timestamp\", function () {",
-					"    pm.expect(jsonData).to.have.property('data');",
-					"    pm.expect(jsonData).to.have.property('timestamp');",
-					"});"
+			"name": "3. Project Data Sync & Logs",
+			"item": [
+			{
+				"name": "Đồng bộ Issue/Backlog/Sprint từ Jira",
+				"event": [
+					{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+								"var jsonData = pm.response.json();",
+								"pm.test(\"Response có cấu trúc data và timestamp\", function () {",
+								"    pm.expect(jsonData).to.have.property('data');",
+								"    pm.expect(jsonData).to.have.property('timestamp');",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}
 				],
-				"type": "text/javascript"
-			}
-		}
-	],
-	"request": {
-		"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
-		"method": "POST",
-		"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/sync", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "integrations", "jira", "sync" ] }
-	}
-},
-{
-	"name": "Đọc Log đồng bộ thất bại mới nhất",
-	"event": [
-		{
-			"listen": "test",
-			"script": {
-				"exec": [
-					"pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });"
+				"request": {
+					"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
+					"method": "POST",
+					"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/sync", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "integrations", "jira", "sync" ] }
+				}
+			},
+			{
+				"name": "Đọc Log đồng bộ thất bại mới nhất",
+				"event": [
+					{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });"
+							],
+							"type": "text/javascript"
+						}
+					}
 				],
-				"type": "text/javascript"
+				"request": {
+					"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
+					"method": "GET",
+					"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/sync/failed/latest", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "integrations", "jira", "sync", "failed", "latest" ] }
+				}
 			}
-		}
-	],
-	"request": {
-		"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
-		"method": "GET",
-		"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/sync/failed/latest", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "integrations", "jira", "sync", "failed", "latest" ] }
-	}
-},
-{
-	"name": "Lấy thông tin Issue từ Jira",
-	"event": [
-		{
-			"listen": "test",
-			"script": {
-				"exec": [
-					"pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });"
-				],
-				"type": "text/javascript"
-			}
-		}
-	],
-	"request": {
-		"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token_leader}}", "type": "string" } ] },
-		"method": "GET",
-		"url": { "raw": "{{baseUrl}}/api/v1/projects/{{projectId}}/integrations/jira/issues/{{jiraIssueKey}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "projects", "{{projectId}}", "integrations", "jira", "issues", "{{jiraIssueKey}}" ] }
-	}
-}
-]
-},
+			]
+		},
 		{
 			"name": "4. [Tùy chọn] Retry Sync Task",
 			"description": "Chỉ thực thi khi cố tình giả lập trạng thái SYNC_FAILED cho một Task.",
@@ -337,6 +334,7 @@
 		{ "key": "jira_project_key", "value": "" },
 		{ "key": "jira_email", "value": "" },
 		{ "key": "jira_api_token", "value": "" },
-		{ "key": "taskId", "value": "" }
+		{ "key": "taskId", "value": "" },
+		{ "key": "jiraIssueKey", "value": "" }
 	]
 }

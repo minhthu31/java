@@ -24,11 +24,13 @@ Bộ Collection chạy nối tiếp nhau theo đúng thứ tự logic hệ thố
 
 1. **Lưu/Cập nhật cấu hình Jira (PUT `/config`):** Đẩy thông tin site, email và token lên hệ thống.
 2. **Test kết nối (POST `/test-connection`):** Xác thực độ chính xác của cấu hình và Token.
-3. **Tạo Task Local (POST `/tasks`):** Khởi tạo Task mới lưu vào database nội bộ. *(Lưu ý: Tạo Task local chưa đồng nghĩa với việc đã đẩy sang Jira)*. ID của task sẽ tự động được lưu vào biến `{{taskId}}`.
-4. **Cập nhật Status / Assignee (PATCH):** Thay đổi trạng thái hoặc gán người phụ trách cho Task local.
-5. **Đồng bộ 1 Task lên Jira (POST `/tasks/{{taskId}}/sync`):** Đẩy chủ động một Task cụ thể sang Jira.
-6. **Retry đồng bộ Task (POST `/tasks/{{taskId}}/retry`):** Gọi lệnh thử lại kèm `Idempotency-Key` đối với Task bị lỗi đồng bộ.
-7. **Đồng bộ toàn bộ dữ liệu (POST `/sync`):** Kéo toàn bộ Issue, Backlog, Sprint từ Jira về hệ thống.
+3. **Tạo Task Local (POST `/tasks`):** Khởi tạo Task mới lưu vào database nội bộ. ID của task sẽ tự động được lưu vào biến `{{taskId}}`.
+4. **Cập nhật Status / Assignee (PATCH):** Thay đổi trạng thái hoặc gán người phụ trách cho Task local trước khi đồng bộ.
+5. **Đồng bộ Task lên Jira (POST `/tasks/{{taskId}}/sync`):** Đẩy chủ động Task sang Jira.
+6. **Đọc lại Task (GET `/tasks/{{taskId}}`):** Tự động bắt lại `jiraIssueKey` sinh ra sau khi đồng bộ thành công và lưu vào biến môi trường.
+7. **Lấy Issue từ Jira (GET `/issues/{{jiraIssueKey}}`):** Dùng biến vừa lưu để đối chiếu lại dữ liệu trực tiếp trên Jira.
+8. **Retry đồng bộ Task (POST `/tasks/{{taskId}}/retry`):** Gọi lệnh thử lại kèm `Idempotency-Key` đối với Task bị lỗi đồng bộ.
+9. **Đồng bộ toàn bộ dữ liệu (POST `/sync`):** Kéo toàn bộ Issue, Backlog, Sprint từ Jira về hệ thống.
 
 ## 3. Chạy Kiểm thử Tự động
 Các request đã tích hợp Test Scripts tự động kiểm tra HTTP Status Code (200, 201) và tự động gán biến.
