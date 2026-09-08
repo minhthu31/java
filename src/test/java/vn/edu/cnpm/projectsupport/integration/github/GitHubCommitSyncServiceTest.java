@@ -56,6 +56,8 @@ class GitHubCommitSyncServiceTest {
         when(repositoryRepository.findByProjectIdAndGithubRepositoryId(1L, 123L))
                 .thenReturn(Optional.of(localRepository));
         when(syncLogRepository.save(any(SyncLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(taskLinkService.linkCommit(eq(1L), any(GitHubCommit.class)))
+                .thenReturn(new GitHubTaskLinkResult(0, 0, 0, List.of()));
     }
 
     @Test

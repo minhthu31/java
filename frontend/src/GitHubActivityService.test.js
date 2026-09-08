@@ -64,4 +64,23 @@ describe("GitHubActivityService Contract Tests", () => {
         expect(result.content[0].issueKeys).toEqual(["CNPM-98"]);
         expect(result.content[0].linkedTaskIds).toEqual([9893]);
     });
+
+    test("đọc hoạt động GitHub đã liên kết theo Task", async () => {
+        api.get.mockResolvedValueOnce({
+            data: {
+                data: {
+                    content: [{ type: "COMMIT", key: "abc1234" }],
+                },
+            },
+        });
+
+        const params = { page: 0, size: 20 };
+        const result = await GitHubActivityService.getTaskActivities(1, 101, params);
+
+        expect(api.get).toHaveBeenCalledWith(
+            "/projects/1/integrations/github/tasks/101/activities",
+            { params },
+        );
+        expect(result.content[0].key).toBe("abc1234");
+    });
 });

@@ -177,6 +177,30 @@ class GitHubRestClientTest {
     }
 
     @Test
+    void getsCompletePullRequestDetailsByNumber() throws Exception {
+        when(transport.get(
+                eq("https://api.github.com/repos/octocat/Hello-World/pulls/12"),
+                any(),
+                any()))
+                .thenReturn(new GitHubHttpResponse(200, """
+                        {"id":9,"number":12,"title":"CNPM-101 integration","body":"demo",
+                         "state":"closed","merged_at":"2026-09-09T00:00:00Z","merge_commit_sha":"abc1234",
+                         "commits":3,"additions":20,"deletions":4,"changed_files":5,
+                         "html_url":"https://github.com/octocat/Hello-World/pull/12",
+                         "user":{"id":77,"login":"member"},
+                         "head":{"ref":"feature/CNPM-101","sha":"aaa"},
+                         "base":{"ref":"main","sha":"bbb"}}
+                        """, Map.of()));
+
+        GitHubPullRequest pullRequest = client.getPullRequest(config, 12);
+
+        assertThat(pullRequest.localState()).isEqualTo("MERGED");
+        assertThat(pullRequest.commits()).isEqualTo(3);
+        assertThat(pullRequest.additions()).isEqualTo(20);
+        assertThat(pullRequest.user().login()).isEqualTo("member");
+    }
+
+    @Test
     void maps401ToAuthenticationErrorWithoutProviderBody() throws Exception {
         when(transport.get(any(), any(), any()))
                 .thenReturn(new GitHubHttpResponse(401, "{\"message\":\"secret token leaked\"}", Map.of()));

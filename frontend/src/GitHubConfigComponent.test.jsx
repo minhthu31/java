@@ -153,6 +153,36 @@ describe("GitHubConfigComponent (Task 92 - Chuẩn OpenAPI CNPM-88)", () => {
         });
     });
 
+    test("Admin đồng bộ commit và Pull Request sau khi kết nối thành công", async () => {
+        GitHubConfigService.getConfig.mockResolvedValueOnce({
+            projectId: 1,
+            repositoryFullName: "test-org/test-repo",
+            configured: true,
+            status: "CONNECTED",
+        });
+        GitHubConfigService.sync.mockResolvedValueOnce({
+            projectId: 1,
+            commitsSynced: 3,
+            pullRequestsSynced: 2,
+            errors: 0,
+        });
+
+        render(<GitHubConfigComponent currentUserRole="ADMIN" projectId={1} />);
+
+        const syncButton = await screen.findByRole("button", {
+            name: /Đồng bộ GitHub/i,
+        });
+        await waitFor(() => expect(syncButton).toBeEnabled());
+        fireEvent.click(syncButton);
+
+        await waitFor(() => {
+            expect(GitHubConfigService.sync).toHaveBeenCalledWith(1);
+            expect(
+                screen.getByText(/Đồng bộ thành công 3 commit và 2 Pull Request/i),
+            ).toBeInTheDocument();
+        });
+    });
+
     test("kiểm tra kết nối thất bại: hiển thị trạng thái Failed (CONNECTION_FAILED) và hướng xử lý gợi ý", async () => {
         GitHubConfigService.getConfig.mockResolvedValueOnce({
             projectId: 1,
