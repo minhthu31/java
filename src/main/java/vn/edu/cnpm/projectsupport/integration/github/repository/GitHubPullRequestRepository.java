@@ -132,6 +132,24 @@ public interface GitHubPullRequestRepository extends JpaRepository<GitHubPullReq
             @Param("accountId") Long accountId);
 
     @Query("""
+            select a.userId as userId, count(pr.id) as count
+            from GitHubPullRequest pr
+            join GitHubRepository r on r.id = pr.repositoryId
+            join UserExternalAccount a on a.id = pr.authorExternalAccountId
+            where r.projectId = :projectId
+              and a.provider = vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider.GITHUB
+              and pr.state = :state
+              and (:from is null or pr.createdAt >= :from)
+              and (:to is null or pr.createdAt <= :to)
+            group by a.userId
+            """)
+    List<GitHubUserActivityCountProjection> countByProjectIdAndStateAndTimeRange(
+            @Param("projectId") Long projectId,
+            @Param("state") GitHubPullRequestState state,
+            @Param("from") Instant from,
+            @Param("to") Instant to);
+
+    @Query("""
             select distinct pr.authorGithubUserId as githubUserId, pr.authorLogin as login
             from GitHubPullRequest pr
             join GitHubRepository r on r.id = pr.repositoryId
