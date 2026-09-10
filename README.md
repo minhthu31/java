@@ -1,6 +1,6 @@
-# CNPM Project Support Backend
+# CNPM Project Support
 
-Backend cho hệ thống hỗ trợ quản lý yêu cầu và tiến độ đồ án CNPM thông qua Jira và GitHub.
+Ứng dụng web hỗ trợ quản lý yêu cầu và tiến độ đồ án CNPM thông qua Jira và GitHub.
 
 ## Phạm vi
 
@@ -19,34 +19,73 @@ Website không thay thế Jira hoặc GitHub:
 - Flyway database migration
 - JUnit 5, Spring Security Test và H2
 - Maven Wrapper
+- React 18, Node.js 22+ và npm
 
-## Chạy local
+## Môi trường chạy trên Windows
 
-Yêu cầu: JDK 21+, Docker Desktop.
+Ứng dụng chạy trực tiếp trên máy Windows. Môi trường đã kiểm tra:
 
-1. Sao chép `.env.example` thành `.env` và thay toàn bộ mật khẩu mẫu.
-2. Khởi động MySQL:
+- JDK 21 trở lên; máy hiện tại dùng Java 26.0.2.
+- Node.js 22 trở lên; máy hiện tại dùng Node.js 24.18.1 và npm 11.16.0.
+- MySQL Server 8.4; máy hiện tại dùng Windows service `MySQL84`.
+- Git và trình duyệt web.
 
-   ```bash
-   docker compose --env-file .env up -d mysql
-   ```
+Không cần cài Maven riêng vì repository có Maven Wrapper.
 
-3. Đặt biến môi trường trong IDE theo `.env`, sau đó chạy:
+## Chuẩn bị MySQL
 
-   ```bash
-   ./mvnw spring-boot:run
-   ```
+Mở MySQL Workbench bằng tài khoản quản trị và chạy một lần:
 
-   Trên Windows dùng `mvnw.cmd spring-boot:run`.
+```sql
+CREATE DATABASE IF NOT EXISTS cnpm_project_support
+  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS 'cnpm_user'@'localhost'
+  IDENTIFIED BY 'thay-bang-mat-khau-cuc-bo';
+GRANT ALL PRIVILEGES ON cnpm_project_support.* TO 'cnpm_user'@'localhost';
+FLUSH PRIVILEGES;
+```
 
-4. Kiểm tra: `GET http://localhost:8080/actuator/health`.
+Kiểm tra service `MySQL84` đang ở trạng thái **Running** trong Windows Services. Flyway tự tạo và cập nhật bảng khi backend khởi động; không chạy SQL schema thủ công.
+
+## Chạy backend bằng CMD
+
+Tại thư mục gốc của repository, đặt biến môi trường cho cửa sổ CMD hiện tại rồi chạy backend:
+
+```cmd
+set DB_NAME=cnpm_project_support
+set DB_USERNAME=cnpm_user
+set DB_PASSWORD=thay-bang-mat-khau-cuc-bo
+set JWT_SECRET=thay-bang-chuoi-ngau-nhien-toi-thieu-32-ky-tu
+set INTEGRATION_ENCRYPTION_KEY=thay-bang-chuoi-ngau-nhien-toi-thieu-32-ky-tu
+mvnw.cmd spring-boot:run
+```
+
+Các giá trị cần thiết được liệt kê trong `.env.example`. Spring Boot không tự đọc tệp `.env`; khi chạy bằng CMD phải dùng `set` như trên, còn khi chạy bằng IDE phải khai báo chúng trong Run Configuration.
+
+Kiểm tra backend tại `http://localhost:8080/actuator/health`.
+
+## Chạy frontend bằng CMD
+
+Mở cửa sổ CMD thứ hai:
+
+```cmd
+cd frontend
+copy .env.example .env
+npm ci
+npm start
+```
+
+Frontend chạy tại `http://localhost:3000` và gọi backend qua `http://localhost:8080/api/v1`.
 
 Không đưa `.env`, token Jira/GitHub, mật khẩu database hoặc key mã hóa lên Git.
 
 ## Kiểm thử
 
-```bash
-./mvnw clean verify
+```cmd
+mvnw.cmd clean verify
+cd frontend
+npm test -- --runInBand
+npm run build
 ```
 
 Test dùng profile `test` và H2, không phụ thuộc MySQL của thành viên.
@@ -92,6 +131,7 @@ Flyway là nguồn chuẩn của schema. Không dùng `spring.jpa.hibernate.ddl-
 
 - `V1__create_core_schema.sql`: schema theo Data Dictionary baseline 2.0.
 - `V2__seed_roles.sql`: bốn role nghiệp vụ.
+- `V3` đến `V11`: dữ liệu demo và schema phục vụ Jira/GitHub Integration.
 - Mỗi thay đổi schema tạo migration mới; không sửa migration đã merge vào `main`.
 
 ## Quy tắc kiến trúc
@@ -123,6 +163,12 @@ Flyway là nguồn chuẩn của schema. Không dùng `spring.jpa.hibernate.ddl-
 
 - [CNPM-74 - Jira field mapping và API contract](docs/integrations/CNPM-74-jira-field-mapping-and-api-contract.md)
 - [CNPM-74 - OpenAPI Jira Integration v1](docs/api/jira-integration-v1.openapi.yaml)
+
+## Sprint 4
+
+- [CNPM-88 - GitHub field mapping và API contract](docs/integrations/CNPM-88-github-field-mapping-and-api-contract.md)
+- [CNPM-88 - OpenAPI GitHub Integration v1](docs/api/github-integration-v1.openapi.yaml)
+- [CNPM-101 - Báo cáo tích hợp Sprint 4](docs/sprint-reports/CNPM-101-sprint-4-integration-report.md)
 
 ## Sprint 5
 

@@ -295,9 +295,6 @@ public class GitHubPullRequest extends BaseEntity {
     public void setClosedAt(Instant closedAt) { 
         this.closedAt = closedAt; 
     }
-    public void setRemoteCreatedAt(Instant remoteCreatedAt) { 
-        this.remoteCreatedAt = remoteCreatedAt; 
-    }
     public void setHtmlUrl(String value) {
         this.htmlUrl = value;
     }

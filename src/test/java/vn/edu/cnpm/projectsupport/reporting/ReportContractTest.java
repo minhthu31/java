@@ -61,7 +61,7 @@ class ReportContractTest {
                 Instant.parse("2026-09-08T00:00:00Z"),
                 Instant.parse("2026-09-08T01:00:00Z"),
                 new TaskMetricsResponse(3, 3, 0, byStatus),
-                List.of(new MemberContributionResponse(7L, "member.test", "Test Member", true, 5, 2, 1, 1, 0, 3)),
+                List.of(new MemberContributionResponse(7L, "member.test", "Test Member", 5, 2, 3)),
                 ReportDataStatus.COMPLETE,
                 List.of(new ReportSourceFreshnessResponse(
                         ReportSource.GITHUB,
@@ -75,8 +75,6 @@ class ReportContractTest {
                 .contains("\"projectId\":1")
                 .contains("\"completedTasks\":3")
                 .contains("\"pullRequests\":2")
-                .contains("\"githubLinked\":true")
-                .contains("\"openPullRequests\":1")
                 .contains("\"dataStatus\":\"COMPLETE\"")
                 .doesNotContain("password", "token", "secret");
     }

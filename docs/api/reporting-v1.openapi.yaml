@@ -144,17 +144,13 @@ components:
 
     MemberContributionResponse:
       type: object
-      required: [memberId, username, fullName, githubLinked, commits, pullRequests, openPullRequests, closedPullRequests, mergedPullRequests, linkedTasks]
+      required: [memberId, username, fullName, commits, pullRequests, linkedTasks]
       properties:
         memberId: { type: integer, format: int64 }
         username: { type: string }
         fullName: { type: string }
-        githubLinked: { type: boolean }
         commits: { type: integer, format: int64, minimum: 0 }
         pullRequests: { type: integer, format: int64, minimum: 0 }
-        openPullRequests: { type: integer, format: int64, minimum: 0 }
-        closedPullRequests: { type: integer, format: int64, minimum: 0 }
-        mergedPullRequests: { type: integer, format: int64, minimum: 0 }
         linkedTasks: { type: integer, format: int64, minimum: 0 }
 
     ReportSourceFreshnessResponse:
