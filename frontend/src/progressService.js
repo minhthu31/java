@@ -22,9 +22,9 @@ export const progressService = {
         return response.data?.data || response.data || [];
     },
 
-    getProjectSummary: async (projectId, params = {}) => {
+    getProjectProgress: async (projectId, params = {}) => {
         const response = await axios.get(
-            `${API_BASE_URL}/projects/${projectId}/reports/summary`,
+            `${API_BASE_URL}/projects/${projectId}/reports/progress`,
             {
                 ...getAuthHeaders(),
                 params,

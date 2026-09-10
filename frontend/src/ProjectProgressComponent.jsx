@@ -16,7 +16,7 @@ export function ProjectProgressComponent({ projectId, currentUserRole }) {
         to: "",
     });
 
-    const [reportData, setReportData] = useState(null);
+    const [progressData, setProgressData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
@@ -55,17 +55,19 @@ export function ProjectProgressComponent({ projectId, currentUserRole }) {
                 params.from = `${appliedFilters.from}T00:00:00Z`;
             }
             if (appliedFilters.to) {
-                params.to = `${appliedFilters.to}T23:59:59Z`;
+                const nextDay = new Date(`${appliedFilters.to}T00:00:00Z`);
+                nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+                params.to = nextDay.toISOString().replace(".000Z", "Z");
             }
 
-            const data = await progressService.getProjectSummary(
+            const data = await progressService.getProjectProgress(
                 projectId,
                 params,
             );
-            setReportData(data);
+            setProgressData(data);
         } catch (err) {
             setError("Không thể tải thông tin tiến độ dự án từ hệ thống.");
-            setReportData(null);
+            setProgressData(null);
         } finally {
             setLoading(false);
         }
@@ -79,8 +81,8 @@ export function ProjectProgressComponent({ projectId, currentUserRole }) {
 
     const handleFilterSubmit = (e) => {
         e.preventDefault();
-        if (fromDate && toDate && new Date(fromDate) >= new Date(toDate)) {
-            setError("Thời gian 'Từ' phải nhỏ hơn thời gian 'Đến'.");
+        if (fromDate && toDate && new Date(fromDate) > new Date(toDate)) {
+            setError("Thời gian 'Từ' phải nhỏ hơn hoặc bằng thời gian 'Đến'.");
             return;
         }
         setAppliedFilters({
@@ -141,13 +143,14 @@ export function ProjectProgressComponent({ projectId, currentUserRole }) {
         );
     }
 
-    const taskMetrics = reportData?.taskMetrics;
-    const totalTasks = taskMetrics?.totalTasks || 0;
-    const completedTasks = taskMetrics?.completedTasks || 0;
-    const overdueTasks = taskMetrics?.overdueTasks || 0;
-    const statusMap = taskMetrics?.tasksByStatus || {};
-
-    const unassignedTasks = taskMetrics?.unassignedTasks ?? 0;
+    const totalRequirements = progressData?.totalRequirements || 0;
+    const totalFeatures = progressData?.totalFeatures || 0;
+    const totalSprints = progressData?.totalSprints || 0;
+    const totalTasks = progressData?.totalTasks || 0;
+    const completedTasks = progressData?.completedTasks || 0;
+    const overdueTasks = progressData?.overdueTasks || 0;
+    const progressPercent = progressData?.progressPercent || 0;
+    const sprintList = progressData?.sprints || [];
 
     return (
         <div
@@ -166,8 +169,8 @@ export function ProjectProgressComponent({ projectId, currentUserRole }) {
                     Tiến độ & Tình trạng Công việc
                 </h2>
                 <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
-                    Theo dõi tổng quan các chỉ số Sprint, Task tồn đọng và trạng
-                    thái thực hiện
+                    Theo dõi tổng quan tiến độ dự án, chỉ số Sprint và trạng
+                    thái Task
                 </p>
             </div>
 
@@ -359,7 +362,7 @@ export function ProjectProgressComponent({ projectId, currentUserRole }) {
                 >
                     Đang tải dữ liệu tiến độ dự án...
                 </div>
-            ) : totalTasks === 0 ? (
+            ) : totalTasks === 0 && totalRequirements === 0 ? (
                 <div
                     data-testid="progress-empty-state"
                     style={{
@@ -378,20 +381,78 @@ export function ProjectProgressComponent({ projectId, currentUserRole }) {
                             color: "#1e293b",
                         }}
                     >
-                        Chưa có công việc nào
+                        Chưa có dữ liệu tiến độ
                     </div>
                     <p style={{ margin: "4px 0 0", fontSize: "13px" }}>
-                        Chưa có công việc nào được ghi nhận cho khoảng thời gian
-                        hoặc Sprint đã chọn.
+                        Chưa ghi nhận Requirement hoặc Task nào trong kỳ báo cáo
+                        này.
                     </p>
                 </div>
             ) : (
                 <div>
+                    {/* Progress Percent Bar */}
+                    <div
+                        style={{
+                            padding: "20px 24px",
+                            backgroundColor: "#ffffff",
+                            borderRadius: "14px",
+                            border: "1px solid #e2e8f0",
+                            marginBottom: "24px",
+                        }}
+                    >
+                        <div
+                            style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                marginBottom: "8px",
+                            }}
+                        >
+                            <span
+                                style={{
+                                    fontSize: "14px",
+                                    fontWeight: 700,
+                                    color: "#0f172a",
+                                }}
+                            >
+                                Tiến độ hoàn thành dự án
+                            </span>
+                            <span
+                                data-testid="metric-progress-percent"
+                                style={{
+                                    fontSize: "16px",
+                                    fontWeight: 800,
+                                    color: "#2563eb",
+                                }}
+                            >
+                                {progressPercent}%
+                            </span>
+                        </div>
+                        <div
+                            style={{
+                                width: "100%",
+                                height: "10px",
+                                backgroundColor: "#e2e8f0",
+                                borderRadius: "999px",
+                                overflow: "hidden",
+                            }}
+                        >
+                            <div
+                                data-testid="metric-progress-bar-fill"
+                                style={{
+                                    width: `${Math.min(Math.max(progressPercent, 0), 100)}%`,
+                                    height: "100%",
+                                    backgroundColor: "#2563eb",
+                                    borderRadius: "999px",
+                                }}
+                            />
+                        </div>
+                    </div>
+
                     <div
                         style={{
                             display: "grid",
                             gridTemplateColumns:
-                                "repeat(auto-fit, minmax(190px, 1fr))",
+                                "repeat(auto-fit, minmax(180px, 1fr))",
                             gap: "16px",
                             marginBottom: "28px",
                         }}
@@ -399,7 +460,103 @@ export function ProjectProgressComponent({ projectId, currentUserRole }) {
                         <div
                             style={{
                                 backgroundColor: "#ffffff",
-                                padding: "20px",
+                                padding: "18px 20px",
+                                borderRadius: "14px",
+                                border: "1px solid #e2e8f0",
+                                borderLeft: "4px solid #6366f1",
+                            }}
+                        >
+                            <span
+                                style={{
+                                    fontSize: "12px",
+                                    fontWeight: 700,
+                                    color: "#64748b",
+                                    textTransform: "uppercase",
+                                }}
+                            >
+                                Yêu cầu (Requirements)
+                            </span>
+                            <h2
+                                data-testid="metric-total-requirements"
+                                style={{
+                                    margin: "8px 0 0",
+                                    fontSize: "26px",
+                                    fontWeight: 800,
+                                    color: "#0f172a",
+                                }}
+                            >
+                                {totalRequirements}
+                            </h2>
+                        </div>
+
+                        <div
+                            style={{
+                                backgroundColor: "#ffffff",
+                                padding: "18px 20px",
+                                borderRadius: "14px",
+                                border: "1px solid #e2e8f0",
+                                borderLeft: "4px solid #8b5cf6",
+                            }}
+                        >
+                            <span
+                                style={{
+                                    fontSize: "12px",
+                                    fontWeight: 700,
+                                    color: "#64748b",
+                                    textTransform: "uppercase",
+                                }}
+                            >
+                                Tính năng (Features)
+                            </span>
+                            <h2
+                                data-testid="metric-total-features"
+                                style={{
+                                    margin: "8px 0 0",
+                                    fontSize: "26px",
+                                    fontWeight: 800,
+                                    color: "#0f172a",
+                                }}
+                            >
+                                {totalFeatures}
+                            </h2>
+                        </div>
+
+                        <div
+                            style={{
+                                backgroundColor: "#ffffff",
+                                padding: "18px 20px",
+                                borderRadius: "14px",
+                                border: "1px solid #e2e8f0",
+                                borderLeft: "4px solid #0ea5e9",
+                            }}
+                        >
+                            <span
+                                style={{
+                                    fontSize: "12px",
+                                    fontWeight: 700,
+                                    color: "#64748b",
+                                    textTransform: "uppercase",
+                                }}
+                            >
+                                Tổng Sprint
+                            </span>
+                            <h2
+                                data-testid="metric-total-sprints"
+                                style={{
+                                    margin: "8px 0 0",
+                                    fontSize: "26px",
+                                    fontWeight: 800,
+                                    color: "#0f172a",
+                                }}
+                            >
+                                {totalSprints}
+                            </h2>
+                        </div>
+
+                        <div
+                            style={{
+                                backgroundColor: "#ffffff",
+                                padding: "18px 20px",
                                 borderRadius: "14px",
                                 border: "1px solid #e2e8f0",
                                 borderLeft: "4px solid #2563eb",
@@ -413,13 +570,13 @@ export function ProjectProgressComponent({ projectId, currentUserRole }) {
                                     textTransform: "uppercase",
                                 }}
                             >
-                                Tổng số Task
+                                Tổng Task
                             </span>
                             <h2
                                 data-testid="metric-total-tasks"
                                 style={{
                                     margin: "8px 0 0",
-                                    fontSize: "28px",
+                                    fontSize: "26px",
                                     fontWeight: 800,
                                     color: "#0f172a",
                                 }}
@@ -431,7 +588,7 @@ export function ProjectProgressComponent({ projectId, currentUserRole }) {
                         <div
                             style={{
                                 backgroundColor: "#ffffff",
-                                padding: "20px",
+                                padding: "18px 20px",
                                 borderRadius: "14px",
                                 border: "1px solid #e2e8f0",
                                 borderLeft: "4px solid #16a34a",
@@ -445,13 +602,13 @@ export function ProjectProgressComponent({ projectId, currentUserRole }) {
                                     textTransform: "uppercase",
                                 }}
                             >
-                                Đã hoàn thành
+                                Task hoàn thành
                             </span>
                             <h2
                                 data-testid="metric-completed-tasks"
                                 style={{
                                     margin: "8px 0 0",
-                                    fontSize: "28px",
+                                    fontSize: "26px",
                                     fontWeight: 800,
                                     color: "#15803d",
                                 }}
@@ -463,7 +620,7 @@ export function ProjectProgressComponent({ projectId, currentUserRole }) {
                         <div
                             style={{
                                 backgroundColor: "#ffffff",
-                                padding: "20px",
+                                padding: "18px 20px",
                                 borderRadius: "14px",
                                 border: "1px solid #e2e8f0",
                                 borderLeft: "4px solid #dc2626",
@@ -477,50 +634,18 @@ export function ProjectProgressComponent({ projectId, currentUserRole }) {
                                     textTransform: "uppercase",
                                 }}
                             >
-                                Quá hạn (Overdue)
+                                Task quá hạn
                             </span>
                             <h2
                                 data-testid="metric-overdue-tasks"
                                 style={{
                                     margin: "8px 0 0",
-                                    fontSize: "28px",
+                                    fontSize: "26px",
                                     fontWeight: 800,
                                     color: "#b91c1c",
                                 }}
                             >
                                 {overdueTasks}
-                            </h2>
-                        </div>
-
-                        <div
-                            style={{
-                                backgroundColor: "#ffffff",
-                                padding: "20px",
-                                borderRadius: "14px",
-                                border: "1px solid #e2e8f0",
-                                borderLeft: "4px solid #f59e0b",
-                            }}
-                        >
-                            <span
-                                style={{
-                                    fontSize: "12px",
-                                    fontWeight: 700,
-                                    color: "#d97706",
-                                    textTransform: "uppercase",
-                                }}
-                            >
-                                Chưa phân công
-                            </span>
-                            <h2
-                                data-testid="metric-unassigned-tasks"
-                                style={{
-                                    margin: "8px 0 0",
-                                    fontSize: "28px",
-                                    fontWeight: 800,
-                                    color: "#b45309",
-                                }}
-                            >
-                                {unassignedTasks}
                             </h2>
                         </div>
                     </div>
@@ -541,21 +666,25 @@ export function ProjectProgressComponent({ projectId, currentUserRole }) {
                                 color: "#1e293b",
                             }}
                         >
-                            Số lượng công việc theo trạng thái
+                            Tiến độ từng Sprint
                         </h3>
 
-                        <div
-                            style={{
-                                display: "grid",
-                                gridTemplateColumns:
-                                    "repeat(auto-fit, minmax(140px, 1fr))",
-                                gap: "12px",
-                            }}
-                        >
-                            {Object.entries(statusMap).map(
-                                ([status, count]) => (
+                        {sprintList.length === 0 ? (
+                            <div style={{ fontSize: "13px", color: "#64748b" }}>
+                                Chưa có dữ liệu chi tiết cho Sprint.
+                            </div>
+                        ) : (
+                            <div
+                                style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "12px",
+                                }}
+                            >
+                                {sprintList.map((s) => (
                                     <div
-                                        key={status}
+                                        key={s.sprintId}
+                                        data-testid={`sprint-progress-row-${s.sprintId}`}
                                         style={{
                                             padding: "14px 18px",
                                             border: "1px solid #e2e8f0",
@@ -565,29 +694,90 @@ export function ProjectProgressComponent({ projectId, currentUserRole }) {
                                     >
                                         <div
                                             style={{
-                                                fontSize: "11px",
-                                                color: "#64748b",
-                                                fontWeight: 700,
-                                                letterSpacing: "0.5px",
+                                                display: "flex",
+                                                justifyContent: "space-between",
+                                                marginBottom: "8px",
                                             }}
                                         >
-                                            {status}
+                                            <span
+                                                style={{
+                                                    fontWeight: 600,
+                                                    color: "#0f172a",
+                                                    fontSize: "14px",
+                                                }}
+                                            >
+                                                {s.sprintName ||
+                                                    `Sprint ${s.sprintId}`}
+                                            </span>
+                                            <span
+                                                data-testid={`sprint-percent-${s.sprintId}`}
+                                                style={{
+                                                    fontSize: "13px",
+                                                    fontWeight: 700,
+                                                    color: "#2563eb",
+                                                }}
+                                            >
+                                                {s.progressPercent}%
+                                            </span>
                                         </div>
+
                                         <div
-                                            data-testid={`status-count-${status}`}
                                             style={{
-                                                fontSize: "24px",
-                                                fontWeight: 800,
-                                                color: "#0f172a",
-                                                marginTop: "6px",
+                                                width: "100%",
+                                                height: "6px",
+                                                backgroundColor: "#f1f5f9",
+                                                borderRadius: "999px",
+                                                overflow: "hidden",
+                                                marginBottom: "10px",
                                             }}
                                         >
-                                            {count}
+                                            <div
+                                                style={{
+                                                    width: `${Math.min(Math.max(s.progressPercent, 0), 100)}%`,
+                                                    height: "100%",
+                                                    backgroundColor: "#16a34a",
+                                                    borderRadius: "999px",
+                                                }}
+                                            />
+                                        </div>
+
+                                        <div
+                                            style={{
+                                                display: "flex",
+                                                gap: "16px",
+                                                fontSize: "12px",
+                                                color: "#64748b",
+                                            }}
+                                        >
+                                            <span>
+                                                Tổng:{" "}
+                                                <strong
+                                                    style={{ color: "#0f172a" }}
+                                                >
+                                                    {s.totalTasks}
+                                                </strong>
+                                            </span>
+                                            <span>
+                                                Hoàn thành:{" "}
+                                                <strong
+                                                    style={{ color: "#16a34a" }}
+                                                >
+                                                    {s.completedTasks}
+                                                </strong>
+                                            </span>
+                                            <span>
+                                                Quá hạn:{" "}
+                                                <strong
+                                                    style={{ color: "#dc2626" }}
+                                                >
+                                                    {s.overdueTasks}
+                                                </strong>
+                                            </span>
                                         </div>
                                     </div>
-                                ),
-                            )}
-                        </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

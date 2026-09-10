@@ -18,23 +18,33 @@ describe("ProjectProgressComponent - Task 106", () => {
         { id: 2, name: "Sprint 2" },
     ];
 
-    const mockSummaryResponse = {
+    const mockProgressResponse = {
         projectId: 1,
-        sprintId: 1,
-        taskMetrics: {
-            totalTasks: 10,
-            completedTasks: 4,
-            overdueTasks: 2,
-            unassignedTasks: 1,
-            tasksByStatus: {
-                TO_DO: 3,
-                IN_PROGRESS: 3,
-                DONE: 4,
-                IN_REVIEW: 0,
-                BLOCKED: 0,
-                CANCELLED: 0,
+        totalRequirements: 12,
+        totalFeatures: 8,
+        totalSprints: 3,
+        totalTasks: 20,
+        completedTasks: 14,
+        overdueTasks: 2,
+        progressPercent: 70.0,
+        sprints: [
+            {
+                sprintId: 1,
+                sprintName: "Sprint 1",
+                totalTasks: 10,
+                completedTasks: 8,
+                overdueTasks: 1,
+                progressPercent: 80.0,
             },
-        },
+            {
+                sprintId: 2,
+                sprintName: "Sprint 2",
+                totalTasks: 10,
+                completedTasks: 6,
+                overdueTasks: 1,
+                progressPercent: 60.0,
+            },
+        ],
     };
 
     beforeEach(() => {
@@ -52,13 +62,13 @@ describe("ProjectProgressComponent - Task 106", () => {
         expect(
             screen.getByTestId("unauthorized-progress-message"),
         ).toBeInTheDocument();
-        expect(progressService.getProjectSummary).not.toHaveBeenCalled();
+        expect(progressService.getProjectProgress).not.toHaveBeenCalled();
     });
 
-    test("AC: TEAM_LEADER truy cập thành công, render đúng 4 thẻ chỉ số và phân bổ trạng thái", async () => {
+    test("AC: TEAM_LEADER render đủ Requirement, Feature, Sprint, phần trăm và tiến độ từng sprint", async () => {
         progressService.getSprints.mockResolvedValue(mockSprints);
-        progressService.getProjectSummary.mockResolvedValue(
-            mockSummaryResponse,
+        progressService.getProjectProgress.mockResolvedValue(
+            mockProgressResponse,
         );
 
         await act(async () => {
@@ -71,38 +81,48 @@ describe("ProjectProgressComponent - Task 106", () => {
         });
 
         await waitFor(() => {
+            expect(
+                screen.getByTestId("metric-total-requirements"),
+            ).toHaveTextContent("12");
+            expect(
+                screen.getByTestId("metric-total-features"),
+            ).toHaveTextContent("8");
+            expect(
+                screen.getByTestId("metric-total-sprints"),
+            ).toHaveTextContent("3");
             expect(screen.getByTestId("metric-total-tasks")).toHaveTextContent(
-                "10",
+                "20",
             );
             expect(
                 screen.getByTestId("metric-completed-tasks"),
-            ).toHaveTextContent("4");
+            ).toHaveTextContent("14");
             expect(
                 screen.getByTestId("metric-overdue-tasks"),
             ).toHaveTextContent("2");
             expect(
-                screen.getByTestId("metric-unassigned-tasks"),
-            ).toHaveTextContent("1");
-            expect(screen.getByTestId("status-count-TO_DO")).toHaveTextContent(
-                "3",
+                screen.getByTestId("metric-progress-percent"),
+            ).toHaveTextContent("70%");
+            expect(screen.getByTestId("sprint-percent-1")).toHaveTextContent(
+                "80%",
             );
-            expect(screen.getByTestId("status-count-DONE")).toHaveTextContent(
-                "4",
+            expect(screen.getByTestId("sprint-percent-2")).toHaveTextContent(
+                "60%",
             );
         });
     });
 
-    test("AC: Hiển thị empty state khi không có task nào", async () => {
+    test("AC: Hiển thị empty state khi không có task và requirement nào", async () => {
         progressService.getSprints.mockResolvedValue(mockSprints);
-        progressService.getProjectSummary.mockResolvedValue({
+        progressService.getProjectProgress.mockResolvedValue({
             projectId: 1,
-            taskMetrics: {
-                totalTasks: 0,
-                completedTasks: 0,
-                overdueTasks: 0,
-                unassignedTasks: 0,
-                tasksByStatus: {},
-            },
+            totalRequirements: 0,
+            totalFeatures: 0,
+            totalSprints: 0,
+            totalTasks: 0,
+            completedTasks: 0,
+            overdueTasks: 0,
+            progressPercent: 0.0,
+            sprints: [],
         });
 
         await act(async () => {
@@ -123,7 +143,7 @@ describe("ProjectProgressComponent - Task 106", () => {
 
     test("AC: Hiển thị thông báo lỗi khi API thất bại", async () => {
         progressService.getSprints.mockResolvedValue(mockSprints);
-        progressService.getProjectSummary.mockRejectedValue(
+        progressService.getProjectProgress.mockRejectedValue(
             new Error("Network Error"),
         );
 
@@ -143,10 +163,10 @@ describe("ProjectProgressComponent - Task 106", () => {
         });
     });
 
-    test("AC: Hoạt động của bộ lọc theo Sprint và Thời gian", async () => {
+    test("AC: Bộ lọc ngày chuyển đổi đúng mốc [from, to) sang đầu ngày kế tiếp", async () => {
         progressService.getSprints.mockResolvedValue(mockSprints);
-        progressService.getProjectSummary.mockResolvedValue(
-            mockSummaryResponse,
+        progressService.getProjectProgress.mockResolvedValue(
+            mockProgressResponse,
         );
 
         await act(async () => {
@@ -159,7 +179,9 @@ describe("ProjectProgressComponent - Task 106", () => {
         });
 
         await waitFor(() => {
-            expect(screen.getByText("Sprint 1")).toBeInTheDocument();
+            expect(
+                screen.getByRole("option", { name: "Sprint 1" }),
+            ).toBeInTheDocument();
         });
 
         await act(async () => {
@@ -176,10 +198,10 @@ describe("ProjectProgressComponent - Task 106", () => {
         });
 
         await waitFor(() => {
-            expect(progressService.getProjectSummary).toHaveBeenCalledWith(1, {
+            expect(progressService.getProjectProgress).toHaveBeenCalledWith(1, {
                 sprintId: "1",
                 from: "2026-09-01T00:00:00Z",
-                to: "2026-09-09T23:59:59Z",
+                to: "2026-09-10T00:00:00Z",
             });
         });
     });
