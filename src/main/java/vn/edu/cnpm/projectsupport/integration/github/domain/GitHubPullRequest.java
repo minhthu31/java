@@ -79,6 +79,9 @@ public class GitHubPullRequest extends BaseEntity {
     @Column(name = "closed_at")
     private Instant closedAt;
 
+    @Column(name = "remote_created_at", nullable = false)
+    private Instant remoteCreatedAt;
+
     @Column(name = "html_url", nullable = false, length = 500)
     private String htmlUrl;
 
@@ -94,6 +97,7 @@ public class GitHubPullRequest extends BaseEntity {
             String state,
             String htmlUrl) {
         this(repositoryId, null, number, title, null, headRef, null, baseRef, parseState(state), false, null, null, 0, 0, 0, null, null, htmlUrl);
+        this.remoteCreatedAt = Instant.now();
     }
 
     public GitHubPullRequest(
@@ -133,6 +137,31 @@ public class GitHubPullRequest extends BaseEntity {
         this.changedFiles = changedFiles;
         this.closedAt = closedAt;
         this.htmlUrl = htmlUrl;
+    }
+
+    public GitHubPullRequest(
+            Long repositoryId,
+            Long githubPullRequestId,
+            Integer number,
+            String title,
+            String body,
+            String headRef,
+            String headSha,
+            String baseRef,
+            GitHubPullRequestState state,
+            boolean draft,
+            Instant mergedAt,
+            String mergeCommitSha,
+            Integer commitCount,
+            Integer additions,
+            Integer deletions,
+            Integer changedFiles,
+            Instant closedAt,
+            String htmlUrl,
+            Instant remoteCreatedAt) {
+        this(repositoryId, githubPullRequestId, number, title, body, headRef, headSha, baseRef, state,
+                draft, mergedAt, mergeCommitSha, commitCount, additions, deletions, changedFiles, closedAt, htmlUrl);
+        this.remoteCreatedAt = remoteCreatedAt;
     }
 
     private static GitHubPullRequestState parseState(String state) {
@@ -202,6 +231,9 @@ public class GitHubPullRequest extends BaseEntity {
     public Instant getClosedAt() { 
         return closedAt; 
     }
+    public Instant getRemoteCreatedAt() { 
+        return remoteCreatedAt; 
+    }
     public String getHtmlUrl() { 
         return htmlUrl; 
     }
@@ -262,6 +294,9 @@ public class GitHubPullRequest extends BaseEntity {
     }
     public void setClosedAt(Instant closedAt) { 
         this.closedAt = closedAt; 
+    }
+    public void setRemoteCreatedAt(Instant remoteCreatedAt) { 
+        this.remoteCreatedAt = remoteCreatedAt; 
     }
     public void setHtmlUrl(String value) {
         this.htmlUrl = value;

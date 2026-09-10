@@ -35,8 +35,8 @@ nhất khi bắt đầu request và dùng mốc đó cho toàn bộ phép tính.
   `tasks.created_at`.
 - Commit: thời gian áp dụng trên `github_commits.committed_at`.
 - Pull Request: thời gian áp dụng trên thời điểm tạo PR của GitHub
-  (`github_pull_requests.remote_created_at`). Schema hiện tại chưa có field này;
-  task hiện thực báo cáo phải thêm bằng migration mới, không sửa migration cũ.
+  (`github_pull_requests.remote_created_at`). Field này được bổ sung bằng migration mới,
+  không sửa migration cũ.
 - Khi có `sprintId`, commit/PR chỉ được tính nếu có ít nhất một Task link thuộc Sprint;
   một hoạt động liên kết nhiều Task vẫn chỉ được đếm một lần.
 - Khi có `memberId`, Task lọc theo assignee; commit/PR lọc qua tài khoản GitHub đã liên
@@ -65,6 +65,9 @@ Mỗi thành viên trả một dòng `MemberContributionResponse`:
 | --- | --- |
 | `commits` | Số `DISTINCT github_commits.id` do GitHub account đã liên kết thực hiện |
 | `pullRequests` | Số `DISTINCT github_pull_requests.id` do GitHub account đã liên kết tạo |
+| `openPullRequests` | Số PR có trạng thái `OPEN` |
+| `closedPullRequests` | Số PR có trạng thái `CLOSED` |
+| `mergedPullRequests` | Số PR có trạng thái `MERGED` |
 | `linkedTasks` | Số `DISTINCT task_id` trong hợp của Task-Commit link và Task-PR link của thành viên |
 
 Không cộng một Task hai lần khi Task đó đồng thời liên kết commit và PR. Không dùng
@@ -104,8 +107,12 @@ riêng, không thay đổi ý nghĩa ba chỉ số này.
         "memberId": 7,
         "username": "member.test",
         "fullName": "Test Team Member",
+        "githubLinked": true,
         "commits": 12,
         "pullRequests": 3,
+        "openPullRequests": 1,
+        "closedPullRequests": 1,
+        "mergedPullRequests": 1,
         "linkedTasks": 5
       }
     ],
