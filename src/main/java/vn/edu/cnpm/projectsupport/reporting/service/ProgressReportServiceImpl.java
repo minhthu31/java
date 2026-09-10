@@ -158,6 +158,10 @@ public class ProgressReportServiceImpl implements ProgressReportService {
                 taskRepository.findByProjectId(projectId)
                         .stream()
                         .filter(task ->
+                                effectiveFilter.sprintId() == null
+                                        || effectiveFilter.sprintId().equals(
+                                                task.getSprintId()))
+                        .filter(task ->
                                 effectiveMemberId == null
                                         || effectiveMemberId.equals(
                                                 task.getAssigneeUserId()))
@@ -395,16 +399,22 @@ public class ProgressReportServiceImpl implements ProgressReportService {
          * Chỉ validate memberId khi client thực sự yêu cầu
          * lọc theo member.
          */
-        if (effectiveMemberId != null
-                && projectRepository.findActiveMembers(projectId)
-                        .stream()
-                        .noneMatch(member ->
-                                effectiveMemberId.equals(
-                                        member.getId()))) {
-
+        if (effectiveMemberId != null && !isActiveProjectMember(projectId, effectiveMemberId)) {
             throw new ResourceNotFoundException(
                     "Member không active trong Project");
         }
+    }
+
+    private boolean isActiveProjectMember(Long projectId, Long userId) {
+        boolean isMember = projectRepository.findActiveMembers(projectId)
+                .stream()
+                .anyMatch(member -> userId.equals(member.getId()));
+        if (isMember) {
+            return true;
+        }
+        return projectRepository.findActiveLeader(projectId)
+                .map(leader -> userId.equals(leader.getId()))
+                .orElse(false);
     }
 
     private long requirementCount(Long projectId) {
@@ -567,7 +577,16 @@ public class ProgressReportServiceImpl implements ProgressReportService {
             List<Task> scopedTasks) {
 
         List<ProjectRepository.ActiveMemberProjection> members =
-                projectRepository.findActiveMembers(projectId);
+                new ArrayList<>(projectRepository.findActiveMembers(projectId));
+
+        projectRepository.findActiveLeader(projectId)
+                .ifPresent(leader -> {
+                    boolean alreadyIncluded = members.stream()
+                            .anyMatch(member -> leader.getId().equals(member.getId()));
+                    if (!alreadyIncluded) {
+                        members.add(leader);
+                    }
+                });
 
         Set<Long> scopedTaskIds =
                 new HashSet<>();
@@ -619,7 +638,7 @@ public class ProgressReportServiceImpl implements ProgressReportService {
                         .filter(timePredicate(
                                 filter.from(),
                                 filter.to(),
-                                GitHubPullRequest::getCreatedAt))
+                                GitHubPullRequest::getRemoteCreatedAt))
                         .toList();
 
         /*
@@ -972,13 +991,15 @@ public class ProgressReportServiceImpl implements ProgressReportService {
         }
 
         if (memberId != null
-                && contributions.stream()
-                        .noneMatch(member ->
-                                memberId.equals(
-                                        member.memberId()))) {
+                && externalAccountRepository
+                        .findByUserIdAndProvider(
+                                memberId,
+                                IntegrationProvider.GITHUB)
+                        .filter(account -> account.getExternalUserId() != null
+                                && !account.getExternalUserId().isBlank())
+                        .isEmpty()) {
 
-            warnings.add(
-                    "GITHUB_ACCOUNT_NOT_LINKED");
+            warnings.add("GITHUB_ACCOUNT_NOT_LINKED");
         }
 
         return warnings;

@@ -22,6 +22,8 @@ import vn.edu.cnpm.projectsupport.feature.repository.FeatureRepository;
 import vn.edu.cnpm.projectsupport.identity.domain.Role;
 import vn.edu.cnpm.projectsupport.identity.domain.RoleCode;
 import vn.edu.cnpm.projectsupport.identity.domain.User;
+import vn.edu.cnpm.projectsupport.integration.github.domain.UserExternalAccount;
+import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubCommitRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubPullRequestRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubRepositoryRepository;
@@ -581,6 +583,87 @@ class ProgressReportServiceTest {
         assertThat(
                 report.taskMetrics().overdueTasks())
                 .isZero();
+    }
+
+    @Test
+    void sprintFilterScopesProjectProgressTasksRequirementsAndFeatures() {
+        var sprint = org.mockito.Mockito.mock(vn.edu.cnpm.projectsupport.sprint.domain.Sprint.class);
+        when(sprint.getId()).thenReturn(20L);
+        when(sprint.getName()).thenReturn("Sprint 20");
+        when(sprintRepository.findByIdAndProjectId(20L, 1L))
+                .thenReturn(Optional.of(sprint));
+        when(sprintRepository.findByProjectId(1L))
+                .thenReturn(List.of(sprint));
+
+        Task inSprint = task(TaskStatus.DONE, null);
+        inSprint.setSprintId(20L);
+        inSprint.setRequirementId(101L);
+        inSprint.setFeatureId(201L);
+
+        Task outsideSprint = task(TaskStatus.TO_DO, null);
+        outsideSprint.setSprintId(21L);
+        outsideSprint.setRequirementId(102L);
+        outsideSprint.setFeatureId(202L);
+
+        when(taskRepository.findByProjectId(1L))
+                .thenReturn(List.of(inSprint, outsideSprint));
+
+        var report = service.getProgress(
+                1L,
+                new ReportFilterRequest(20L, null, null, null));
+
+        assertThat(report.totalTasks()).isEqualTo(1);
+        assertThat(report.completedTasks()).isEqualTo(1);
+        assertThat(report.totalRequirements()).isEqualTo(1);
+        assertThat(report.totalFeatures()).isEqualTo(1);
+        assertThat(report.totalSprints()).isEqualTo(1);
+        assertThat(report.sprints()).hasSize(1);
+        assertThat(report.sprints().get(0).totalTasks()).isEqualTo(1);
+    }
+
+    @Test
+    void githubAccountWarningChecksActualLinkState() {
+        when(projectRepository.findActiveMembers(1L)).thenReturn(List.of());
+        var leader = org.mockito.Mockito.mock(ProjectRepository.ActiveMemberProjection.class);
+        when(leader.getId()).thenReturn(7L);
+        when(leader.getUsername()).thenReturn("leader");
+        when(leader.getFullName()).thenReturn("Leader");
+        when(projectRepository.findActiveLeader(1L)).thenReturn(Optional.of(leader));
+        when(externalAccountRepository.findByUserIdAndProvider(
+                7L, IntegrationProvider.GITHUB))
+                .thenReturn(Optional.empty());
+
+        var report = service.getSummary(
+                1L, new ReportFilterRequest(null, 7L, null, null));
+
+        assertThat(report.warnings()).contains("GITHUB_ACCOUNT_NOT_LINKED");
+
+        when(externalAccountRepository.findByUserIdAndProvider(
+                7L, IntegrationProvider.GITHUB))
+                .thenReturn(Optional.of(
+                        new UserExternalAccount(7L, IntegrationProvider.GITHUB, "123", "leader")));
+
+        var linkedReport = service.getSummary(
+                1L, new ReportFilterRequest(null, 7L, null, null));
+
+        assertThat(linkedReport.warnings())
+                .doesNotContain("GITHUB_ACCOUNT_NOT_LINKED");
+    }
+
+    @Test
+    void teamLeaderIsIncludedEvenWhenNotPresentInGroupMembers() {
+        when(projectRepository.findActiveMembers(1L)).thenReturn(List.of());
+        var leader = org.mockito.Mockito.mock(ProjectRepository.ActiveMemberProjection.class);
+        when(leader.getId()).thenReturn(7L);
+        when(leader.getUsername()).thenReturn("leader");
+        when(leader.getFullName()).thenReturn("Team Leader");
+        when(projectRepository.findActiveLeader(1L)).thenReturn(Optional.of(leader));
+        var report = service.getSummary(
+                1L, new ReportFilterRequest(null, null, null, null));
+
+        assertThat(report.memberContributions())
+                .extracting(member -> member.memberId())
+                .contains(7L);
     }
 
     private Task task(

@@ -24,6 +24,9 @@ public class GitHubPullRequest extends BaseEntity {
     @Column(name = "github_pull_request_id")
     private Long githubPullRequestId;
 
+    @Column(name = "remote_created_at")
+    private Instant remoteCreatedAt;
+
     @Column(name = "author_external_account_id")
     private Long authorExternalAccountId;
 
@@ -145,6 +148,9 @@ public class GitHubPullRequest extends BaseEntity {
     public Long getRepositoryId() { 
         return repositoryId; 
     }
+    public Instant getRemoteCreatedAt() {
+        return remoteCreatedAt;
+    }
     public Long getGithubPullRequestId() { 
         return githubPullRequestId; 
     }
@@ -204,6 +210,10 @@ public class GitHubPullRequest extends BaseEntity {
     }
     public String getHtmlUrl() { 
         return htmlUrl; 
+    }
+
+    public void setRemoteCreatedAt(Instant value) {
+        this.remoteCreatedAt = value;
     }
 
     public void setAuthorExternalAccountId(Long value) { 

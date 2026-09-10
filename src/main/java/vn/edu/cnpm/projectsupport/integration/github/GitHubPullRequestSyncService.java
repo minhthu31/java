@@ -245,6 +245,7 @@ public class GitHubPullRequestSyncService {
         local.setChangedFiles(remote.changedFiles());
         local.setClosedAt(remote.closedAt());
         local.setHtmlUrl(remote.htmlUrl());
+        local.setRemoteCreatedAt(remote.createdAt());
         local.setAuthorGithubUserId(remote.user() == null ? null : remote.user().id());
         local.setAuthorLogin(remote.user() == null ? null : remote.user().login());
         mapExternalAuthor(local, remote.user());

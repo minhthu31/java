@@ -100,6 +100,8 @@ class GitHubPullRequestSyncServiceTest {
         assertThat(captor.getAllValues().get(0).getState()).isEqualTo(GitHubPullRequestState.OPEN);
         assertThat(captor.getAllValues().get(1).getState()).isEqualTo(GitHubPullRequestState.MERGED);
         assertThat(captor.getAllValues().get(0).getHeadRef()).isEqualTo("feature/CNPM-101");
+        assertThat(captor.getAllValues().get(0).getRemoteCreatedAt())
+                .isEqualTo(Instant.parse("2026-09-08T10:00:00Z"));
     }
 
     @Test
