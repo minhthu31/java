@@ -8,6 +8,4 @@ public interface RequirementRepository
         extends JpaRepository<Requirement, Long>, JpaSpecificationExecutor<Requirement> {
 
     Optional<Requirement> findByIdAndProjectId(Long id, Long projectId);
-
-    long countByProjectId(Long projectId);
 }

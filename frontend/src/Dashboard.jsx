@@ -7,7 +7,6 @@ import TaskComponent from "./TaskComponent";
 import JiraConfigComponent from "./JiraConfigComponent";
 import { GitHubConfigComponent } from "./GitHubConfigComponent";
 import { GitHubActivityComponent } from "./GitHubActivityComponent";
-import { ProjectProgressComponent } from "./ProjectProgressComponent";
 
 const getRoleTitle = (role) => {
     switch (role) {
@@ -66,9 +65,6 @@ export default function Dashboard({ title }) {
     const canAccessRequirement =
         userRole === "TEAM_LEADER" || userRole === "LECTURER";
 
-    const canAccessProgress =
-        userRole === "TEAM_LEADER" || userRole === "LECTURER";
-
     const canAccessJira = userRole === "ADMIN";
     const canAccessGitHubConfig = userRole === "ADMIN";
 
@@ -76,12 +72,9 @@ export default function Dashboard({ title }) {
         <main
             className="dashboard"
             style={{
-                padding: "28px 36px",
-                background: "linear-gradient(180deg, #f0f6ff 0%, #e2eaf8 100%)",
+                padding: "24px",
+                backgroundColor: "#f4f5f7",
                 minHeight: "100vh",
-                boxSizing: "border-box",
-                fontFamily:
-                    "'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif",
             }}
         >
             <header
@@ -89,32 +82,29 @@ export default function Dashboard({ title }) {
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    marginBottom: "20px",
-                    padding: "16px 26px",
-                    backgroundColor: "#ffffff",
-                    borderRadius: "14px",
-                    border: "1px solid #dbeafe",
-                    boxShadow: "0 2px 10px rgba(37, 99, 235, 0.04)",
+                    marginBottom: "24px",
+                    padding: "16px 20px",
+                    backgroundColor: "#fff",
+                    borderRadius: "8px",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
                 }}
             >
                 <div>
                     <span
                         style={{
-                            fontSize: "11px",
-                            color: "#2563eb",
-                            letterSpacing: "0.8px",
+                            fontSize: "12px",
+                            color: "#6b778c",
                             textTransform: "uppercase",
-                            fontWeight: 700,
+                            fontWeight: 600,
                         }}
                     >
-                        CNPM Project Hub
+                        CNPM Project Support
                     </span>
                     <h1
                         style={{
-                            margin: "3px 0 0",
-                            fontSize: "20px",
-                            color: "#0f172a",
-                            fontWeight: 700,
+                            margin: "4px 0 0",
+                            fontSize: "22px",
+                            color: "#172b4d",
                         }}
                     >
                         {displayTitle}
@@ -125,22 +115,14 @@ export default function Dashboard({ title }) {
                     type="button"
                     onClick={handleLogout}
                     style={{
-                        padding: "8px 18px",
-                        backgroundColor: "#ffffff",
-                        color: "#dc2626",
-                        border: "1px solid #fecaca",
-                        borderRadius: "8px",
+                        padding: "8px 16px",
+                        backgroundColor: "#de350b",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "4px",
                         cursor: "pointer",
-                        fontWeight: 600,
-                        fontSize: "13px",
-                        transition: "all 0.15s ease",
+                        fontWeight: 500,
                     }}
-                    onMouseOver={(e) =>
-                        (e.currentTarget.style.backgroundColor = "#fee2e2")
-                    }
-                    onMouseOut={(e) =>
-                        (e.currentTarget.style.backgroundColor = "#ffffff")
-                    }
                 >
                     Đăng xuất
                 </button>
@@ -150,94 +132,47 @@ export default function Dashboard({ title }) {
                 className="welcome"
                 style={{
                     marginBottom: "24px",
-                    padding: "24px 30px",
-                    background:
-                        "linear-gradient(135deg, #0b2545 0%, #134074 50%, #1d4ed8 100%)",
-                    borderRadius: "16px",
-                    boxShadow: "0 10px 25px -4px rgba(19, 64, 116, 0.28)",
-                    color: "#ffffff",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
+                    padding: "18px 22px",
+                    backgroundColor: "#2563eb",
+                    borderRadius: "8px",
+                    boxShadow: "0 2px 6px rgba(37, 99, 235, 0.25)",
                 }}
             >
-                <div>
-                    <h2
-                        style={{
-                            margin: "0 0 6px",
-                            fontSize: "20px",
-                            color: "#ffffff",
-                            fontWeight: 700,
-                        }}
-                    >
-                        Xin chào,{" "}
-                        {user.fullName || user.username || "Người dùng"}
-                    </h2>
-                    <p
-                        style={{
-                            margin: 0,
-                            color: "#bfdbfe",
-                            fontSize: "13px",
-                        }}
-                    >
-                        Tài khoản:{" "}
-                        <strong style={{ color: "#ffffff" }}>
-                            {user.username}
-                        </strong>
-                        {"  "}•{"  "}Vai trò:{" "}
-                        <span
-                            style={{
-                                display: "inline-block",
-                                padding: "2px 8px",
-                                backgroundColor: "rgba(255, 255, 255, 0.16)",
-                                borderRadius: "5px",
-                                color: "#e0f2fe",
-                                fontWeight: 600,
-                                fontSize: "12px",
-                            }}
-                        >
-                            {userRole || "Chưa phân quyền"}
+                <h2
+                    style={{
+                        margin: "0 0 6px",
+                        fontSize: "18px",
+                        color: "#ffffff",
+                        fontWeight: 700,
+                    }}
+                >
+                    Xin chào, {user.fullName || user.username || "Người dùng"}
+                </h2>
+                <p style={{ margin: 0, color: "#dbeafe", fontSize: "13px" }}>
+                    Tài khoản:{" "}
+                    <strong style={{ color: "#ffffff" }}>
+                        {user.username}
+                    </strong>{" "}
+                    · Vai trò:{" "}
+                    <strong style={{ color: "#ffffff" }}>
+                        {userRole || "Chưa phân quyền"}
+                    </strong>
+                    {selectedProjectId && (
+                        <span>
+                            {" "}
+                            · Project ID:{" "}
+                            <strong style={{ color: "#ffffff" }}>
+                                #{selectedProjectId}
+                            </strong>
                         </span>
-                    </p>
-                </div>
-
-                {selectedProjectId && (
-                    <div
-                        style={{
-                            padding: "8px 18px",
-                            backgroundColor: "rgba(255, 255, 255, 0.12)",
-                            borderRadius: "12px",
-                            border: "1px solid rgba(255, 255, 255, 0.18)",
-                            textAlign: "right",
-                        }}
-                    >
-                        <div
-                            style={{
-                                fontSize: "11px",
-                                color: "#93c5fd",
-                                textTransform: "uppercase",
-                                fontWeight: 600,
-                            }}
-                        >
-                            Dự án hiện tại
-                        </div>
-                        <div
-                            style={{
-                                fontSize: "17px",
-                                fontWeight: 800,
-                                color: "#ffffff",
-                            }}
-                        >
-                            Project #{selectedProjectId}
-                        </div>
-                    </div>
-                )}
+                    )}
+                </p>
             </section>
 
             <div
                 style={{
                     display: "flex",
-                    gap: "22px",
+                    gap: "24px",
                     alignItems: "flex-start",
                 }}
             >
@@ -248,37 +183,31 @@ export default function Dashboard({ title }) {
                         flexShrink: 0,
                         display: "flex",
                         flexDirection: "column",
-                        gap: "6px",
-                        backgroundColor: "#ffffff",
-                        padding: "12px",
-                        borderRadius: "14px",
-                        border: "1px solid #dbeafe",
-                        boxShadow: "0 2px 10px rgba(37, 99, 235, 0.03)",
+                        gap: "12px",
                     }}
                 >
                     <button
                         type="button"
                         onClick={() => setActiveTab("requirements")}
                         style={{
-                            display: "block",
-                            width: "100%",
-                            padding: "12px 16px",
-                            borderRadius: "10px",
+                            backgroundColor: "#fff",
+                            padding: "16px",
+                            borderRadius: "6px",
                             border: "none",
-                            backgroundColor:
+                            borderLeft:
                                 activeTab === "requirements"
-                                    ? "#1d4ed8"
-                                    : "transparent",
-                            color:
-                                activeTab === "requirements"
-                                    ? "#ffffff"
-                                    : "#334155",
+                                    ? "4px solid #0052cc"
+                                    : "4px solid transparent",
                             fontWeight:
                                 activeTab === "requirements" ? 600 : 500,
-                            fontSize: "13px",
+                            color:
+                                activeTab === "requirements"
+                                    ? "#0052cc"
+                                    : "#172b4d",
                             cursor: "pointer",
                             textAlign: "left",
-                            transition: "all 0.15s ease",
+                            boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                            fontSize: "14px",
                         }}
                     >
                         Yêu cầu dự án
@@ -288,22 +217,21 @@ export default function Dashboard({ title }) {
                         type="button"
                         onClick={() => setActiveTab("tasks")}
                         style={{
-                            display: "block",
-                            width: "100%",
-                            padding: "12px 16px",
-                            borderRadius: "10px",
+                            backgroundColor: "#fff",
+                            padding: "16px",
+                            borderRadius: "6px",
                             border: "none",
-                            backgroundColor:
+                            borderLeft:
                                 activeTab === "tasks"
-                                    ? "#1d4ed8"
-                                    : "transparent",
-                            color:
-                                activeTab === "tasks" ? "#ffffff" : "#334155",
+                                    ? "4px solid #0052cc"
+                                    : "4px solid transparent",
                             fontWeight: activeTab === "tasks" ? 600 : 500,
-                            fontSize: "13px",
+                            color:
+                                activeTab === "tasks" ? "#0052cc" : "#172b4d",
                             cursor: "pointer",
                             textAlign: "left",
-                            transition: "all 0.15s ease",
+                            boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                            fontSize: "14px",
                         }}
                     >
                         Công việc được giao
@@ -314,22 +242,21 @@ export default function Dashboard({ title }) {
                             type="button"
                             onClick={() => setActiveTab("srs")}
                             style={{
-                                display: "block",
-                                width: "100%",
-                                padding: "12px 16px",
-                                borderRadius: "10px",
+                                backgroundColor: "#fff",
+                                padding: "16px",
+                                borderRadius: "6px",
                                 border: "none",
-                                backgroundColor:
+                                borderLeft:
                                     activeTab === "srs"
-                                        ? "#1d4ed8"
-                                        : "transparent",
-                                color:
-                                    activeTab === "srs" ? "#ffffff" : "#334155",
+                                        ? "4px solid #0052cc"
+                                        : "4px solid transparent",
                                 fontWeight: activeTab === "srs" ? 600 : 500,
-                                fontSize: "13px",
+                                color:
+                                    activeTab === "srs" ? "#0052cc" : "#172b4d",
                                 cursor: "pointer",
                                 textAlign: "left",
-                                transition: "all 0.15s ease",
+                                boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                                fontSize: "14px",
                             }}
                         >
                             Xem trước SRS
@@ -338,27 +265,25 @@ export default function Dashboard({ title }) {
 
                     <button
                         type="button"
-                        data-testid="progress-tab"
                         onClick={() => setActiveTab("progress")}
                         style={{
-                            display: "block",
-                            width: "100%",
-                            padding: "12px 16px",
-                            borderRadius: "10px",
+                            backgroundColor: "#fff",
+                            padding: "16px",
+                            borderRadius: "6px",
                             border: "none",
-                            backgroundColor:
+                            borderLeft:
                                 activeTab === "progress"
-                                    ? "#1d4ed8"
-                                    : "transparent",
+                                    ? "4px solid #0052cc"
+                                    : "4px solid transparent",
+                            fontWeight: activeTab === "progress" ? 600 : 500,
                             color:
                                 activeTab === "progress"
-                                    ? "#ffffff"
-                                    : "#334155",
-                            fontWeight: activeTab === "progress" ? 600 : 500,
-                            fontSize: "13px",
+                                    ? "#0052cc"
+                                    : "#172b4d",
                             cursor: "pointer",
                             textAlign: "left",
-                            transition: "all 0.15s ease",
+                            boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                            fontSize: "14px",
                         }}
                     >
                         Tiến độ nhóm
@@ -368,22 +293,21 @@ export default function Dashboard({ title }) {
                         type="button"
                         onClick={() => setActiveTab("github")}
                         style={{
-                            display: "block",
-                            width: "100%",
-                            padding: "12px 16px",
-                            borderRadius: "10px",
+                            backgroundColor: "#fff",
+                            padding: "16px",
+                            borderRadius: "6px",
                             border: "none",
-                            backgroundColor:
+                            borderLeft:
                                 activeTab === "github"
-                                    ? "#1d4ed8"
-                                    : "transparent",
-                            color:
-                                activeTab === "github" ? "#ffffff" : "#334155",
+                                    ? "4px solid #0052cc"
+                                    : "4px solid transparent",
                             fontWeight: activeTab === "github" ? 600 : 500,
-                            fontSize: "13px",
+                            color:
+                                activeTab === "github" ? "#0052cc" : "#172b4d",
                             cursor: "pointer",
                             textAlign: "left",
-                            transition: "all 0.15s ease",
+                            boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                            fontSize: "14px",
                         }}
                     >
                         Hoạt động GitHub
@@ -395,25 +319,24 @@ export default function Dashboard({ title }) {
                             data-testid="jira-config-tab"
                             onClick={() => setActiveTab("jira-config")}
                             style={{
-                                display: "block",
-                                width: "100%",
-                                padding: "12px 16px",
-                                borderRadius: "10px",
+                                backgroundColor: "#fff",
+                                padding: "16px",
+                                borderRadius: "6px",
                                 border: "none",
-                                backgroundColor:
+                                borderLeft:
                                     activeTab === "jira-config"
-                                        ? "#1d4ed8"
-                                        : "transparent",
-                                color:
-                                    activeTab === "jira-config"
-                                        ? "#ffffff"
-                                        : "#334155",
+                                        ? "4px solid #0052cc"
+                                        : "4px solid transparent",
                                 fontWeight:
                                     activeTab === "jira-config" ? 600 : 500,
-                                fontSize: "13px",
+                                color:
+                                    activeTab === "jira-config"
+                                        ? "#0052cc"
+                                        : "#172b4d",
                                 cursor: "pointer",
                                 textAlign: "left",
-                                transition: "all 0.15s ease",
+                                boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                                fontSize: "14px",
                             }}
                         >
                             Cấu hình Jira
@@ -426,25 +349,24 @@ export default function Dashboard({ title }) {
                             data-testid="github-config-tab"
                             onClick={() => setActiveTab("github-config")}
                             style={{
-                                display: "block",
-                                width: "100%",
-                                padding: "12px 16px",
-                                borderRadius: "10px",
+                                backgroundColor: "#fff",
+                                padding: "16px",
+                                borderRadius: "6px",
                                 border: "none",
-                                backgroundColor:
+                                borderLeft:
                                     activeTab === "github-config"
-                                        ? "#1d4ed8"
-                                        : "transparent",
-                                color:
-                                    activeTab === "github-config"
-                                        ? "#ffffff"
-                                        : "#334155",
+                                        ? "4px solid #0052cc"
+                                        : "4px solid transparent",
                                 fontWeight:
                                     activeTab === "github-config" ? 600 : 500,
-                                fontSize: "13px",
+                                color:
+                                    activeTab === "github-config"
+                                        ? "#0052cc"
+                                        : "#172b4d",
                                 cursor: "pointer",
                                 textAlign: "left",
-                                transition: "all 0.15s ease",
+                                boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                                fontSize: "14px",
                             }}
                         >
                             Cấu hình GitHub
@@ -455,16 +377,14 @@ export default function Dashboard({ title }) {
                 <section
                     style={{
                         flex: 1,
-                        backgroundColor: "#ffffff",
-                        borderRadius: "14px",
-                        border: "1px solid #dbeafe",
-                        boxShadow: "0 2px 10px rgba(37, 99, 235, 0.03)",
+                        backgroundColor: "#fff",
+                        borderRadius: "8px",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
                         overflow: "hidden",
-                        minHeight: "480px",
                     }}
                 >
                     {activeTab === "github-config" && (
-                        <div style={{ padding: "24px" }}>
+                        <div style={{ padding: "20px" }}>
                             <GitHubConfigComponent
                                 currentUserRole={userRole}
                                 projectId={selectedProjectId}
@@ -477,15 +397,15 @@ export default function Dashboard({ title }) {
                             <div
                                 data-testid="no-project-message"
                                 style={{
-                                    padding: "60px 24px",
+                                    padding: "40px 24px",
                                     textAlign: "center",
-                                    color: "#64748b",
+                                    color: "#6b778c",
                                 }}
                             >
                                 <h3
                                     style={{
-                                        color: "#0f172a",
-                                        marginBottom: "6px",
+                                        color: "#172b4d",
+                                        marginBottom: "8px",
                                     }}
                                 >
                                     Chưa chọn dự án
@@ -507,15 +427,15 @@ export default function Dashboard({ title }) {
                             {!canAccessRequirement ? (
                                 <div
                                     style={{
-                                        padding: "60px 24px",
+                                        padding: "40px 24px",
                                         textAlign: "center",
-                                        color: "#64748b",
+                                        color: "#6b778c",
                                     }}
                                     data-testid="unauthorized-message"
                                 >
                                     <h3
                                         style={{
-                                            color: "#dc2626",
+                                            color: "#de350b",
                                             marginBottom: "8px",
                                         }}
                                     >
@@ -534,16 +454,16 @@ export default function Dashboard({ title }) {
                             ) : !selectedProjectId ? (
                                 <div
                                     style={{
-                                        padding: "60px 24px",
+                                        padding: "40px 24px",
                                         textAlign: "center",
-                                        color: "#64748b",
+                                        color: "#6b778c",
                                     }}
                                     data-testid="no-project-message"
                                 >
                                     <h3
                                         style={{
-                                            color: "#0f172a",
-                                            marginBottom: "6px",
+                                            color: "#172b4d",
+                                            marginBottom: "8px",
                                         }}
                                     >
                                         Chưa chọn dự án
@@ -563,20 +483,20 @@ export default function Dashboard({ title }) {
                     )}
 
                     {activeTab === "tasks" && (
-                        <div style={{ padding: "24px" }}>
+                        <div style={{ padding: "20px" }}>
                             {!selectedProjectId ? (
                                 <div
                                     data-testid="no-project-message"
                                     style={{
-                                        padding: "60px 24px",
+                                        padding: "40px 24px",
                                         textAlign: "center",
-                                        color: "#64748b",
+                                        color: "#6b778c",
                                     }}
                                 >
                                     <h3
                                         style={{
-                                            color: "#0f172a",
-                                            marginBottom: "6px",
+                                            color: "#172b4d",
+                                            marginBottom: "8px",
                                         }}
                                     >
                                         Chưa chọn dự án
@@ -598,9 +518,9 @@ export default function Dashboard({ title }) {
                                 <div
                                     data-testid="no-project-message"
                                     style={{
-                                        padding: "60px 24px",
+                                        padding: "40px 24px",
                                         textAlign: "center",
-                                        color: "#64748b",
+                                        color: "#6b778c",
                                     }}
                                 >
                                     Chưa chọn dự án để xem trước SRS.
@@ -615,64 +535,19 @@ export default function Dashboard({ title }) {
                     )}
 
                     {activeTab === "progress" && (
-                        <>
-                            {!canAccessProgress ? (
-                                <div
-                                    style={{
-                                        padding: "60px 24px",
-                                        textAlign: "center",
-                                        color: "#64748b",
-                                    }}
-                                    data-testid="unauthorized-progress-message"
-                                >
-                                    <h3
-                                        style={{
-                                            color: "#dc2626",
-                                            marginBottom: "8px",
-                                        }}
-                                    >
-                                        Không có quyền truy cập
-                                    </h3>
-                                    <p style={{ margin: 0, fontSize: "14px" }}>
-                                        Chỉ có{" "}
-                                        <strong>
-                                            Trưởng nhóm (TEAM_LEADER)
-                                        </strong>{" "}
-                                        và{" "}
-                                        <strong>Giảng viên (LECTURER)</strong>{" "}
-                                        mới được phép theo dõi tiến độ dự án.
-                                    </p>
-                                </div>
-                            ) : !selectedProjectId ? (
-                                <div
-                                    data-testid="no-project-message"
-                                    style={{
-                                        padding: "60px 24px",
-                                        textAlign: "center",
-                                        color: "#64748b",
-                                    }}
-                                >
-                                    <h3
-                                        style={{
-                                            color: "#0f172a",
-                                            marginBottom: "6px",
-                                        }}
-                                    >
-                                        Chưa chọn dự án
-                                    </h3>
-                                    <p style={{ margin: 0, fontSize: "14px" }}>
-                                        Vui lòng chọn một project trước khi xem
-                                        tiến độ nhóm.
-                                    </p>
-                                </div>
-                            ) : (
-                                <ProjectProgressComponent
-                                    key={selectedProjectId}
-                                    projectId={selectedProjectId}
-                                    currentUserRole={userRole}
-                                />
-                            )}
-                        </>
+                        <div
+                            style={{
+                                padding: "40px 24px",
+                                textAlign: "center",
+                                color: "#6b778c",
+                            }}
+                        >
+                            <h3>Theo dõi tiến độ nhóm</h3>
+                            <p style={{ margin: 0, fontSize: "14px" }}>
+                                Báo cáo tiến độ và phân bổ công việc của các
+                                thành viên.
+                            </p>
+                        </div>
                     )}
 
                     {activeTab === "github" &&
@@ -680,15 +555,15 @@ export default function Dashboard({ title }) {
                             <div
                                 data-testid="no-project-message"
                                 style={{
-                                    padding: "60px 24px",
+                                    padding: "40px 24px",
                                     textAlign: "center",
-                                    color: "#64748b",
+                                    color: "#6b778c",
                                 }}
                             >
                                 <h3
                                     style={{
-                                        color: "#0f172a",
-                                        marginBottom: "6px",
+                                        color: "#172b4d",
+                                        marginBottom: "8px",
                                     }}
                                 >
                                     Chưa chọn dự án
@@ -700,7 +575,6 @@ export default function Dashboard({ title }) {
                             </div>
                         ) : (
                             <GitHubActivityComponent
-                                key={selectedProjectId}
                                 projectId={selectedProjectId}
                             />
                         ))}
