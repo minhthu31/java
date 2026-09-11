@@ -119,4 +119,32 @@ public interface GitHubCommitRepository extends JpaRepository<GitHubCommit, Long
               and c.authorExternalAccountId is null
             """)
     List<GitHubUnlinkedAuthorProjection> findUnlinkedAuthors(@Param("projectId") Long projectId);
+    @Query(value = """
+            SELECT c.id AS activityId,
+                   a.user_id AS userId,
+                   tcl.task_id AS taskId
+              FROM github_commits c
+              JOIN github_repositories r ON r.id = c.repository_id
+              LEFT JOIN user_external_accounts a ON a.id = c.author_external_account_id
+              LEFT JOIN task_commit_links tcl ON tcl.commit_id = c.id
+             WHERE r.project_id = :projectId
+               AND (:memberId IS NULL OR a.user_id = :memberId)
+               AND (:from IS NULL OR c.committed_at >= :from)
+               AND (:to IS NULL OR c.committed_at < :to)
+               AND (:sprintId IS NULL OR EXISTS (
+                    SELECT 1 FROM tasks t
+                     WHERE t.id = tcl.task_id
+                       AND t.project_id = :projectId
+                       AND t.sprint_id = :sprintId
+                       AND (:taskMemberId IS NULL OR t.assignee_user_id = :taskMemberId)
+               ))
+            """, nativeQuery = true)
+    List<ReportCommitActivityProjection> findReportActivity(
+            @Param("projectId") Long projectId,
+            @Param("memberId") Long memberId,
+            @Param("from") Instant from,
+            @Param("to") Instant to,
+            @Param("sprintId") Long sprintId,
+            @Param("taskMemberId") Long taskMemberId);
+
 }

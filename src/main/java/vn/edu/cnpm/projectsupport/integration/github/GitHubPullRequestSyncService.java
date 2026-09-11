@@ -230,6 +230,7 @@ public class GitHubPullRequestSyncService {
                         remote.htmlUrl()));
 
         local.setGithubPullRequestId(remote.id());
+        local.setRemoteCreatedAt(remote.createdAt());
         local.setTitle(remote.title());
         local.setBody(remote.body());
         local.setHeadRef(remote.head().ref());
