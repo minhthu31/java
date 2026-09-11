@@ -22,7 +22,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.server.ResponseStatusException;
-import vn.edu.cnpm.projectsupport.reporting.dto.*;
+import vn.edu.cnpm.projectsupport.reporting.dto.MemberContributionResponse;
+import vn.edu.cnpm.projectsupport.reporting.dto.ReportDataStatus;
+import vn.edu.cnpm.projectsupport.reporting.dto.ReportSource;
+import vn.edu.cnpm.projectsupport.reporting.dto.ReportSourceFreshnessResponse;
+import vn.edu.cnpm.projectsupport.reporting.dto.ReportSourceStatus;
+import vn.edu.cnpm.projectsupport.reporting.dto.ReportSummaryResponse;
+import vn.edu.cnpm.projectsupport.reporting.dto.TaskMetricsResponse;
 import vn.edu.cnpm.projectsupport.task.domain.TaskStatus;
 
 @ExtendWith(MockitoExtension.class)
@@ -42,10 +48,12 @@ class ReportControllerRbacTest {
     }
 
     @Test
-    @DisplayName("LECTURER / LEADER có quyền truy cập trả về HTTP 200 OK với đầy đủ dữ liệu")
+    @DisplayName("LECTURER / LEADER có quyền truy cập trả về HTTP 200 OK")
     void authorizedUser_Returns200WithFullData() throws Exception {
         var statusMap = new EnumMap<TaskStatus, Long>(TaskStatus.class);
-        for (TaskStatus status : TaskStatus.values()) statusMap.put(status, 0L);
+        for (TaskStatus status : TaskStatus.values()) {
+            statusMap.put(status, 0L);
+        }
         statusMap.put(TaskStatus.DONE, 3L);
 
         ReportSummaryResponse mockResponse = new ReportSummaryResponse(
@@ -74,7 +82,9 @@ class ReportControllerRbacTest {
     @DisplayName("TEAM_MEMBER xem báo cáo bị ép scope về chính mình")
     void teamMember_ForcedScopeToSelf() throws Exception {
         var statusMap = new EnumMap<TaskStatus, Long>(TaskStatus.class);
-        for (TaskStatus status : TaskStatus.values()) statusMap.put(status, 0L);
+        for (TaskStatus status : TaskStatus.values()) {
+            statusMap.put(status, 0L);
+        }
 
         ReportSummaryResponse mockResponse = new ReportSummaryResponse(
                 1L, null, 7L, null, null,
@@ -90,7 +100,6 @@ class ReportControllerRbacTest {
 
         Principal principal = () -> "member.test";
 
-        // Truyền memberId khác nhưng trả về đúng memberId bị ép (7L)
         mockMvc.perform(get("/api/v1/projects/1/reports/summary")
                 .param("memberId", "999")
                 .principal(principal))

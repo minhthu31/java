@@ -15,7 +15,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import vn.edu.cnpm.projectsupport.reporting.dto.*;
+import vn.edu.cnpm.projectsupport.reporting.dto.MemberContributionResponse;
+import vn.edu.cnpm.projectsupport.reporting.dto.ReportDataStatus;
+import vn.edu.cnpm.projectsupport.reporting.dto.ReportFilterRequest;
+import vn.edu.cnpm.projectsupport.reporting.dto.ReportSource;
+import vn.edu.cnpm.projectsupport.reporting.dto.ReportSourceFreshnessResponse;
+import vn.edu.cnpm.projectsupport.reporting.dto.ReportSourceStatus;
+import vn.edu.cnpm.projectsupport.reporting.dto.ReportSummaryResponse;
+import vn.edu.cnpm.projectsupport.reporting.dto.TaskMetricsResponse;
 import vn.edu.cnpm.projectsupport.task.domain.TaskStatus;
 
 @Service
@@ -31,99 +38,134 @@ public class ReportService {
     public ReportSummaryResponse getSummaryReport(Long projectId, ReportFilterRequest filter, String currentUsername) {
         Instant asOf = Instant.now();
 
-        // 1. Kiểm tra xác thực người dùng
         if (currentUsername == null || currentUsername.isBlank()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
         }
 
-        // 2. Lấy thông tin user hiện tại và role
-        Query uQuery = em.createNativeQuery("SELECT id, role FROM users WHERE username = :uname")
-                .setParameter("uname", currentUsername);
-        List<?> uList = uQuery.getResultList();
-        if (uList.isEmpty()) {
+        // 1. Join bảng roles qua role_id để lấy thông tin và quyền
+        Query userQuery = em.createNativeQuery("""
+            SELECT u.id, r.code
+            FROM users u
+            JOIN roles r ON u.role_id = r.id
+            WHERE u.username = :uname
+        """);
+        userQuery.setParameter("uname", currentUsername);
+        List<?> userList = userQuery.getResultList();
+        if (userList.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
         }
-        Object[] uRow = (Object[]) uList.get(0);
-        Long currentUserId = ((Number) uRow[0]).longValue();
-        String roleName = (String) uRow[1];
+        Object[] userRow = (Object[]) userList.get(0);
+        Long currentUserId = ((Number) userRow[0]).longValue();
+        String roleCode = (String) userRow[1];
 
-        // 3. Kiểm tra Project tồn tại và lấy groupId
-        Query pQuery = em.createNativeQuery("SELECT id, group_id FROM projects WHERE id = :pid")
-                .setParameter("pid", projectId);
-        List<?> pList = pQuery.getResultList();
-        if (pList.isEmpty()) {
+        // 2. Lấy group_id của Project
+        Query projectQuery = em.createNativeQuery("SELECT id, group_id FROM projects WHERE id = :pid");
+        projectQuery.setParameter("pid", projectId);
+        List<?> projectList = projectQuery.getResultList();
+        if (projectList.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "PROJECT_NOT_FOUND");
         }
-        Object[] pRow = (Object[]) pList.get(0);
-        Long groupId = pRow[1] != null ? ((Number) pRow[1]).longValue() : null;
+        Object[] projectRow = (Object[]) projectList.get(0);
+        Long groupId = projectRow[1] != null ? ((Number) projectRow[1]).longValue() : null;
 
-        // 4. Kiểm tra phân quyền RBAC
-        if ("LECTURER".equals(roleName)) {
-            Number lecturerCount = (Number) em.createNativeQuery(
-                    "SELECT COUNT(1) FROM project_groups WHERE id = :gid AND lecturer_user_id = :uid")
-                    .setParameter("gid", groupId)
-                    .setParameter("uid", currentUserId)
-                    .getSingleResult();
-            if (lecturerCount.longValue() == 0) {
+        // 3. Kiểm tra RBAC theo student_groups, group_lecturers, student_groups.leader_user_id
+        if ("LECTURER".equals(roleCode)) {
+            Number count = (Number) em.createNativeQuery("""
+                SELECT COUNT(1)
+                FROM group_lecturers
+                WHERE group_id = :gid AND lecturer_user_id = :uid
+            """)
+            .setParameter("gid", groupId)
+            .setParameter("uid", currentUserId)
+            .getSingleResult();
+
+            if (count.longValue() == 0) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "REPORT_ACCESS_DENIED");
             }
-        } else if ("TEAM_LEADER".equals(roleName) || "TEAM_MEMBER".equals(roleName)) {
-            Number memberCount = (Number) em.createNativeQuery(
-                    "SELECT COUNT(1) FROM group_members WHERE group_id = :gid AND user_id = :uid AND active = true")
-                    .setParameter("gid", groupId)
-                    .setParameter("uid", currentUserId)
-                    .getSingleResult();
-            if (memberCount.longValue() == 0) {
+        } else if ("TEAM_LEADER".equals(roleCode)) {
+            Number count = (Number) em.createNativeQuery("""
+                SELECT COUNT(1)
+                FROM student_groups
+                WHERE id = :gid AND leader_user_id = :uid
+            """)
+            .setParameter("gid", groupId)
+            .setParameter("uid", currentUserId)
+            .getSingleResult();
+
+            if (count.longValue() == 0) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "REPORT_ACCESS_DENIED");
             }
-        } else if (!"ADMIN".equals(roleName)) {
+        } else if ("TEAM_MEMBER".equals(roleCode)) {
+            Number count = (Number) em.createNativeQuery("""
+                SELECT COUNT(1)
+                FROM group_members
+                WHERE group_id = :gid AND user_id = :uid AND status = 'ACTIVE'
+            """)
+            .setParameter("gid", groupId)
+            .setParameter("uid", currentUserId)
+            .getSingleResult();
+
+            if (count.longValue() == 0) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "REPORT_ACCESS_DENIED");
+            }
+        } else if (!"ADMIN".equals(roleCode)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "REPORT_ACCESS_DENIED");
         }
 
-        // 5. Ép scope memberId nếu là TEAM_MEMBER
+        // 4. Ép scope memberId về chính mình nếu là TEAM_MEMBER
         Long targetMemberId = filter.memberId();
-        if ("TEAM_MEMBER".equals(roleName)) {
+        if ("TEAM_MEMBER".equals(roleCode)) {
             targetMemberId = currentUserId;
         }
 
-        // 6. Kiểm tra Sprint thuộc Project (nếu có filter sprintId)
+        // 5. Kiểm tra Sprint thuộc Project
         if (filter.sprintId() != null) {
-            Number sprintCount = (Number) em.createNativeQuery(
-                    "SELECT COUNT(1) FROM sprints WHERE id = :sid AND project_id = :pid")
-                    .setParameter("sid", filter.sprintId())
-                    .setParameter("pid", projectId)
-                    .getSingleResult();
+            Number sprintCount = (Number) em.createNativeQuery("""
+                SELECT COUNT(1)
+                FROM sprints
+                WHERE id = :sid AND project_id = :pid
+            """)
+            .setParameter("sid", filter.sprintId())
+            .setParameter("pid", projectId)
+            .getSingleResult();
+
             if (sprintCount.longValue() == 0) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "SPRINT_NOT_FOUND");
             }
         }
 
-        // 7. Kiểm tra Member active trong Project (nếu có filter memberId)
+        // 6. Kiểm tra Member active trong Project (status = 'ACTIVE' hoặc là Leader của student_groups)
         if (targetMemberId != null) {
-            Number activeCount = (Number) em.createNativeQuery("""
-                SELECT COUNT(1) 
-                FROM group_members gm 
-                JOIN projects p ON gm.group_id = p.group_id 
-                WHERE p.id = :pid AND gm.user_id = :uid AND gm.active = true
+            Number activeMemberCount = (Number) em.createNativeQuery("""
+                SELECT COUNT(1)
+                FROM projects p
+                JOIN student_groups g ON g.id = p.group_id
+                WHERE p.id = :pid AND (
+                    g.leader_user_id = :uid
+                    OR EXISTS (
+                        SELECT 1 FROM group_members gm
+                        WHERE gm.group_id = g.id AND gm.user_id = :uid AND gm.status = 'ACTIVE'
+                    )
+                )
             """)
             .setParameter("pid", projectId)
             .setParameter("uid", targetMemberId)
             .getSingleResult();
 
-            if (activeCount.longValue() == 0) {
+            if (activeMemberCount.longValue() == 0) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "MEMBER_NOT_FOUND");
             }
         }
 
-        // 8. Tính Task Metrics
+        // 7. Tính Task Metrics
         TaskMetricsResponse taskMetrics = calculateTaskMetrics(
                 projectId, filter.sprintId(), targetMemberId, filter.from(), filter.to(), asOf);
 
-        // 9. Tính Đóng góp thành viên (dùng đúng author_external_account_id và provider)
+        // 8. Tính Member Contributions
         List<MemberContributionResponse> memberContributions = calculateMemberContributions(
                 projectId, filter.sprintId(), targetMemberId, filter.from(), filter.to());
 
-        // 10. Nguồn dữ liệu & Freshness (dùng đúng provider và completed_at)
+        // 9. Nguồn dữ liệu Freshness & Cảnh báo
         List<ReportSourceFreshnessResponse> sources = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
 
@@ -136,7 +178,7 @@ public class ReportService {
             FROM user_external_accounts uea
             JOIN group_members gm ON uea.user_id = gm.user_id
             JOIN projects p ON gm.group_id = p.group_id
-            WHERE p.id = :pid AND uea.provider = 'GITHUB'
+            WHERE p.id = :pid AND uea.provider = 'GITHUB' AND gm.status = 'ACTIVE'
         """)
         .setParameter("pid", projectId)
         .getSingleResult();
@@ -166,10 +208,18 @@ public class ReportService {
             Long projectId, Long sprintId, Long memberId, Instant from, Instant to, Instant asOf) {
 
         StringBuilder where = new StringBuilder(" WHERE t.project_id = :projectId ");
-        if (sprintId != null) where.append(" AND t.sprint_id = :sprintId ");
-        if (memberId != null) where.append(" AND t.assignee_user_id = :memberId ");
-        if (from != null) where.append(" AND t.created_at >= :from ");
-        if (to != null) where.append(" AND t.created_at < :to ");
+        if (sprintId != null) {
+            where.append(" AND t.sprint_id = :sprintId ");
+        }
+        if (memberId != null) {
+            where.append(" AND t.assignee_user_id = :memberId ");
+        }
+        if (from != null) {
+            where.append(" AND t.created_at >= :from ");
+        }
+        if (to != null) {
+            where.append(" AND t.created_at < :to ");
+        }
 
         String statusSql = "SELECT t.status, COUNT(DISTINCT t.id) FROM tasks t " + where + " GROUP BY t.status";
         Query statusQ = em.createNativeQuery(statusSql);
@@ -192,7 +242,8 @@ public class ReportService {
                 if (st == TaskStatus.DONE) {
                     completed = count;
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
 
         String overdueSql = "SELECT COUNT(DISTINCT t.id) FROM tasks t " + where
@@ -211,11 +262,12 @@ public class ReportService {
             Long projectId, Long sprintId, Long memberId, Instant from, Instant to) {
 
         StringBuilder userSql = new StringBuilder("""
-            SELECT u.id, u.username, u.full_name
+            SELECT DISTINCT u.id, u.username, u.full_name
             FROM users u
-            JOIN group_members gm ON u.id = gm.user_id
-            JOIN projects p ON gm.group_id = p.group_id
-            WHERE p.id = :projectId AND gm.active = true
+            JOIN projects p ON p.id = :projectId
+            JOIN student_groups g ON g.id = p.group_id
+            LEFT JOIN group_members gm ON gm.group_id = g.id AND gm.user_id = u.id
+            WHERE (gm.status = 'ACTIVE' OR g.leader_user_id = u.id)
         """);
         if (memberId != null) {
             userSql.append(" AND u.id = :memberId ");
@@ -223,7 +275,9 @@ public class ReportService {
 
         Query userQ = em.createNativeQuery(userSql.toString());
         userQ.setParameter("projectId", projectId);
-        if (memberId != null) userQ.setParameter("memberId", memberId);
+        if (memberId != null) {
+            userQ.setParameter("memberId", memberId);
+        }
 
         List<Object[]> users = userQ.getResultList();
         List<MemberContributionResponse> result = new ArrayList<>();
@@ -233,7 +287,7 @@ public class ReportService {
             String username = (String) u[1];
             String fullName = (String) u[2];
 
-            // Commits (dùng author_external_account_id và provider)
+            // 1. Commits (dùng author_external_account_id và provider)
             StringBuilder commitSql = new StringBuilder("""
                 SELECT COUNT(DISTINCT c.id)
                 FROM github_commits c
@@ -241,20 +295,36 @@ public class ReportService {
                 JOIN github_repositories r ON c.repository_id = r.id
                 WHERE r.project_id = :projectId AND uea.user_id = :uid
             """);
-            if (from != null) commitSql.append(" AND c.committed_at >= :from ");
-            if (to != null) commitSql.append(" AND c.committed_at < :to ");
+            if (from != null) {
+                commitSql.append(" AND c.committed_at >= :from ");
+            }
+            if (to != null) {
+                commitSql.append(" AND c.committed_at < :to ");
+            }
             if (sprintId != null) {
-                commitSql.append(" AND EXISTS (SELECT 1 FROM task_commit_links tcl JOIN tasks t ON tcl.task_id = t.id WHERE tcl.commit_id = c.id AND t.sprint_id = :sprintId) ");
+                commitSql.append("""
+                    AND EXISTS (
+                        SELECT 1 FROM task_commit_links tcl
+                        JOIN tasks t ON tcl.task_id = t.id
+                        WHERE tcl.commit_id = c.id AND t.sprint_id = :sprintId
+                    )
+                """);
             }
             Query cq = em.createNativeQuery(commitSql.toString());
             cq.setParameter("projectId", projectId);
             cq.setParameter("uid", uid);
-            if (sprintId != null) cq.setParameter("sprintId", sprintId);
-            if (from != null) cq.setParameter("from", from);
-            if (to != null) cq.setParameter("to", to);
+            if (sprintId != null) {
+                cq.setParameter("sprintId", sprintId);
+            }
+            if (from != null) {
+                cq.setParameter("from", from);
+            }
+            if (to != null) {
+                cq.setParameter("to", to);
+            }
             long commits = ((Number) cq.getSingleResult()).longValue();
 
-            // Pull Requests (dùng author_external_account_id và provider)
+            // 2. Pull Requests (dùng remote_created_at và task_pr_links)
             StringBuilder prSql = new StringBuilder("""
                 SELECT COUNT(DISTINCT pr.id)
                 FROM github_pull_requests pr
@@ -262,40 +332,92 @@ public class ReportService {
                 JOIN github_repositories r ON pr.repository_id = r.id
                 WHERE r.project_id = :projectId AND uea.user_id = :uid
             """);
-            if (from != null) prSql.append(" AND pr.created_at >= :from ");
-            if (to != null) prSql.append(" AND pr.created_at < :to ");
+            if (from != null) {
+                prSql.append(" AND pr.remote_created_at >= :from ");
+            }
+            if (to != null) {
+                prSql.append(" AND pr.remote_created_at < :to ");
+            }
             if (sprintId != null) {
-                prSql.append(" AND EXISTS (SELECT 1 FROM task_pull_request_links tprl JOIN tasks t ON tprl.pull_request_id = pr.id WHERE t.sprint_id = :sprintId) ");
+                prSql.append("""
+                    AND EXISTS (
+                        SELECT 1 FROM task_pr_links tprl
+                        JOIN tasks t ON tprl.pull_request_id = pr.id
+                        WHERE t.sprint_id = :sprintId
+                    )
+                """);
             }
             Query prq = em.createNativeQuery(prSql.toString());
             prq.setParameter("projectId", projectId);
             prq.setParameter("uid", uid);
-            if (sprintId != null) prq.setParameter("sprintId", sprintId);
-            if (from != null) prq.setParameter("from", from);
-            if (to != null) prq.setParameter("to", to);
+            if (sprintId != null) {
+                prq.setParameter("sprintId", sprintId);
+            }
+            if (from != null) {
+                prq.setParameter("from", from);
+            }
+            if (to != null) {
+                prq.setParameter("to", to);
+            }
             long pullRequests = ((Number) prq.getSingleResult()).longValue();
 
-            // Linked Tasks (dùng author_external_account_id)
-            String linkedSql = """
-                SELECT COUNT(DISTINCT lk.task_id) FROM (
-                    SELECT tcl.task_id
-                    FROM task_commit_links tcl
-                    JOIN github_commits c ON tcl.commit_id = c.id
-                    JOIN user_external_accounts uea ON c.author_external_account_id = uea.id AND uea.provider = 'GITHUB'
-                    JOIN github_repositories r ON c.repository_id = r.id
-                    WHERE r.project_id = :projectId AND uea.user_id = :uid
-                    UNION
-                    SELECT tprl.task_id
-                    FROM task_pull_request_links tprl
-                    JOIN github_pull_requests pr ON tprl.pull_request_id = pr.id
-                    JOIN user_external_accounts uea ON pr.author_external_account_id = uea.id AND uea.provider = 'GITHUB'
-                    JOIN github_repositories r ON pr.repository_id = r.id
-                    WHERE r.project_id = :projectId AND uea.user_id = :uid
-                ) lk
-            """;
-            Query lq = em.createNativeQuery(linkedSql);
+            // 3. Linked Tasks: Áp dụng đầy đủ bộ lọc sprintId, from và to
+            StringBuilder linkedSql = new StringBuilder("SELECT COUNT(DISTINCT lk.task_id) FROM (");
+
+            linkedSql.append("""
+                SELECT tcl.task_id AS task_id
+                FROM task_commit_links tcl
+                JOIN github_commits c ON tcl.commit_id = c.id
+                JOIN user_external_accounts uea ON c.author_external_account_id = uea.id AND uea.provider = 'GITHUB'
+                JOIN github_repositories r ON c.repository_id = r.id
+                JOIN tasks t ON tcl.task_id = t.id
+                WHERE r.project_id = :projectId AND uea.user_id = :uid
+            """);
+            if (sprintId != null) {
+                linkedSql.append(" AND t.sprint_id = :sprintId ");
+            }
+            if (from != null) {
+                linkedSql.append(" AND c.committed_at >= :from ");
+            }
+            if (to != null) {
+                linkedSql.append(" AND c.committed_at < :to ");
+            }
+
+            linkedSql.append(" UNION ");
+
+            linkedSql.append("""
+                SELECT tprl.task_id AS task_id
+                FROM task_pr_links tprl
+                JOIN github_pull_requests pr ON tprl.pull_request_id = pr.id
+                JOIN user_external_accounts uea ON pr.author_external_account_id = uea.id AND uea.provider = 'GITHUB'
+                JOIN github_repositories r ON pr.repository_id = r.id
+                JOIN tasks t ON tprl.task_id = t.id
+                WHERE r.project_id = :projectId AND uea.user_id = :uid
+            """);
+            if (sprintId != null) {
+                linkedSql.append(" AND t.sprint_id = :sprintId ");
+            }
+            if (from != null) {
+                linkedSql.append(" AND pr.remote_created_at >= :from ");
+            }
+            if (to != null) {
+                linkedSql.append(" AND pr.remote_created_at < :to ");
+            }
+
+            linkedSql.append(") lk");
+
+            Query lq = em.createNativeQuery(linkedSql.toString());
             lq.setParameter("projectId", projectId);
             lq.setParameter("uid", uid);
+            if (sprintId != null) {
+                lq.setParameter("sprintId", sprintId);
+            }
+            if (from != null) {
+                lq.setParameter("from", from);
+            }
+            if (to != null) {
+                lq.setParameter("to", to);
+            }
             long linkedTasks = ((Number) lq.getSingleResult()).longValue();
 
             result.add(new MemberContributionResponse(uid, username, fullName, commits, pullRequests, linkedTasks));
@@ -310,23 +432,31 @@ public class ReportService {
 
         ReportSource source = ReportSource.valueOf(provider);
 
-        // Lấy completed_at lần sync thành công gần nhất
-        Query successQ = em.createNativeQuery(
-                "SELECT MAX(completed_at) FROM sync_logs WHERE project_id = :pid AND provider = :provider AND status = 'SUCCESS'")
-                .setParameter("pid", projectId)
-                .setParameter("provider", provider);
+        Query successQ = em.createNativeQuery("""
+            SELECT MAX(completed_at)
+            FROM sync_logs
+            WHERE project_id = :pid AND provider = :provider AND status = 'SUCCESS'
+        """)
+        .setParameter("pid", projectId)
+        .setParameter("provider", provider);
+
         Object successRes = null;
         try {
             successRes = successQ.getSingleResult();
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
 
         Instant lastSuccess = successRes != null ? ((Timestamp) successRes).toInstant() : null;
 
-        // Lấy trạng thái và completed_at (hoặc started_at) lần sync gần nhất
-        Query latestQ = em.createNativeQuery(
-                "SELECT status, completed_at, started_at FROM sync_logs WHERE project_id = :pid AND provider = :provider ORDER BY id DESC LIMIT 1")
-                .setParameter("pid", projectId)
-                .setParameter("provider", provider);
+        Query latestQ = em.createNativeQuery("""
+            SELECT status, completed_at, started_at
+            FROM sync_logs
+            WHERE project_id = :pid AND provider = :provider
+            ORDER BY id DESC LIMIT 1
+        """)
+        .setParameter("pid", projectId)
+        .setParameter("provider", provider);
+
         List<?> latestList = latestQ.getResultList();
 
         if (lastSuccess == null) {
@@ -371,9 +501,17 @@ public class ReportService {
 
     private void bindFilterParams(Query q, Long projectId, Long sprintId, Long memberId, Instant from, Instant to) {
         q.setParameter("projectId", projectId);
-        if (sprintId != null) q.setParameter("sprintId", sprintId);
-        if (memberId != null) q.setParameter("memberId", memberId);
-        if (from != null) q.setParameter("from", from);
-        if (to != null) q.setParameter("to", to);
+        if (sprintId != null) {
+            q.setParameter("sprintId", sprintId);
+        }
+        if (memberId != null) {
+            q.setParameter("memberId", memberId);
+        }
+        if (from != null) {
+            q.setParameter("from", from);
+        }
+        if (to != null) {
+            q.setParameter("to", to);
+        }
     }
 }
