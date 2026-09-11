@@ -148,12 +148,13 @@ public class GitHubPullRequest extends BaseEntity {
     public Long getRepositoryId() { 
         return repositoryId; 
     }
-    public Instant getRemoteCreatedAt() {
-        return remoteCreatedAt;
-    }
     public Long getGithubPullRequestId() { 
         return githubPullRequestId; 
     }
+    public Instant getRemoteCreatedAt() {
+        return remoteCreatedAt;
+    }
+
     public Long getAuthorExternalAccountId() { 
         return authorExternalAccountId; 
     }

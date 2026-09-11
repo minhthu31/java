@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.RestController;
 import vn.edu.cnpm.projectsupport.common.api.ApiResponse;
 import vn.edu.cnpm.projectsupport.reporting.dto.ProjectProgressResponse;
 import vn.edu.cnpm.projectsupport.reporting.dto.ReportFilterRequest;
-import vn.edu.cnpm.projectsupport.reporting.dto.ReportSummaryResponse;
 import vn.edu.cnpm.projectsupport.reporting.service.ProgressReportService;
 
 @RestController
@@ -20,13 +19,6 @@ public class ReportingController {
 
     public ReportingController(ProgressReportService service) {
         this.service = service;
-    }
-
-    @GetMapping("/summary")
-    public ResponseEntity<ApiResponse<ReportSummaryResponse>> summary(
-            @PathVariable Long projectId,
-            @Valid @ModelAttribute ReportFilterRequest filter) {
-        return ResponseEntity.ok(ApiResponse.success(service.getSummary(projectId, filter)));
     }
 
     @GetMapping("/progress")

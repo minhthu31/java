@@ -10,6 +10,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.LinkedHashMap;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -28,6 +29,8 @@ import vn.edu.cnpm.projectsupport.integration.github.domain.GitHubPullRequest;
 import vn.edu.cnpm.projectsupport.integration.github.domain.TaskCommitLink;
 import vn.edu.cnpm.projectsupport.integration.github.domain.TaskPullRequestLink;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubCommitRepository;
+import vn.edu.cnpm.projectsupport.integration.github.repository.ReportCommitActivityProjection;
+import vn.edu.cnpm.projectsupport.integration.github.repository.ReportPullRequestActivityProjection;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubPullRequestRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubRepositoryRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.TaskCommitLinkRepository;
@@ -157,10 +160,6 @@ public class ProgressReportServiceImpl implements ProgressReportService {
         List<Task> allTasks =
                 taskRepository.findByProjectId(projectId)
                         .stream()
-                        .filter(task ->
-                                effectiveFilter.sprintId() == null
-                                        || effectiveFilter.sprintId().equals(
-                                                task.getSprintId()))
                         .filter(task ->
                                 effectiveMemberId == null
                                         || effectiveMemberId.equals(
@@ -399,32 +398,23 @@ public class ProgressReportServiceImpl implements ProgressReportService {
          * Chỉ validate memberId khi client thực sự yêu cầu
          * lọc theo member.
          */
-        if (effectiveMemberId != null && !isActiveProjectMember(projectId, effectiveMemberId)) {
-            throw new ResourceNotFoundException(
-                    "Member không active trong Project");
-        }
-    }
+        if (effectiveMemberId != null) {
+            boolean activeMember = projectRepository.findActiveMembers(projectId)
+                    .stream()
+                    .anyMatch(member -> effectiveMemberId.equals(member.getId()));
+            boolean activeLeader = projectRepository.findActiveLeader(projectId)
+                    .map(leader -> effectiveMemberId.equals(leader.getId()))
+                    .orElse(false);
 
-    private boolean isActiveProjectMember(Long projectId, Long userId) {
-        boolean isMember = projectRepository.findActiveMembers(projectId)
-                .stream()
-                .anyMatch(member -> userId.equals(member.getId()));
-        if (isMember) {
-            return true;
+            if (!activeMember && !activeLeader) {
+                throw new ResourceNotFoundException(
+                        "Member không active trong Project");
+            }
         }
-        return projectRepository.findActiveLeader(projectId)
-                .map(leader -> userId.equals(leader.getId()))
-                .orElse(false);
     }
 
     private long requirementCount(Long projectId) {
-
-        return requirementRepository.findAll()
-                .stream()
-                .filter(requirement ->
-                        projectId.equals(
-                                requirement.getProjectId()))
-                .count();
+        return requirementRepository.countByProjectId(projectId);
     }
 
     private long requirementCountForTasks(
@@ -576,270 +566,85 @@ public class ProgressReportServiceImpl implements ProgressReportService {
             Long effectiveMemberId,
             List<Task> scopedTasks) {
 
-        List<ProjectRepository.ActiveMemberProjection> members =
-                new ArrayList<>(projectRepository.findActiveMembers(projectId));
+        Map<Long, ProjectRepository.ActiveMemberProjection> members =
+                new LinkedHashMap<>();
 
+        projectRepository.findActiveMembers(projectId)
+                .forEach(member -> members.put(member.getId(), member));
         projectRepository.findActiveLeader(projectId)
-                .ifPresent(leader -> {
-                    boolean alreadyIncluded = members.stream()
-                            .anyMatch(member -> leader.getId().equals(member.getId()));
-                    if (!alreadyIncluded) {
-                        members.add(leader);
-                    }
-                });
+                .ifPresent(leader -> members.putIfAbsent(leader.getId(), leader));
 
-        Set<Long> scopedTaskIds =
-                new HashSet<>();
+        Long taskMemberId = effectiveMemberId;
+        List<ReportCommitActivityProjection> commitRows =
+                commitRepository.findReportActivity(
+                        projectId,
+                        effectiveMemberId,
+                        filter.from(),
+                        filter.to(),
+                        filter.sprintId(),
+                        taskMemberId);
+        List<ReportPullRequestActivityProjection> prRows =
+                pullRequestRepository.findReportActivity(
+                        projectId,
+                        effectiveMemberId,
+                        filter.from(),
+                        filter.to(),
+                        filter.sprintId(),
+                        taskMemberId);
 
-        for (Task task : scopedTasks) {
-
-            if (task.getId() != null) {
-                scopedTaskIds.add(task.getId());
+        Map<Long, Long> commitUserByActivity = new HashMap<>();
+        Map<Long, Set<Long>> commitTasksByUser = new HashMap<>();
+        for (ReportCommitActivityProjection row : commitRows) {
+            if (row.getActivityId() == null || row.getUserId() == null) {
+                continue;
+            }
+            commitUserByActivity.put(row.getActivityId(), row.getUserId());
+            if (row.getTaskId() != null) {
+                commitTasksByUser.computeIfAbsent(row.getUserId(), ignored -> new HashSet<>())
+                        .add(row.getTaskId());
             }
         }
 
-        List<vn.edu.cnpm.projectsupport.integration.github.domain.GitHubRepository>
-                repositories =
-                githubRepositoryRepository
-                        .findByProjectIdOrderByFullNameAsc(
-                                projectId,
-                                Pageable.unpaged())
-                        .getContent();
-
-        Set<Long> repositoryIds =
-                new HashSet<>();
-
-        for (var repository : repositories) {
-
-            if (repository.getId() != null) {
-                repositoryIds.add(repository.getId());
+        Map<Long, Long> prUserByActivity = new HashMap<>();
+        Map<Long, Set<Long>> prTasksByUser = new HashMap<>();
+        for (ReportPullRequestActivityProjection row : prRows) {
+            if (row.getActivityId() == null || row.getUserId() == null) {
+                continue;
+            }
+            prUserByActivity.put(row.getActivityId(), row.getUserId());
+            if (row.getTaskId() != null) {
+                prTasksByUser.computeIfAbsent(row.getUserId(), ignored -> new HashSet<>())
+                        .add(row.getTaskId());
             }
         }
 
-        List<GitHubCommit> commits =
-                commitRepository.findAll()
-                        .stream()
-                        .filter(commit ->
-                                repositoryIds.contains(
-                                        commit.getRepositoryId()))
-                        .filter(timePredicate(
-                                filter.from(),
-                                filter.to(),
-                                GitHubCommit::getCommittedAt))
-                        .toList();
-
-        
-        List<GitHubPullRequest> prs =
-                pullRequestRepository.findAll()
-                        .stream()
-                        .filter(pr ->
-                                repositoryIds.contains(
-                                        pr.getRepositoryId()))
-                        .filter(timePredicate(
-                                filter.from(),
-                                filter.to(),
-                                GitHubPullRequest::getRemoteCreatedAt))
-                        .toList();
-
-        /*
-         * Mapping GitHub account -> user nội bộ.
-         */
-        Map<Long, Long> accountToUser =
-                new HashMap<>();
-
-        externalAccountRepository.findAll()
-                .stream()
-                .filter(account ->
-                        account.getProvider()
-                                == IntegrationProvider.GITHUB)
-                .forEach(account ->
-                        accountToUser.put(
-                                account.getId(),
-                                account.getUserId()));
-
-        Map<Long, Set<Long>> commitTasksByUser =
-                new HashMap<>();
-
-        Map<Long, Set<Long>> prTasksByUser =
-                new HashMap<>();
-
-        /*
-         * Commit -> Task -> User
-         */
-        for (GitHubCommit commit : commits) {
-
-            Long userId =
-                    accountToUser.get(
-                            commit.getAuthorExternalAccountId());
-
-            if (userId == null
-                    || (filter.memberId() != null
-                    && !filter.memberId().equals(userId))) {
+        List<MemberContributionResponse> result = new ArrayList<>();
+        for (ProjectRepository.ActiveMemberProjection member : members.values()) {
+            if (effectiveMemberId != null && !effectiveMemberId.equals(member.getId())) {
                 continue;
             }
 
-            for (TaskCommitLink link :
-                    commitLinkRepository.findByIdCommitId(
-                            commit.getId())) {
+            Set<Long> taskUnion = new HashSet<>(
+                    commitTasksByUser.getOrDefault(member.getId(), Set.of()));
+            taskUnion.addAll(prTasksByUser.getOrDefault(member.getId(), Set.of()));
 
-                if (link.getId() != null
-                        && scopedTaskIds.contains(
-                                link.getId().getTaskId())) {
+            long commitsCount = commitUserByActivity.values().stream()
+                    .filter(member.getId()::equals)
+                    .count();
+            long prCount = prUserByActivity.values().stream()
+                    .filter(member.getId()::equals)
+                    .count();
 
-                    commitTasksByUser
-                            .computeIfAbsent(
-                                    userId,
-                                    ignored -> new HashSet<>())
-                            .add(
-                                    link.getId().getTaskId());
-                }
-            }
-        }
-
-        /*
-         * Pull Request -> Task -> User
-         */
-        for (GitHubPullRequest pr : prs) {
-
-            Long userId =
-                    accountToUser.get(
-                            pr.getAuthorExternalAccountId());
-
-            if (userId == null
-                    || (filter.memberId() != null
-                    && !filter.memberId().equals(userId))) {
-                continue;
-            }
-
-            for (TaskPullRequestLink link :
-                    pullRequestLinkRepository
-                            .findByIdPullRequestId(
-                                    pr.getId())) {
-
-                if (link.getId() != null
-                        && scopedTaskIds.contains(
-                                link.getId().getTaskId())) {
-
-                    prTasksByUser
-                            .computeIfAbsent(
-                                    userId,
-                                    ignored -> new HashSet<>())
-                            .add(
-                                    link.getId().getTaskId());
-                }
-            }
-        }
-
-        List<MemberContributionResponse> result =
-                new ArrayList<>();
-
-        for (ProjectRepository.ActiveMemberProjection member :
-                members) {
-
-            if (effectiveMemberId != null
-                    && !effectiveMemberId.equals(
-                            member.getId())) {
-                continue;
-            }
-
-            Set<Long> taskUnion =
-                    new HashSet<>(
-                            commitTasksByUser.getOrDefault(
-                                    member.getId(),
-                                    Set.of()));
-
-            taskUnion.addAll(
-                    prTasksByUser.getOrDefault(
-                            member.getId(),
-                            Set.of()));
-
-            long commitsCount =
-                    commits.stream()
-                            .filter(commit ->
-                                    member.getId().equals(
-                                            accountToUser.get(
-                                                    commit.getAuthorExternalAccountId())))
-                            .filter(commit ->
-                                    activityMatchesScope(
-                                            commitLinkRepository
-                                                    .findByIdCommitId(
-                                                            commit.getId()),
-                                            scopedTaskIds,
-                                            filter.sprintId() != null))
-                            .count();
-
-            long prCount =
-                    prs.stream()
-                            .filter(pr ->
-                                    member.getId().equals(
-                                            accountToUser.get(
-                                                    pr.getAuthorExternalAccountId())))
-                            .filter(pr ->
-                                    activityMatchesScope(
-                                            pullRequestLinkRepository
-                                                    .findByIdPullRequestId(
-                                                            pr.getId()),
-                                            scopedTaskIds,
-                                            filter.sprintId() != null))
-                            .count();
-
-            result.add(
-                    new MemberContributionResponse(
-                            member.getId(),
-                            member.getUsername(),
-                            member.getFullName(),
-                            commitsCount,
-                            prCount,
-                            taskUnion.size()));
+            result.add(new MemberContributionResponse(
+                    member.getId(),
+                    member.getUsername(),
+                    member.getFullName(),
+                    commitsCount,
+                    prCount,
+                    taskUnion.size()));
         }
 
         return result;
-    }
-
-    private boolean activityMatchesScope(
-            List<?> links,
-            Set<Long> scopedTaskIds,
-            boolean sprintFiltered) {
-
-        /*
-         * Không lọc Sprint:
-         * activity đã thuộc repository của Project,
-         * không bắt buộc phải có Task link.
-         */
-        if (!sprintFiltered) {
-            return true;
-        }
-
-        /*
-         * Có lọc Sprint:
-         * activity phải có ít nhất một Task link
-         * thuộc tập Task của Sprint.
-         */
-        for (Object value : links) {
-
-            Long taskId = null;
-
-            if (value instanceof TaskCommitLink commitLink
-                    && commitLink.getId() != null) {
-
-                taskId =
-                        commitLink.getId().getTaskId();
-
-            } else if (value instanceof TaskPullRequestLink prLink
-                    && prLink.getId() != null) {
-
-                taskId =
-                        prLink.getId().getTaskId();
-            }
-
-            if (taskId != null
-                    && scopedTaskIds.contains(taskId)) {
-
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private ReportSourceFreshnessResponse sourceStatus(
@@ -995,8 +800,9 @@ public class ProgressReportServiceImpl implements ProgressReportService {
                         .findByUserIdAndProvider(
                                 memberId,
                                 IntegrationProvider.GITHUB)
-                        .filter(account -> account.getExternalUserId() != null
-                                && !account.getExternalUserId().isBlank())
+                        .filter(account ->
+                                account.getExternalUserId() != null
+                                        && !account.getExternalUserId().isBlank())
                         .isEmpty()) {
 
             warnings.add("GITHUB_ACCOUNT_NOT_LINKED");
