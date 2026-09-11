@@ -63,6 +63,20 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     List<ActiveMemberProjection> findActiveMembers(@Param("projectId") Long projectId);
 
     @Query(value = """
+            SELECT u.id AS id,
+                   u.username AS username,
+                   u.full_name AS fullName
+              FROM projects p
+              JOIN student_groups g ON g.id = p.group_id
+              JOIN users u ON u.id = g.leader_user_id
+             WHERE p.id = :projectId
+               AND p.status = 'ACTIVE'
+               AND g.status = 'ACTIVE'
+               AND u.status = 'ACTIVE'
+            """, nativeQuery = true)
+    Optional<ActiveMemberProjection> findActiveLeader(@Param("projectId") Long projectId);
+
+    @Query(value = """
             SELECT COUNT(*)
               FROM projects p
               JOIN student_groups g ON g.id = p.group_id
