@@ -81,7 +81,6 @@ public interface ReportingRepository extends JpaRepository<vn.edu.cnpm.projectsu
                AND (:fromTime IS NULL OR pr.remote_created_at >= :fromTime)
                AND (:toTime IS NULL OR pr.remote_created_at < :toTime)
                AND pr.remote_created_at <= :asOf
-               AND pr.created_at <= :asOf
                AND (
                    :sprintId IS NULL OR EXISTS (
                        SELECT 1
@@ -116,7 +115,6 @@ public interface ReportingRepository extends JpaRepository<vn.edu.cnpm.projectsu
                AND (:fromTime IS NULL OR pr.remote_created_at >= :fromTime)
                AND (:toTime IS NULL OR pr.remote_created_at < :toTime)
                AND pr.remote_created_at <= :asOf
-               AND pr.created_at <= :asOf
                AND (
                    :sprintId IS NULL OR EXISTS (
                        SELECT 1

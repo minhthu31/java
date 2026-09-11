@@ -52,7 +52,6 @@ class ReportingRepositoryIntegrationTest {
     void queriesDistinctActivitiesAndUsesRemotePrCreationTime() {
         long accountId = insertAccount();
         insertRepository();
-        Instant before = Instant.parse("2026-09-10T00:00:00Z");
         Instant from = Instant.parse("2026-09-10T10:00:00Z");
         Instant boundary = Instant.parse("2026-09-11T00:00:00Z");
         Instant after = Instant.parse("2026-09-11T00:00:00Z");
@@ -62,6 +61,12 @@ class ReportingRepositoryIntegrationTest {
         insertPr(accountId, PR_OPEN, "OPEN", from.plusSeconds(2));
         insertPr(accountId, PR_CLOSED, "CLOSED", boundary.minusSeconds(1));
         insertPr(accountId, PR_MERGED, "MERGED", after);
+
+        // Local created_at is deliberately outside the report range.
+        // The query must still count the PR because remote_created_at is in range.
+        jdbcTemplate.update(
+                "UPDATE github_pull_requests SET created_at = ? WHERE number = ?",
+                asOf.minusSeconds(1), PR_OPEN);
 
         long commits = reportingRepository.countCommits(projectId, null, memberId, from, boundary, asOf);
         long pullRequests = reportingRepository.countPullRequests(projectId, null, memberId, from, boundary, asOf);
@@ -81,7 +86,6 @@ class ReportingRepositoryIntegrationTest {
         assertThat(reportingRepository.countCommits(projectId, null, memberId, from, boundary, asOf)).isEqualTo(1);
         assertThat(reportingRepository.countPullRequests(projectId, null, memberId, from, boundary, asOf)).isEqualTo(2);
 
-        assertThat(before).isBefore(from);
     }
 
     @Test

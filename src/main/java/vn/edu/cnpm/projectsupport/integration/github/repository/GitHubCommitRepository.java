@@ -111,22 +111,6 @@ public interface GitHubCommitRepository extends JpaRepository<GitHubCommit, Long
             @Param("accountId") Long accountId);
 
     @Query("""
-            select a.userId as userId, count(c.id) as count
-            from GitHubCommit c
-            join GitHubRepository r on r.id = c.repositoryId
-            join UserExternalAccount a on a.id = c.authorExternalAccountId
-            where r.projectId = :projectId
-              and a.provider = vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider.GITHUB
-              and (:from is null or c.committedAt >= :from)
-              and (:to is null or c.committedAt <= :to)
-            group by a.userId
-            """)
-    List<GitHubUserActivityCountProjection> countByProjectIdAndTimeRange(
-            @Param("projectId") Long projectId,
-            @Param("from") Instant from,
-            @Param("to") Instant to);
-
-    @Query("""
             select distinct c.authorGithubUserId as githubUserId, c.authorLogin as login
             from GitHubCommit c
             join GitHubRepository r on r.id = c.repositoryId

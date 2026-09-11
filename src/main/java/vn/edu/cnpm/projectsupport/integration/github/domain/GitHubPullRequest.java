@@ -79,7 +79,7 @@ public class GitHubPullRequest extends BaseEntity {
     @Column(name = "closed_at")
     private Instant closedAt;
 
-    @Column(name = "remote_created_at", nullable = false)
+    @Column(name = "remote_created_at")
     private Instant remoteCreatedAt;
 
     @Column(name = "html_url", nullable = false, length = 500)

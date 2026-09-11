@@ -1,7 +1,6 @@
 package vn.edu.cnpm.projectsupport.integration.github.repository;
 
 import java.util.Optional;
-import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import vn.edu.cnpm.projectsupport.integration.github.domain.UserExternalAccount;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider;
@@ -13,9 +12,5 @@ public interface UserExternalAccountRepository extends JpaRepository<UserExterna
 
     Optional<UserExternalAccount> findByUserIdAndProvider(
             Long userId,
-            IntegrationProvider provider);
-
-    List<UserExternalAccount> findAllByUserIdInAndProvider(
-            List<Long> userIds,
             IntegrationProvider provider);
 }

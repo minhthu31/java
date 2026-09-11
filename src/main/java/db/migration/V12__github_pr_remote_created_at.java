@@ -16,17 +16,9 @@ public class V12__github_pr_remote_created_at extends BaseJavaMigration {
             addColumn(statement, "github_pull_requests",
                     "remote_created_at TIMESTAMP(6) NULL");
 
-            statement.executeUpdate("""
-                    UPDATE github_pull_requests
-                       SET remote_created_at = created_at
-                     WHERE remote_created_at IS NULL
-                    """);
-
-            if (mysql) {
-                statement.execute("ALTER TABLE github_pull_requests MODIFY COLUMN remote_created_at TIMESTAMP(6) NOT NULL");
-            } else {
-                statement.execute("ALTER TABLE github_pull_requests ALTER COLUMN remote_created_at SET NOT NULL");
-            }
+            // Do not copy local created_at into remote_created_at.
+            // Existing rows remain NULL until a GitHub synchronization
+            // provides the real creation time from GitHub.
         }
     }
 
