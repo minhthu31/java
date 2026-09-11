@@ -640,8 +640,7 @@ export default function Dashboard({ title }) {
                                         </strong>{" "}
                                         và{" "}
                                         <strong>Giảng viên (LECTURER)</strong>{" "}
-                                        mới được phép theo dõi tiến độ dự
-                                        án[cite: 1].
+                                        mới được phép theo dõi tiến độ dự án.
                                     </p>
                                 </div>
                             ) : !selectedProjectId ? (
