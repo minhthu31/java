@@ -37,7 +37,18 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     Optional<Long> findFirstAccessibleProjectId(@Param("userId") Long userId);
 
     @Query(value = """
-            SELECT u.id AS id,
+            SELECT DISTINCT u.id AS id,
+                   u.username AS username,
+                   u.full_name AS fullName
+              FROM projects p
+              JOIN student_groups g ON g.id = p.group_id
+              JOIN users u ON u.id = g.leader_user_id
+             WHERE p.id = :projectId
+               AND p.status = 'ACTIVE'
+               AND g.status = 'ACTIVE'
+               AND u.status = 'ACTIVE'
+            UNION
+            SELECT DISTINCT u.id AS id,
                    u.username AS username,
                    u.full_name AS fullName
               FROM projects p
@@ -47,7 +58,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
                AND p.status = 'ACTIVE'
                AND gm.status = 'ACTIVE'
                AND u.status = 'ACTIVE'
-             ORDER BY u.full_name, u.id
+             ORDER BY fullName, id
             """, nativeQuery = true)
     List<ActiveMemberProjection> findActiveMembers(@Param("projectId") Long projectId);
 

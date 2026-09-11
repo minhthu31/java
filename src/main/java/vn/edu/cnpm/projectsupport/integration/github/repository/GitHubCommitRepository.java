@@ -119,4 +119,19 @@ public interface GitHubCommitRepository extends JpaRepository<GitHubCommit, Long
               and c.authorExternalAccountId is null
             """)
     List<GitHubUnlinkedAuthorProjection> findUnlinkedAuthors(@Param("projectId") Long projectId);
+
+    @Query("""
+    select new map(a.userId as userId, count(c) as count)
+    from GitHubCommit c
+    join GitHubRepository r on r.id = c.repositoryId
+    left join UserExternalAccount a on a.id = c.authorExternalAccountId
+    where r.projectId = :projectId
+      and c.committedAt >= :from
+      and c.committedAt <= :to
+    group by a.userId
+    """)
+    List<GitHubUserActivityCountProjection> countByProjectIdAndTimeRange(
+        @Param("projectId") Long projectId,
+        @Param("from") Instant from,
+        @Param("to") Instant to);
 }
