@@ -161,6 +161,10 @@ public class ProgressReportServiceImpl implements ProgressReportService {
                 taskRepository.findByProjectId(projectId)
                         .stream()
                         .filter(task ->
+                                effectiveFilter.sprintId() == null
+                                        || effectiveFilter.sprintId().equals(
+                                                task.getSprintId()))
+                        .filter(task ->
                                 effectiveMemberId == null
                                         || effectiveMemberId.equals(
                                                 task.getAssigneeUserId()))

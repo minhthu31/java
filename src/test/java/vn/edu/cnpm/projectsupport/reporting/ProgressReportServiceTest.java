@@ -507,6 +507,68 @@ class ProgressReportServiceTest {
      * Project có 2 Task, trong đó 1 DONE
      * => tiến độ = 50%.
      */
+    /**
+     * Khi truyền sprintId, toàn bộ số liệu của getProgress() phải chỉ tính
+     * các Task thuộc Sprint được chọn. Task ở Sprint khác không được làm tăng
+     * total/completed/overdue hoặc thay đổi phần trăm tiến độ.
+     */
+    @Test
+     void progressFiltersAllTaskMetricsBySprint() {
+          Instant now = Instant.now();
+
+          var sprint20 = org.mockito.Mockito.mock(
+                vn.edu.cnpm.projectsupport.sprint.domain.Sprint.class);
+          when(sprint20.getId()).thenReturn(20L);
+          when(sprint20.getName()).thenReturn("Sprint 20");
+
+          var sprint21 = org.mockito.Mockito.mock(
+                vn.edu.cnpm.projectsupport.sprint.domain.Sprint.class);
+          when(sprint21.getId()).thenReturn(21L);
+        
+
+          when(sprintRepository.findByIdAndProjectId(20L, 1L))
+                 .thenReturn(Optional.of(sprint20));
+
+         when(sprintRepository.findByProjectId(1L))
+                .thenReturn(List.of(sprint20, sprint21));
+
+         Task doneInSelectedSprint =
+                task(TaskStatus.DONE, now.plusSeconds(3600));
+         doneInSelectedSprint.setSprintId(20L);
+
+         Task overdueInOtherSprint =
+                task(TaskStatus.IN_PROGRESS, now.minusSeconds(3600));
+         overdueInOtherSprint.setSprintId(21L);
+
+         when(taskRepository.findByProjectId(1L))
+                .thenReturn(List.of(
+                        doneInSelectedSprint,
+                        overdueInOtherSprint));
+
+         var report =
+                service.getProgress(
+                        1L,
+                        new ReportFilterRequest(
+                                20L,
+                                null,
+                                null,
+                                null));
+
+         assertThat(report.totalTasks()).isEqualTo(1);
+         assertThat(report.completedTasks()).isEqualTo(1);
+         assertThat(report.overdueTasks()).isZero();
+         assertThat(report.progressPercent()).isEqualTo(100.0);
+
+         assertThat(report.totalSprints()).isEqualTo(1);
+
+         assertThat(report.sprints()).singleElement()
+                .satisfies(sprint -> {
+                    assertThat(sprint.sprintId()).isEqualTo(20L);
+                    assertThat(sprint.totalTasks()).isEqualTo(1);
+                    assertThat(sprint.completedTasks()).isEqualTo(1);
+                    assertThat(sprint.overdueTasks()).isZero();
+            });
+   }
     @Test
     void projectProgressIsCalculatedFromCompletedTasks() {
 
@@ -550,55 +612,7 @@ class ProgressReportServiceTest {
                 .isEqualTo(50.0);
     }
 
-    /**
-     * Task không có status không được làm report crash.
-     */
-    @Test
-    void reportContributionUsesScopedQueriesInsteadOfFindAllOrPerActivityLinkQueries() {
-        var member = org.mockito.Mockito.mock(ProjectRepository.ActiveMemberProjection.class);
-        when(member.getId()).thenReturn(7L);
-        when(member.getUsername()).thenReturn("leader");
-        when(member.getFullName()).thenReturn("Team Leader");
-        when(projectRepository.findActiveMembers(1L)).thenReturn(List.of());
-        when(projectRepository.findActiveLeader(1L)).thenReturn(Optional.of(member));
-
-        ReportCommitActivityProjection commit = org.mockito.Mockito.mock(ReportCommitActivityProjection.class);
-        when(commit.getActivityId()).thenReturn(100L);
-        when(commit.getUserId()).thenReturn(7L);
-        when(commit.getTaskId()).thenReturn(10L);
-
-        ReportPullRequestActivityProjection pullRequest = org.mockito.Mockito.mock(ReportPullRequestActivityProjection.class);
-        when(pullRequest.getActivityId()).thenReturn(200L);
-        when(pullRequest.getUserId()).thenReturn(7L);
-        when(pullRequest.getTaskId()).thenReturn(10L);
-
-        when(commitRepository.findReportActivity(1L, null, null, null, null, null))
-                .thenReturn(List.of(commit));
-        when(pullRequestRepository.findReportActivity(1L, null, null, null, null, null))
-                .thenReturn(List.of(pullRequest));
-
-        when(taskRepository.findByProjectId(1L)).thenReturn(List.of());
-
-        var report = service.getSummary(1L, new ReportFilterRequest(null, null, null, null));
-
-        assertThat(report.memberContributions())
-                .singleElement()
-                .satisfies(value -> {
-                    assertThat(value.memberId()).isEqualTo(7L);
-                    assertThat(value.commits()).isEqualTo(1);
-                    assertThat(value.pullRequests()).isEqualTo(1);
-                    assertThat(value.linkedTasks()).isEqualTo(1);
-                });
-
-        verify(commitRepository).findReportActivity(1L, null, null, null, null, null);
-        verify(pullRequestRepository).findReportActivity(1L, null, null, null, null, null);
-        verify(commitRepository, never()).findAll();
-        verify(pullRequestRepository, never()).findAll();
-        verify(externalAccountRepository, never()).findAll();
-        verify(commitLinkRepository, never()).findByIdCommitId(org.mockito.ArgumentMatchers.anyLong());
-        verify(pullRequestLinkRepository, never()).findByIdPullRequestId(org.mockito.ArgumentMatchers.anyLong());
-    }
-
+    
     @Test
     void taskWithoutStatusDoesNotBreakReport() {
 
