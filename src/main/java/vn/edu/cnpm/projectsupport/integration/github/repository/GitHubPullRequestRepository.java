@@ -141,14 +141,14 @@ public interface GitHubPullRequestRepository extends JpaRepository<GitHubPullReq
             """)
     List<GitHubUnlinkedAuthorProjection> findUnlinkedAuthors(@Param("projectId") Long projectId);
     @Query("""
-    select new map(a.userId as userId, count(pr) as count)
+    select a.userId as userId, count(pr) as count
     from GitHubPullRequest pr
     join GitHubRepository r on r.id = pr.repositoryId
     left join UserExternalAccount a on a.id = pr.authorExternalAccountId
     where r.projectId = :projectId
       and pr.state = :state
       and pr.createdAt >= :from
-      and pr.createdAt <= :to
+      and pr.createdAt < :to
     group by a.userId
     """)
     List<GitHubUserActivityCountProjection> countByProjectIdAndStateAndTimeRange(
