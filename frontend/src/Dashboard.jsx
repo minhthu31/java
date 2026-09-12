@@ -8,6 +8,7 @@ import JiraConfigComponent from "./JiraConfigComponent";
 import { GitHubConfigComponent } from "./GitHubConfigComponent";
 import { GitHubActivityComponent } from "./GitHubActivityComponent";
 import { ProjectProgressComponent } from "./ProjectProgressComponent";
+import MemberContributionComponent from "./MemberContributionComponent";
 
 const getRoleTitle = (role) => {
     switch (role) {
@@ -58,6 +59,7 @@ export default function Dashboard({ title }) {
     };
 
     const selectedProjectId = getProjectId();
+
     const handleLogout = () => {
         logout();
         navigate("/login");
@@ -666,11 +668,17 @@ export default function Dashboard({ title }) {
                                     </p>
                                 </div>
                             ) : (
-                                <ProjectProgressComponent
-                                    key={selectedProjectId}
-                                    projectId={selectedProjectId}
-                                    currentUserRole={userRole}
-                                />
+                                <div style={{ padding: "24px" }}>
+                                    <ProjectProgressComponent
+                                        key={selectedProjectId}
+                                        projectId={selectedProjectId}
+                                        currentUserRole={userRole}
+                                    />
+                                    <MemberContributionComponent
+                                        key={`contrib-${selectedProjectId}`}
+                                        projectId={selectedProjectId}
+                                    />
+                                </div>
                             )}
                         </>
                     )}
