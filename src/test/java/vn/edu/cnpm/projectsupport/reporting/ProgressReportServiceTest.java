@@ -24,6 +24,7 @@ import vn.edu.cnpm.projectsupport.feature.repository.FeatureRepository;
 import vn.edu.cnpm.projectsupport.identity.domain.Role;
 import vn.edu.cnpm.projectsupport.identity.domain.RoleCode;
 import vn.edu.cnpm.projectsupport.identity.domain.User;
+import vn.edu.cnpm.projectsupport.integration.github.domain.GitHubPullRequestState;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubCommitRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubPullRequestRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubRepositoryRepository;
@@ -640,6 +641,52 @@ class ProgressReportServiceTest {
      * Kiểm tra report contribution sử dụng các query đã được scope
      * thay vì findAll() hoặc truy vấn link riêng lẻ theo từng activity.
      */
+    @Test
+    void deduplicatesPullRequestStateCountsWhenOnePullRequestHasMultipleTaskLinks() {
+        var member = org.mockito.Mockito.mock(
+                ProjectRepository.ActiveMemberProjection.class);
+
+        when(member.getId()).thenReturn(7L);
+        when(member.getUsername()).thenReturn("leader");
+        when(member.getFullName()).thenReturn("Team Leader");
+        when(projectRepository.findActiveMembers(1L)).thenReturn(List.of());
+        when(projectRepository.findActiveLeader(1L)).thenReturn(Optional.of(member));
+
+        ReportPullRequestActivityProjection first =
+                org.mockito.Mockito.mock(ReportPullRequestActivityProjection.class);
+        when(first.getActivityId()).thenReturn(200L);
+        when(first.getUserId()).thenReturn(7L);
+        when(first.getTaskId()).thenReturn(10L);
+        when(first.getState()).thenReturn(GitHubPullRequestState.OPEN);
+
+        ReportPullRequestActivityProjection second =
+                org.mockito.Mockito.mock(ReportPullRequestActivityProjection.class);
+        when(second.getActivityId()).thenReturn(200L);
+        when(second.getUserId()).thenReturn(7L);
+        when(second.getTaskId()).thenReturn(11L);
+        when(second.getState()).thenReturn(GitHubPullRequestState.OPEN);
+
+        when(commitRepository.findReportActivity(1L, null, null, null, null, null))
+                .thenReturn(List.of());
+        when(pullRequestRepository.findReportActivity(1L, null, null, null, null, null))
+                .thenReturn(List.of(first, second));
+        when(taskRepository.findByProjectId(1L)).thenReturn(List.of());
+
+        var report = service.getSummary(
+                1L,
+                new ReportFilterRequest(null, null, null, null));
+
+        assertThat(report.memberContributions())
+                .singleElement()
+                .satisfies(value -> {
+                    assertThat(value.pullRequests()).isEqualTo(1);
+                    assertThat(value.openPullRequests()).isEqualTo(1);
+                    assertThat(value.closedPullRequests()).isZero();
+                    assertThat(value.mergedPullRequests()).isZero();
+                    assertThat(value.linkedTasks()).isEqualTo(2);
+                });
+    }
+
     @Test
     void reportContributionUsesScopedQueriesInsteadOfFindAllOrPerActivityLinkQueries() {
 

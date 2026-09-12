@@ -1,8 +1,9 @@
 package vn.edu.cnpm.projectsupport.reporting;
 
 import jakarta.validation.Valid;
-import java.security.Principal;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -13,6 +14,7 @@ import vn.edu.cnpm.projectsupport.reporting.dto.ReportFilterRequest;
 import vn.edu.cnpm.projectsupport.reporting.dto.ReportSummaryResponse;
 
 @RestController
+@Validated
 @RequestMapping("/api/v1/projects/{projectId}/reports")
 public class ReportController {
 
@@ -23,12 +25,10 @@ public class ReportController {
     }
 
     @GetMapping("/summary")
-    public ResponseEntity<ApiResponse<ReportSummaryResponse>> getProjectReportSummary(
+    @PreAuthorize("@projectAuthorization.canViewReports(#projectId)")
+    public ResponseEntity<ApiResponse<ReportSummaryResponse>> getSummary(
             @PathVariable("projectId") Long projectId,
-            @Valid @ModelAttribute ReportFilterRequest filter,
-            Principal principal) {
-        String username = (principal != null) ? principal.getName() : null;
-        ReportSummaryResponse summary = reportService.getSummaryReport(projectId, filter, username);
-        return ResponseEntity.ok(ApiResponse.success(summary));
+            @Valid @ModelAttribute ReportFilterRequest filter) {
+        return ResponseEntity.ok(ApiResponse.success(reportService.getProjectSummary(projectId, filter)));
     }
 }

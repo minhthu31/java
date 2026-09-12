@@ -24,9 +24,6 @@ public class GitHubPullRequest extends BaseEntity {
     @Column(name = "github_pull_request_id")
     private Long githubPullRequestId;
 
-    @Column(name = "remote_created_at")
-    private Instant remoteCreatedAt;
-
     @Column(name = "author_external_account_id")
     private Long authorExternalAccountId;
 
@@ -82,6 +79,9 @@ public class GitHubPullRequest extends BaseEntity {
     @Column(name = "closed_at")
     private Instant closedAt;
 
+    @Column(name = "remote_created_at")
+    private Instant remoteCreatedAt;
+
     @Column(name = "html_url", nullable = false, length = 500)
     private String htmlUrl;
 
@@ -97,6 +97,7 @@ public class GitHubPullRequest extends BaseEntity {
             String state,
             String htmlUrl) {
         this(repositoryId, null, number, title, null, headRef, null, baseRef, parseState(state), false, null, null, 0, 0, 0, null, null, htmlUrl);
+        this.remoteCreatedAt = Instant.now();
     }
 
     public GitHubPullRequest(
@@ -138,6 +139,31 @@ public class GitHubPullRequest extends BaseEntity {
         this.htmlUrl = htmlUrl;
     }
 
+    public GitHubPullRequest(
+            Long repositoryId,
+            Long githubPullRequestId,
+            Integer number,
+            String title,
+            String body,
+            String headRef,
+            String headSha,
+            String baseRef,
+            GitHubPullRequestState state,
+            boolean draft,
+            Instant mergedAt,
+            String mergeCommitSha,
+            Integer commitCount,
+            Integer additions,
+            Integer deletions,
+            Integer changedFiles,
+            Instant closedAt,
+            String htmlUrl,
+            Instant remoteCreatedAt) {
+        this(repositoryId, githubPullRequestId, number, title, body, headRef, headSha, baseRef, state,
+                draft, mergedAt, mergeCommitSha, commitCount, additions, deletions, changedFiles, closedAt, htmlUrl);
+        this.remoteCreatedAt = remoteCreatedAt;
+    }
+
     private static GitHubPullRequestState parseState(String state) {
         if (state == null) {
             throw new IllegalArgumentException("Pull request state must not be null");
@@ -145,134 +171,132 @@ public class GitHubPullRequest extends BaseEntity {
         return GitHubPullRequestState.valueOf(state.trim().toUpperCase());
     }
 
-    public Long getRepositoryId() { 
-        return repositoryId; 
+    public Long getRepositoryId() {
+        return repositoryId;
     }
-    public Long getGithubPullRequestId() { 
-        return githubPullRequestId; 
+    public Long getGithubPullRequestId() {
+        return githubPullRequestId;
+    }
+    public Long getAuthorExternalAccountId() {
+        return authorExternalAccountId;
+    }
+    public Long getAuthorGithubUserId() {
+        return authorGithubUserId;
+    }
+    public String getAuthorLogin() {
+        return authorLogin;
+    }
+    public Integer getNumber() {
+        return number;
+    }
+    public String getTitle() {
+        return title;
+    }
+    public String getBody() {
+        return body;
+    }
+    public String getHeadRef() {
+        return headRef;
+    }
+    public String getHeadSha() {
+        return headSha;
+    }
+    public String getBaseRef() {
+        return baseRef;
+    }
+    public GitHubPullRequestState getState() {
+        return state;
+    }
+    public boolean isDraft() {
+        return draft;
+    }
+    public Instant getMergedAt() {
+        return mergedAt;
+    }
+    public String getMergeCommitSha() {
+        return mergeCommitSha;
+    }
+    public Integer getCommitCount() {
+        return commitCount;
+    }
+    public Integer getAdditions() {
+        return additions;
+    }
+    public Integer getDeletions() {
+        return deletions;
+    }
+    public Integer getChangedFiles() {
+        return changedFiles;
+    }
+    public Instant getClosedAt() {
+        return closedAt;
     }
     public Instant getRemoteCreatedAt() {
         return remoteCreatedAt;
     }
-
-    public Long getAuthorExternalAccountId() { 
-        return authorExternalAccountId; 
-    }
-    public Long getAuthorGithubUserId() { 
-        return authorGithubUserId; 
-    }
-    public String getAuthorLogin() { 
-        return authorLogin; 
-    }
-    public Integer getNumber() { 
-        return number; 
-    }
-    public String getTitle() { 
-        return title; 
-    }
-    public String getBody() { 
-        return body; 
-    }
-    public String getHeadRef() { 
-        return headRef; 
-    }
-    public String getHeadSha() { 
-        return headSha; 
-    }
-    public String getBaseRef() { 
-        return baseRef; 
-    }
-    public GitHubPullRequestState getState() { 
-        return state; 
-    }
-    public boolean isDraft() { 
-        return draft; 
-    }
-    public Instant getMergedAt() { 
-        return mergedAt; 
-    }
-    public String getMergeCommitSha() { 
-        return mergeCommitSha; 
-    }
-    public Integer getCommitCount() { 
-        return commitCount; 
-    }
-    public Integer getAdditions() { 
-        return additions; 
-    }
-    public Integer getDeletions() { 
-        return deletions; 
-    }
-    public Integer getChangedFiles() { 
-        return changedFiles; 
-    }
-    public Instant getClosedAt() { 
-        return closedAt; 
-    }
-    public String getHtmlUrl() { 
-        return htmlUrl; 
+    public String getHtmlUrl() {
+        return htmlUrl;
     }
 
-    public void setRemoteCreatedAt(Instant value) {
-        this.remoteCreatedAt = value;
-    }
-
-    public void setAuthorExternalAccountId(Long value) { 
-        this.authorExternalAccountId = value; 
+    public void setAuthorExternalAccountId(Long value) {
+        this.authorExternalAccountId = value;
     }
     public void setGithubPullRequestId(Long value) {
         this.githubPullRequestId = value;
     }
-    public void setAuthorGithubUserId(Long value) { 
-        this.authorGithubUserId = value; 
+    public void setAuthorGithubUserId(Long value) {
+        this.authorGithubUserId = value;
     }
-    public void setAuthorLogin(String value) { 
-        this.authorLogin = value; 
+    public void setAuthorLogin(String value) {
+        this.authorLogin = value;
     }
     public void setTitle(String value) {
         this.title = value;
     }
-    public void setState(GitHubPullRequestState state) { 
-        this.state = state; 
+    public void setState(GitHubPullRequestState state) {
+        this.state = state;
     }
-    public void setState(String state) { 
-        this.state = parseState(state); 
+    public void setState(String state) {
+        this.state = parseState(state);
     }
-    public void setBody(String body) { 
-        this.body = body; 
+    public void setBody(String body) {
+        this.body = body;
     }
     public void setHeadRef(String value) {
         this.headRef = value;
     }
-    public void setHeadSha(String headSha) { 
-        this.headSha = headSha; 
+    public void setHeadSha(String headSha) {
+        this.headSha = headSha;
     }
     public void setBaseRef(String value) {
         this.baseRef = value;
     }
-    public void setDraft(boolean draft) { 
-        this.draft = draft; 
+    public void setDraft(boolean draft) {
+        this.draft = draft;
     }
-    public void setMergedAt(Instant mergedAt) { 
-        this.mergedAt = mergedAt; 
+    public void setMergedAt(Instant mergedAt) {
+        this.mergedAt = mergedAt;
     }
-    public void setMergeCommitSha(String mergeCommitSha) { 
-        this.mergeCommitSha = mergeCommitSha; 
+    public void setMergeCommitSha(String mergeCommitSha) {
+        this.mergeCommitSha = mergeCommitSha;
     }
-    public void setCommitCount(Integer commitCount) { 
-        this.commitCount = commitCount; 
+    public void setCommitCount(Integer commitCount) {
+        this.commitCount = commitCount;
     }
-    public void setAdditions(Integer additions) { 
-        this.additions = additions == null ? 0 : additions; 
+    public void setAdditions(Integer additions) {
+        this.additions = additions == null ? 0 : additions;
     }
-    public void setDeletions(Integer deletions) { 
-        this.deletions = deletions == null ? 0 : deletions; 
+    public void setDeletions(Integer deletions) {
+        this.deletions = deletions == null ? 0 : deletions;
     }
-    public void setChangedFiles(Integer changedFiles) { 
-        this.changedFiles = changedFiles; 
+    public void setChangedFiles(Integer changedFiles) {
+        this.changedFiles = changedFiles;
     }
-    public void setClosedAt(Instant closedAt) { 
-        this.closedAt = closedAt; 
+    public void setClosedAt(Instant closedAt) {
+        this.closedAt = closedAt;
+    }
+    public void setRemoteCreatedAt(Instant remoteCreatedAt) {
+        this.remoteCreatedAt = remoteCreatedAt;
     }
     public void setHtmlUrl(String value) {
         this.htmlUrl = value;

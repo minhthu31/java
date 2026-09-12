@@ -35,7 +35,7 @@ public class JiraMapper {
     }
 
     public JiraIssueDto toIssue(String id, String key, String summary, String description, JiraStatusDto status, JiraPriorityDto priority, JiraUserDto assignee, JiraProjectDto project) {
-        JiraAdfDocumentDto adf = description == null ? null : 
+        JiraAdfDocumentDto adf = description == null ? null :
         new JiraAdfDocumentDto(1,"doc",List.of(new JiraAdfNodeDto("paragraph",null,null,null,List.of(new JiraAdfNodeDto("text", description,null,null,null)))));
 
         return toIssue(id,key,summary,adf,status,priority,assignee,project);

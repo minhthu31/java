@@ -44,32 +44,32 @@ public class TaskCommitLink {
         this(id, TaskLinkSource.valueOf(linkSource.trim().toUpperCase()));
     }
 
-    public TaskCommitLinkId getId() { 
-        return id; 
+    public TaskCommitLinkId getId() {
+        return id;
     }
-    public TaskLinkSource getLinkSource() { 
-        return linkSource; 
+    public TaskLinkSource getLinkSource() {
+        return linkSource;
     }
-    public TaskLinkMatchedFrom getMatchedFrom() { 
-        return matchedFrom; 
+    public TaskLinkMatchedFrom getMatchedFrom() {
+        return matchedFrom;
     }
-    public Long getLinkedByUserId() { 
-        return linkedByUserId; 
+    public Long getLinkedByUserId() {
+        return linkedByUserId;
     }
-    public String getReason() { 
-        return reason; 
+    public String getReason() {
+        return reason;
     }
-    public Instant getLinkedAt() { 
-        return linkedAt; 
+    public Instant getLinkedAt() {
+        return linkedAt;
     }
 
-    public void setMatchedFrom(TaskLinkMatchedFrom value) { 
-        this.matchedFrom = value; 
+    public void setMatchedFrom(TaskLinkMatchedFrom value) {
+        this.matchedFrom = value;
     }
-    public void setLinkedByUserId(Long value) { 
-        this.linkedByUserId = value; 
+    public void setLinkedByUserId(Long value) {
+        this.linkedByUserId = value;
     }
-    public void setReason(String reason) { 
-        this.reason = reason; 
+    public void setReason(String reason) {
+        this.reason = reason;
     }
 }

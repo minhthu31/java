@@ -101,20 +101,14 @@ public class GitHubPullRequestSyncService {
 
         try {
             GitHubRepository remoteRepository = gitHubRestClient.getRepository(config);
-            vn.edu.cnpm.projectsupport.integration.github.domain.GitHubRepository localRepository =
-                    upsertRepository(projectId, remoteRepository, syncedAt);
+            vn.edu.cnpm.projectsupport.integration.github.domain.GitHubRepository localRepository = upsertRepository(projectId, remoteRepository, syncedAt);
 
             int page = 1;
             String nextUrl;
             do {
                 if (page > MAX_PAGES) {
-                    throw new GitHubApiException(
-                            org.springframework.http.HttpStatus.BAD_GATEWAY,
-                            "GITHUB_PROVIDER_UNAVAILABLE",
-                            false,
-                            null,
-                            "GitHub pagination exceeded the safety limit",
-                            null);
+                    throw new GitHubApiException(org.springframework.http.HttpStatus.BAD_GATEWAY,"GITHUB_PROVIDER_UNAVAILABLE",
+                    false,null,"GitHub pagination exceeded the safety limit",null);
                 }
                 GitHubPage<GitHubPullRequest> pageResult = gitHubRestClient.getPullRequestsPage(config, "all", page);
                 for (GitHubPullRequest listedPullRequest : pageResult.items()) {
@@ -123,8 +117,7 @@ public class GitHubPullRequestSyncService {
                             throw new IllegalArgumentException("GitHub pull request list item has no number");
                         }
                         GitHubPullRequest remote = gitHubRestClient.getPullRequest(config, listedPullRequest.number());
-                        vn.edu.cnpm.projectsupport.integration.github.domain.GitHubPullRequest local =
-                                upsertPullRequest(localRepository.getId(), remote);
+                        vn.edu.cnpm.projectsupport.integration.github.domain.GitHubPullRequest local = upsertPullRequest(localRepository.getId(), remote);
                         GitHubTaskLinkResult linkResult = taskLinkService.linkPullRequest(projectId, local);
                         linksCreated += linkResult.linksCreated();
                         if (linkResult.linksCreated() == 0 && linkResult.duplicateLinks() == 0) {
@@ -150,9 +143,7 @@ public class GitHubPullRequestSyncService {
             log.setCompletedAt(Instant.now());
             syncLogRepository.save(log);
 
-            return new GitHubPullRequestSyncResult(
-                    projectId, localRepository.getId(), synced, linksCreated, unlinkedActivities,
-                    errors, syncedAt, correlationId);
+            return new GitHubPullRequestSyncResult(projectId, localRepository.getId(), synced, linksCreated, unlinkedActivities, errors, syncedAt, correlationId);
         } catch (RuntimeException exception) {
             log.setStatus(SyncLogStatus.FAILED);
             log.setErrorCode(errorCode(exception));
@@ -227,10 +218,10 @@ public class GitHubPullRequestSyncService {
                         remote.deletions(),
                         remote.changedFiles(),
                         remote.closedAt(),
-                        remote.htmlUrl()));
+                        remote.htmlUrl(),
+                        remote.createdAt()));
 
         local.setGithubPullRequestId(remote.id());
-        local.setRemoteCreatedAt(remote.createdAt());
         local.setTitle(remote.title());
         local.setBody(remote.body());
         local.setHeadRef(remote.head().ref());
@@ -245,6 +236,7 @@ public class GitHubPullRequestSyncService {
         local.setDeletions(remote.deletions());
         local.setChangedFiles(remote.changedFiles());
         local.setClosedAt(remote.closedAt());
+        local.setRemoteCreatedAt(remote.createdAt());
         local.setHtmlUrl(remote.htmlUrl());
         local.setAuthorGithubUserId(remote.user() == null ? null : remote.user().id());
         local.setAuthorLogin(remote.user() == null ? null : remote.user().login());
