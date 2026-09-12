@@ -24,7 +24,7 @@ public record GitHubRepository(
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record Permissions(Boolean admin, Boolean maintain, Boolean push, Boolean triage, Boolean pull) {
-                
+
         public String effectivePermission() {
             if (Boolean.TRUE.equals(admin)) {
                 return "admin";

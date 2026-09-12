@@ -15,9 +15,9 @@ public interface GitHubPullRequestRepository extends JpaRepository<GitHubPullReq
 
     Optional<GitHubPullRequest> findByRepositoryIdAndNumber(Long repositoryId, Integer number);
 
-    Page<GitHubPullRequest> findByRepositoryIdOrderByCreatedAtDesc(Long repositoryId, Pageable pageable);
+    Page<GitHubPullRequest> findByRepositoryIdOrderByRemoteCreatedAtDesc(Long repositoryId, Pageable pageable);
 
-    Page<GitHubPullRequest> findByRepositoryIdAndStateOrderByCreatedAtDesc(
+    Page<GitHubPullRequest> findByRepositoryIdAndStateOrderByRemoteCreatedAtDesc(
             Long repositoryId, GitHubPullRequestState state, Pageable pageable);
 
     @Query("""
@@ -54,7 +54,7 @@ public interface GitHubPullRequestRepository extends JpaRepository<GitHubPullReq
               and (:userId is null or a.userId = :userId)
               and (:state is null or pr.state = :state)
               and (:from is null or pr.remoteCreatedAt >= :from)
-              and (:to is null or pr.remoteCreatedAt <= :to)
+              and (:to is null or pr.remoteCreatedAt < :to)
             order by pr.remoteCreatedAt desc, pr.id desc
             """)
     Page<GitHubPullRequest> findUnifiedActivityWithoutIssueKey(
@@ -76,7 +76,7 @@ public interface GitHubPullRequestRepository extends JpaRepository<GitHubPullReq
               and (:state is null or pr.state = :state)
               and ji.jiraIssueKey = :issueKey
               and (:from is null or pr.remoteCreatedAt >= :from)
-              and (:to is null or pr.remoteCreatedAt <= :to)
+              and (:to is null or pr.remoteCreatedAt < :to)
             order by pr.remoteCreatedAt desc, pr.id desc
             """)
     Page<GitHubPullRequest> findUnifiedActivityWithIssueKey(
@@ -140,32 +140,46 @@ public interface GitHubPullRequestRepository extends JpaRepository<GitHubPullReq
               and pr.authorExternalAccountId is null
             """)
     List<GitHubUnlinkedAuthorProjection> findUnlinkedAuthors(@Param("projectId") Long projectId);
-    @Query(value = """
-            SELECT pr.id AS activityId,
-                   a.user_id AS userId,
-                   tpl.task_id AS taskId
-              FROM github_pull_requests pr
-              JOIN github_repositories r ON r.id = pr.repository_id
-              LEFT JOIN user_external_accounts a ON a.id = pr.author_external_account_id
-              LEFT JOIN task_pr_links tpl ON tpl.pull_request_id = pr.id
-             WHERE r.project_id = :projectId
-               AND (:memberId IS NULL OR a.user_id = :memberId)
-               AND (:from IS NULL OR pr.remote_created_at >= :from)
-               AND (:to IS NULL OR pr.remote_created_at < :to)
-               AND (:sprintId IS NULL OR EXISTS (
-                    SELECT 1 FROM tasks t
-                     WHERE t.id = tpl.task_id
-                       AND t.project_id = :projectId
-                       AND t.sprint_id = :sprintId
-                       AND (:taskMemberId IS NULL OR t.assignee_user_id = :taskMemberId)
-               ))
-            """, nativeQuery = true)
+    @Query("""
+            select pr.id as activityId,
+                   a.userId as userId,
+                   tpl.id.taskId as taskId,
+                   pr.state as state
+            from GitHubPullRequest pr
+            join GitHubRepository r on r.id = pr.repositoryId
+            left join UserExternalAccount a on a.id = pr.authorExternalAccountId
+            left join TaskPullRequestLink tpl on tpl.id.pullRequestId = pr.id
+            left join Task t on t.id = tpl.id.taskId
+            where r.projectId = :projectId
+              and (:userId is null or a.userId = :userId)
+              and (:from is null or pr.remoteCreatedAt >= :from)
+              and (:to is null or pr.remoteCreatedAt < :to)
+              and (:sprintId is null or t.sprintId = :sprintId)
+              and (:taskMemberId is null or :userId is not null or t.assigneeUserId = :taskMemberId)
+            order by pr.remoteCreatedAt desc, pr.id desc
+            """)
     List<ReportPullRequestActivityProjection> findReportActivity(
             @Param("projectId") Long projectId,
-            @Param("memberId") Long memberId,
+            @Param("userId") Long userId,
             @Param("from") Instant from,
             @Param("to") Instant to,
             @Param("sprintId") Long sprintId,
             @Param("taskMemberId") Long taskMemberId);
 
+    @Query("""
+    select a.userId as userId, count(pr) as count
+    from GitHubPullRequest pr
+    join GitHubRepository r on r.id = pr.repositoryId
+    left join UserExternalAccount a on a.id = pr.authorExternalAccountId
+    where r.projectId = :projectId
+      and pr.state = :state
+      and pr.remoteCreatedAt >= :from
+      and pr.remoteCreatedAt < :to
+    group by a.userId
+    """)
+    List<GitHubUserActivityCountProjection> countByProjectIdAndStateAndTimeRange(
+        @Param("projectId") Long projectId,
+        @Param("state") GitHubPullRequestState state,
+        @Param("from") Instant from,
+        @Param("to") Instant to);
 }
