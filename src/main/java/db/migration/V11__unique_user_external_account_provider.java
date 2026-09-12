@@ -48,7 +48,7 @@ public class V11__unique_user_external_account_provider extends BaseJavaMigratio
 
     private void removeDuplicateAccounts(Connection connection, long userId, String provider, long keepId) throws Exception {
 
-        String duplicateIdsSql = "SELECT id " + "FROM user_external_accounts " + "WHERE user_id = ? " 
+        String duplicateIdsSql = "SELECT id " + "FROM user_external_accounts " + "WHERE user_id = ? "
             + "AND provider = ? "+ "AND id <> ? " + "ORDER BY id";
 
         try (PreparedStatement selectStatement = connection.prepareStatement(duplicateIdsSql)) {

@@ -611,6 +611,10 @@ public class ProgressReportServiceImpl implements ProgressReportService {
 
         Map<Long, Long> prUserByActivity = new HashMap<>();
         Map<Long, Set<Long>> prTasksByUser = new HashMap<>();
+        Map<Long, Long> openPrByUser = new HashMap<>();
+        Map<Long, Long> closedPrByUser = new HashMap<>();
+        Map<Long, Long> mergedPrByUser = new HashMap<>();
+        Set<Long> countedPullRequests = new HashSet<>();
         for (ReportPullRequestActivityProjection row : prRows) {
             if (row.getActivityId() == null || row.getUserId() == null) {
                 continue;
@@ -620,6 +624,23 @@ public class ProgressReportServiceImpl implements ProgressReportService {
                 prTasksByUser.computeIfAbsent(row.getUserId(), ignored -> new HashSet<>())
                         .add(row.getTaskId());
             }
+
+            if (row.getState() != null && countedPullRequests.add(row.getActivityId())) {
+                switch (row.getState()) {
+                    case OPEN -> openPrByUser.merge(row.getUserId(), 1L, Long::sum);
+                    case CLOSED -> closedPrByUser.merge(row.getUserId(), 1L, Long::sum);
+                    case MERGED -> mergedPrByUser.merge(row.getUserId(), 1L, Long::sum);
+                }
+            }
+        }
+
+        List<Long> memberIds = members.values().stream()
+                .map(ProjectRepository.ActiveMemberProjection::getId)
+                .toList();
+        Set<Long> githubLinkedMemberIds = new HashSet<>();
+        for (var account : externalAccountRepository.findAllByUserIdInAndProvider(
+                memberIds, IntegrationProvider.GITHUB)) {
+            githubLinkedMemberIds.add(account.getUserId());
         }
 
         List<MemberContributionResponse> result = new ArrayList<>();
@@ -643,8 +664,12 @@ public class ProgressReportServiceImpl implements ProgressReportService {
                     member.getId(),
                     member.getUsername(),
                     member.getFullName(),
+                    githubLinkedMemberIds.contains(member.getId()),
                     commitsCount,
                     prCount,
+                    openPrByUser.getOrDefault(member.getId(), 0L),
+                    closedPrByUser.getOrDefault(member.getId(), 0L),
+                    mergedPrByUser.getOrDefault(member.getId(), 0L),
                     taskUnion.size()));
         }
 

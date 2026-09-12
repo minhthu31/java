@@ -22,7 +22,12 @@ public class RestAccessDeniedHandler implements AccessDeniedHandler {
             throws IOException {
         response.setStatus(403);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+
+        String code = request.getRequestURI().contains("/reports/")
+                ? "REPORT_ACCESS_DENIED"
+                : "ACCESS_DENIED";
+
         objectMapper.writeValue(response.getOutputStream(), new ApiError(
-                "ACCESS_DENIED", "Bạn không có quyền truy cập", MDC.get("correlationId"), Map.of(), Instant.now()));
+                code, "Bạn không có quyền truy cập", MDC.get("correlationId"), Map.of(), Instant.now()));
     }
 }

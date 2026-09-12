@@ -43,3 +43,6 @@ app:
     expiration-ms: ${JWT_EXPIRATION_MS:3600000}
   security:
     integration-encryption-key: ${INTEGRATION_ENCRYPTION_KEY}
+
+reporting:
+  freshness-threshold: ${REPORTING_FRESHNESS_THRESHOLD:24h}

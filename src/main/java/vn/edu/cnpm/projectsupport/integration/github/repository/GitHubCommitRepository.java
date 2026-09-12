@@ -36,7 +36,7 @@ public interface GitHubCommitRepository extends JpaRepository<GitHubCommit, Long
             where r.projectId = :projectId
               and (:userId is null or a.userId = :userId)
               and (:from is null or c.committedAt >= :from)
-              and (:to is null or c.committedAt <= :to)
+              and (:to is null or c.committedAt < :to)
             order by c.committedAt desc, c.id desc
             """)
     Page<GitHubCommit> findUnifiedActivityWithoutIssueKey(
@@ -56,7 +56,7 @@ public interface GitHubCommitRepository extends JpaRepository<GitHubCommit, Long
               and (:userId is null or a.userId = :userId)
               and ji.jiraIssueKey = :issueKey
               and (:from is null or c.committedAt >= :from)
-              and (:to is null or c.committedAt <= :to)
+              and (:to is null or c.committedAt < :to)
             order by c.committedAt desc, c.id desc
             """)
     Page<GitHubCommit> findUnifiedActivityWithIssueKey(
@@ -119,32 +119,44 @@ public interface GitHubCommitRepository extends JpaRepository<GitHubCommit, Long
               and c.authorExternalAccountId is null
             """)
     List<GitHubUnlinkedAuthorProjection> findUnlinkedAuthors(@Param("projectId") Long projectId);
-    @Query(value = """
-            SELECT c.id AS activityId,
-                   a.user_id AS userId,
-                   tcl.task_id AS taskId
-              FROM github_commits c
-              JOIN github_repositories r ON r.id = c.repository_id
-              LEFT JOIN user_external_accounts a ON a.id = c.author_external_account_id
-              LEFT JOIN task_commit_links tcl ON tcl.commit_id = c.id
-             WHERE r.project_id = :projectId
-               AND (:memberId IS NULL OR a.user_id = :memberId)
-               AND (:from IS NULL OR c.committed_at >= :from)
-               AND (:to IS NULL OR c.committed_at < :to)
-               AND (:sprintId IS NULL OR EXISTS (
-                    SELECT 1 FROM tasks t
-                     WHERE t.id = tcl.task_id
-                       AND t.project_id = :projectId
-                       AND t.sprint_id = :sprintId
-                       AND (:taskMemberId IS NULL OR t.assignee_user_id = :taskMemberId)
-               ))
-            """, nativeQuery = true)
+
+    @Query("""
+            select c.id as activityId,
+                   a.userId as userId,
+                   tcl.id.taskId as taskId
+            from GitHubCommit c
+            join GitHubRepository r on r.id = c.repositoryId
+            left join UserExternalAccount a on a.id = c.authorExternalAccountId
+            left join TaskCommitLink tcl on tcl.id.commitId = c.id
+            left join Task t on t.id = tcl.id.taskId
+            where r.projectId = :projectId
+              and (:userId is null or a.userId = :userId)
+              and (:from is null or c.committedAt >= :from)
+              and (:to is null or c.committedAt < :to)
+              and (:sprintId is null or t.sprintId = :sprintId)
+              and (:taskMemberId is null or :userId is not null or t.assigneeUserId = :taskMemberId)
+            order by c.committedAt desc, c.id desc
+            """)
     List<ReportCommitActivityProjection> findReportActivity(
             @Param("projectId") Long projectId,
-            @Param("memberId") Long memberId,
+            @Param("userId") Long userId,
             @Param("from") Instant from,
             @Param("to") Instant to,
             @Param("sprintId") Long sprintId,
             @Param("taskMemberId") Long taskMemberId);
 
+    @Query("""
+    select a.userId as userId, count(c) as count
+    from GitHubCommit c
+    join GitHubRepository r on r.id = c.repositoryId
+    left join UserExternalAccount a on a.id = c.authorExternalAccountId
+    where r.projectId = :projectId
+      and c.committedAt >= :from
+      and c.committedAt < :to
+    group by a.userId
+    """)
+    List<GitHubUserActivityCountProjection> countByProjectIdAndTimeRange(
+        @Param("projectId") Long projectId,
+        @Param("from") Instant from,
+        @Param("to") Instant to);
 }

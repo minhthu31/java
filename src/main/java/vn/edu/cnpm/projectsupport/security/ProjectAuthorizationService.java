@@ -61,6 +61,15 @@ public class ProjectAuthorizationService {
                 .orElse(false);
     }
 
+    public boolean canViewReports(Long projectId) {
+        return currentUserService.findCurrentUser()
+                .map(user -> role(user) == RoleCode.ADMIN
+                        || isLeader(user, projectId)
+                        || isLecturer(user, projectId)
+                        || isMember(user, projectId))
+                .orElse(false);
+    }
+
     public boolean canViewTask(Long projectId, Long taskId) {
         Optional<User> current = currentUserService.findCurrentUser();
         if (current.isEmpty()) {
