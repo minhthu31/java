@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 import java.time.Instant;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -72,7 +73,11 @@ class ReportServiceTest {
                 eq(projectId), isNull(), eq(memberId), eq("MERGED"), eq(from), eq(to), any(Instant.class))).thenReturn(1L);
         when(reportingRepository.countLinkedTasks(
                 eq(projectId), isNull(), eq(memberId), eq(from), eq(to), any(Instant.class))).thenReturn(2L);
-        when(reportingRepository.findLastSuccessfulGithubSync(projectId)).thenReturn(lastSync);
+        ReportingRepository.LatestSyncProjection githubLatestSync = latestSync("SUCCESS");
+        when(reportingRepository.findLatestSync(projectId, "GITHUB")).thenReturn(Optional.of(githubLatestSync));
+        when(reportingRepository.findLastSuccessfulSync(projectId, "GITHUB")).thenReturn(lastSync);
+        when(reportingRepository.findLatestSync(projectId, "JIRA")).thenReturn(Optional.empty());
+        when(reportingRepository.findLastSuccessfulSync(projectId, "JIRA")).thenReturn(null);
 
         var response = service.getProjectSummary(
                 projectId, new ReportFilterRequest(null, memberId, from, to));
@@ -149,7 +154,10 @@ class ReportServiceTest {
         when(reportingRepository.countPullRequests(anyLong(), isNull(), eq(memberId), isNull(), isNull(), any(Instant.class))).thenReturn(0L);
         when(reportingRepository.countPullRequestsByState(anyLong(), isNull(), eq(memberId), anyString(), isNull(), isNull(), any(Instant.class))).thenReturn(0L);
         when(reportingRepository.countLinkedTasks(anyLong(), isNull(), eq(memberId), isNull(), isNull(), any(Instant.class))).thenReturn(0L);
-        when(reportingRepository.findLastSuccessfulGithubSync(projectId)).thenReturn(null);
+        when(reportingRepository.findLatestSync(projectId, "GITHUB")).thenReturn(Optional.empty());
+        when(reportingRepository.findLastSuccessfulSync(projectId, "GITHUB")).thenReturn(null);
+        when(reportingRepository.findLatestSync(projectId, "JIRA")).thenReturn(Optional.empty());
+        when(reportingRepository.findLastSuccessfulSync(projectId, "JIRA")).thenReturn(null);
 
         var response = service.getProjectSummary(projectId, new ReportFilterRequest(null, memberId, null, null));
 
@@ -159,6 +167,180 @@ class ReportServiceTest {
             assertThat(c.pullRequests()).isZero();
         });
         assertThat(response.warnings()).contains("GITHUB_ACCOUNT_NOT_LINKED");
+    }
+
+
+    @Test
+    void latestGithubFailureOverridesPreviousSuccessfulSync() {
+        Long projectId = 1L;
+        Long memberId = 7L;
+        Instant lastSuccessful = Instant.parse("2026-09-08T00:30:00Z");
+
+        User admin = mockUser(99L, RoleCode.ADMIN);
+        ProjectRepository.ActiveMemberProjection member =
+                mock(ProjectRepository.ActiveMemberProjection.class);
+        when(member.getId()).thenReturn(memberId);
+        when(member.getUsername()).thenReturn("member.test");
+        when(member.getFullName()).thenReturn("Test Member");
+
+        when(projectRepository.existsById(projectId)).thenReturn(true);
+        when(projectRepository.findActiveMembers(projectId)).thenReturn(List.of(member));
+        when(currentUserService.findCurrentUser()).thenReturn(Optional.of(admin));
+        when(reportingRepository.countTasksByStatus(
+                anyLong(), isNull(), eq(memberId), isNull(), isNull(), any(Instant.class)))
+                .thenReturn(List.of());
+        when(reportingRepository.countOverdueTasks(
+                anyLong(), isNull(), eq(memberId), isNull(), isNull(), any(Instant.class)))
+                .thenReturn(0L);
+        when(reportingRepository.isGithubLinked(memberId)).thenReturn(true);
+        when(reportingRepository.countCommits(
+                anyLong(), isNull(), eq(memberId), isNull(), isNull(), any(Instant.class))).thenReturn(0L);
+        when(reportingRepository.countPullRequests(
+                anyLong(), isNull(), eq(memberId), isNull(), isNull(), any(Instant.class))).thenReturn(0L);
+        when(reportingRepository.countPullRequestsByState(
+                anyLong(), isNull(), eq(memberId), anyString(), isNull(), isNull(), any(Instant.class))).thenReturn(0L);
+        when(reportingRepository.countLinkedTasks(
+                anyLong(), isNull(), eq(memberId), isNull(), isNull(), any(Instant.class))).thenReturn(0L);
+
+        ReportingRepository.LatestSyncProjection githubLatestSync = latestSync("FAILED");
+        when(reportingRepository.findLatestSync(projectId, "GITHUB"))
+                .thenReturn(Optional.of(githubLatestSync));
+        when(reportingRepository.findLastSuccessfulSync(projectId, "GITHUB"))
+                .thenReturn(lastSuccessful);
+        ReportingRepository.LatestSyncProjection jiraLatestSync = latestSync("SUCCESS");
+        when(reportingRepository.findLatestSync(projectId, "JIRA"))
+                .thenReturn(Optional.of(jiraLatestSync));
+        when(reportingRepository.findLastSuccessfulSync(projectId, "JIRA"))
+                .thenReturn(lastSuccessful);
+
+        var response = service.getProjectSummary(
+                projectId, new ReportFilterRequest(null, memberId, null, null));
+
+        assertThat(response.sources())
+                .anySatisfy(source -> {
+                    if (source.source() == vn.edu.cnpm.projectsupport.reporting.dto.ReportSource.GITHUB) {
+                        assertThat(source.status()).isEqualTo(
+                                vn.edu.cnpm.projectsupport.reporting.dto.ReportSourceStatus.SYNC_FAILED);
+                        assertThat(source.lastSyncedAt()).isEqualTo(lastSuccessful);
+                    }
+                });
+        assertThat(response.warnings()).contains("GITHUB_SYNC_FAILED");
+        assertThat(response.dataStatus())
+                .isEqualTo(vn.edu.cnpm.projectsupport.reporting.dto.ReportDataStatus.PARTIAL);
+    }
+
+    @Test
+    void jiraSourceIsIncludedInReport() {
+        Long projectId = 1L;
+        Long memberId = 7L;
+        Instant lastSync = Instant.now();
+
+        User admin = mockUser(99L, RoleCode.ADMIN);
+        ProjectRepository.ActiveMemberProjection member =
+                mock(ProjectRepository.ActiveMemberProjection.class);
+        when(member.getId()).thenReturn(memberId);
+        when(member.getUsername()).thenReturn("member.test");
+        when(member.getFullName()).thenReturn("Test Member");
+
+        when(projectRepository.existsById(projectId)).thenReturn(true);
+        when(projectRepository.findActiveMembers(projectId)).thenReturn(List.of(member));
+        when(currentUserService.findCurrentUser()).thenReturn(Optional.of(admin));
+        when(reportingRepository.countTasksByStatus(
+                anyLong(), isNull(), eq(memberId), isNull(), isNull(), any(Instant.class)))
+                .thenReturn(List.of());
+        when(reportingRepository.countOverdueTasks(
+                anyLong(), isNull(), eq(memberId), isNull(), isNull(), any(Instant.class)))
+                .thenReturn(0L);
+        when(reportingRepository.isGithubLinked(memberId)).thenReturn(false);
+        when(reportingRepository.countCommits(
+                anyLong(), isNull(), eq(memberId), isNull(), isNull(), any(Instant.class))).thenReturn(0L);
+        when(reportingRepository.countPullRequests(
+                anyLong(), isNull(), eq(memberId), isNull(), isNull(), any(Instant.class))).thenReturn(0L);
+        when(reportingRepository.countPullRequestsByState(
+                anyLong(), isNull(), eq(memberId), anyString(), isNull(), isNull(), any(Instant.class))).thenReturn(0L);
+        when(reportingRepository.countLinkedTasks(
+                anyLong(), isNull(), eq(memberId), isNull(), isNull(), any(Instant.class))).thenReturn(0L);
+
+        when(reportingRepository.findLatestSync(projectId, "GITHUB")).thenReturn(Optional.empty());
+        when(reportingRepository.findLastSuccessfulSync(projectId, "GITHUB")).thenReturn(null);
+        ReportingRepository.LatestSyncProjection jiraLatestSync = latestSync("SUCCESS");
+        when(reportingRepository.findLatestSync(projectId, "JIRA"))
+                .thenReturn(Optional.of(jiraLatestSync));
+        when(reportingRepository.findLastSuccessfulSync(projectId, "JIRA"))
+                .thenReturn(lastSync);
+
+        var response = service.getProjectSummary(
+                projectId, new ReportFilterRequest(null, memberId, null, null));
+
+        assertThat(response.sources())
+                .extracting(s -> s.source())
+                .contains(
+                        vn.edu.cnpm.projectsupport.reporting.dto.ReportSource.JIRA,
+                        vn.edu.cnpm.projectsupport.reporting.dto.ReportSource.GITHUB);
+    }
+
+
+    @Test
+    void usesConfiguredFreshnessThreshold() {
+        Long projectId = 1L;
+        Long memberId = 7L;
+        Instant lastSync = Instant.now().minus(Duration.ofHours(2));
+
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                service, "freshnessThreshold", Duration.ofHours(1));
+
+        User admin = mockUser(99L, RoleCode.ADMIN);
+        ProjectRepository.ActiveMemberProjection member =
+                mock(ProjectRepository.ActiveMemberProjection.class);
+        when(member.getId()).thenReturn(memberId);
+        when(member.getUsername()).thenReturn("member.test");
+        when(member.getFullName()).thenReturn("Test Member");
+
+        when(projectRepository.existsById(projectId)).thenReturn(true);
+        when(projectRepository.findActiveMembers(projectId)).thenReturn(List.of(member));
+        when(currentUserService.findCurrentUser()).thenReturn(Optional.of(admin));
+        when(reportingRepository.countTasksByStatus(
+                anyLong(), isNull(), eq(memberId), isNull(), isNull(), any(Instant.class)))
+                .thenReturn(List.of());
+        when(reportingRepository.countOverdueTasks(
+                anyLong(), isNull(), eq(memberId), isNull(), isNull(), any(Instant.class)))
+                .thenReturn(0L);
+        when(reportingRepository.isGithubLinked(memberId)).thenReturn(false);
+        when(reportingRepository.countCommits(
+                anyLong(), isNull(), eq(memberId), isNull(), isNull(), any(Instant.class))).thenReturn(0L);
+        when(reportingRepository.countPullRequests(
+                anyLong(), isNull(), eq(memberId), isNull(), isNull(), any(Instant.class))).thenReturn(0L);
+        when(reportingRepository.countPullRequestsByState(
+                anyLong(), isNull(), eq(memberId), anyString(), isNull(), isNull(), any(Instant.class))).thenReturn(0L);
+        when(reportingRepository.countLinkedTasks(
+                anyLong(), isNull(), eq(memberId), isNull(), isNull(), any(Instant.class))).thenReturn(0L);
+        ReportingRepository.LatestSyncProjection githubLatestSync = latestSync("SUCCESS");
+        when(reportingRepository.findLatestSync(projectId, "GITHUB"))
+                .thenReturn(Optional.of(githubLatestSync));
+        when(reportingRepository.findLastSuccessfulSync(projectId, "GITHUB"))
+                .thenReturn(lastSync);
+        when(reportingRepository.findLatestSync(projectId, "JIRA"))
+                .thenReturn(Optional.empty());
+        when(reportingRepository.findLastSuccessfulSync(projectId, "JIRA"))
+                .thenReturn(null);
+
+        var response = service.getProjectSummary(
+                projectId, new ReportFilterRequest(null, memberId, null, null));
+
+        assertThat(response.sources())
+                .anySatisfy(source -> {
+                    if (source.source() == vn.edu.cnpm.projectsupport.reporting.dto.ReportSource.GITHUB) {
+                        assertThat(source.status()).isEqualTo(
+                                vn.edu.cnpm.projectsupport.reporting.dto.ReportSourceStatus.STALE);
+                    }
+                });
+    }
+
+    private ReportingRepository.LatestSyncProjection latestSync(String status) {
+        ReportingRepository.LatestSyncProjection projection =
+                mock(ReportingRepository.LatestSyncProjection.class);
+        when(projection.getStatus()).thenReturn(status);
+        return projection;
     }
 
     private User mockUser(Long id, RoleCode roleCode) {

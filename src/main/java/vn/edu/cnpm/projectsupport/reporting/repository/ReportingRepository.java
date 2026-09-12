@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import vn.edu.cnpm.projectsupport.task.domain.TaskStatus;
+import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider;
 
 /** Read-only aggregate queries used by the project report. */
 public interface ReportingRepository extends JpaRepository<vn.edu.cnpm.projectsupport.task.domain.Task, Long> {
@@ -181,6 +182,39 @@ public interface ReportingRepository extends JpaRepository<vn.edu.cnpm.projectsu
                AND a.provider = 'GITHUB'
             """, nativeQuery = true)
     boolean isGithubLinked(@Param("memberId") Long memberId);
+
+
+
+    interface LatestSyncProjection {
+        String getStatus();
+        Instant getStartedAt();
+        Instant getCompletedAt();
+    }
+
+    @Query(value = """
+            SELECT s.status AS status,
+                   s.started_at AS startedAt,
+                   s.completed_at AS completedAt
+              FROM sync_logs s
+             WHERE s.project_id = :projectId
+               AND s.provider = :provider
+             ORDER BY s.started_at DESC
+             LIMIT 1
+            """, nativeQuery = true)
+    java.util.Optional<LatestSyncProjection> findLatestSync(
+            @Param("projectId") Long projectId,
+            @Param("provider") String provider);
+
+    @Query(value = """
+            SELECT MAX(s.completed_at)
+              FROM sync_logs s
+             WHERE s.project_id = :projectId
+               AND s.provider = :provider
+               AND s.status = 'SUCCESS'
+            """, nativeQuery = true)
+    Instant findLastSuccessfulSync(
+            @Param("projectId") Long projectId,
+            @Param("provider") String provider);
 
     @Query(value = """
             SELECT MAX(s.completed_at)

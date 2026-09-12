@@ -53,6 +53,33 @@ class ReportApiIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
+
+    @Test
+    void reportReturnsSprintNotFoundCode() throws Exception {
+        JsonNode login = login("leader.test", "password");
+        long projectId = login.path("projectId").asLong();
+        String token = login.path("accessToken").asText();
+
+        mockMvc.perform(get("/api/v1/projects/{projectId}/reports/summary", projectId)
+                        .param("sprintId", "999999999")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("SPRINT_NOT_FOUND"));
+    }
+
+    @Test
+    void reportReturnsMemberNotFoundCode() throws Exception {
+        JsonNode login = login("leader.test", "password");
+        long projectId = login.path("projectId").asLong();
+        String token = login.path("accessToken").asText();
+
+        mockMvc.perform(get("/api/v1/projects/{projectId}/reports/summary", projectId)
+                        .param("memberId", "999999999")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("MEMBER_NOT_FOUND"));
+    }
+
     @Test
     void reportRejectsEqualFromAndTo() throws Exception {
         JsonNode login = login("leader.test", "password");
@@ -63,7 +90,8 @@ class ReportApiIntegrationTest {
                         .param("from", "2026-09-08T00:00:00Z")
                         .param("to", "2026-09-08T00:00:00Z")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REPORT_FILTER_INVALID"));
     }
 
     @Test
@@ -76,7 +104,8 @@ class ReportApiIntegrationTest {
                         .param("from", "2026-09-09T00:00:00Z")
                         .param("to", "2026-09-08T00:00:00Z")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REPORT_FILTER_INVALID"));
     }
 
     private JsonNode login(String username, String password) throws Exception {

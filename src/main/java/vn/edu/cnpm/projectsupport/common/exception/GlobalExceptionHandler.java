@@ -40,7 +40,7 @@ public class GlobalExceptionHandler {
 
         return error(
                 HttpStatus.BAD_REQUEST,
-                "VALIDATION_ERROR",
+                isReportRequest(request) ? "REPORT_FILTER_INVALID" : "VALIDATION_ERROR",
                 "Dữ liệu đầu vào không hợp lệ",
                 fields,
                 request);
@@ -53,7 +53,7 @@ public class GlobalExceptionHandler {
 
         return error(
                 HttpStatus.NOT_FOUND,
-                "RESOURCE_NOT_FOUND",
+                reportNotFoundCode(exception, request),
                 exception.getMessage(),
                 Map.of(),
                 request);
@@ -69,7 +69,7 @@ public class GlobalExceptionHandler {
 
         return error(
                 HttpStatus.FORBIDDEN,
-                "ACCESS_DENIED",
+                isReportRequest(request) ? "REPORT_ACCESS_DENIED" : "ACCESS_DENIED",
                 "Bạn không có quyền thực hiện thao tác này",
                 Map.of(),
                 request);
@@ -134,7 +134,7 @@ public class GlobalExceptionHandler {
 
         return error(
                 HttpStatus.BAD_REQUEST,
-                "VALIDATION_FAILED",
+                isReportRequest(request) ? "REPORT_FILTER_INVALID" : "VALIDATION_FAILED",
                 exception.getMessage(),
                 Map.of(),
                 request);
@@ -220,6 +220,36 @@ public class GlobalExceptionHandler {
                                 correlationId(request),
                                 fields,
                                 Instant.now()));
+    }
+
+    private boolean isReportRequest(WebRequest request) {
+        String path = request.getDescription(false);
+        return path != null && path.contains("/reports/");
+    }
+
+    private String reportNotFoundCode(
+            ResourceNotFoundException exception,
+            WebRequest request) {
+
+        if (!isReportRequest(request)) {
+            return "RESOURCE_NOT_FOUND";
+        }
+
+        String message = exception.getMessage() == null
+                ? ""
+                : exception.getMessage();
+
+        if (message.startsWith("Project not found")) {
+            return "PROJECT_NOT_FOUND";
+        }
+        if (message.startsWith("Sprint not found")) {
+            return "SPRINT_NOT_FOUND";
+        }
+        if (message.startsWith("Member not found")) {
+            return "MEMBER_NOT_FOUND";
+        }
+
+        return "RESOURCE_NOT_FOUND";
     }
 
     private String correlationId(

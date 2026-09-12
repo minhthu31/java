@@ -63,10 +63,19 @@ class ReportContractTest {
                 new TaskMetricsResponse(3, 3, 0, byStatus),
                 List.of(new MemberContributionResponse(7L, "member.test", "Test Member", true, 5, 2, 1, 1, 0, 3)),
                 ReportDataStatus.COMPLETE,
-                List.of(new ReportSourceFreshnessResponse(
-                        ReportSource.GITHUB,
-                        ReportSourceStatus.CURRENT,
-                        Instant.parse("2026-09-08T00:30:00Z"))),
+                List.of(
+                        new ReportSourceFreshnessResponse(
+                                ReportSource.LOCAL_TASK,
+                                ReportSourceStatus.CURRENT,
+                                null),
+                        new ReportSourceFreshnessResponse(
+                                ReportSource.JIRA,
+                                ReportSourceStatus.CURRENT,
+                                Instant.parse("2026-09-08T00:20:00Z")),
+                        new ReportSourceFreshnessResponse(
+                                ReportSource.GITHUB,
+                                ReportSourceStatus.CURRENT,
+                                Instant.parse("2026-09-08T00:30:00Z"))),
                 List.of());
 
         String json = objectMapper.writeValueAsString(response);
