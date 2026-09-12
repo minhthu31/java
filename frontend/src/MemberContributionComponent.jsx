@@ -1,10 +1,14 @@
-import React, { useState, useEffect } from "react";
-import { getMemberContributions } from "./memberContributionService";
+import React, { useState, useEffect, useCallback } from "react";
+import {
+    getMemberContributions,
+    getProjectSprints,
+} from "./memberContributionService";
 
-export default function MemberContributionComponent({
+function MemberContributionComponent({
     projectId,
-    sprints = [],
+    sprints: initialSprints = [],
 }) {
+    const [sprintList, setSprintList] = useState(initialSprints);
     const [selectedSprintId, setSelectedSprintId] = useState("");
     const [fromDate, setFromDate] = useState("");
     const [toDate, setToDate] = useState("");
@@ -12,38 +16,70 @@ export default function MemberContributionComponent({
     const [error, setError] = useState(null);
     const [reportData, setReportData] = useState(null);
 
-    const loadData = async () => {
-        if (!projectId) return;
-        setLoading(true);
-        setError(null);
-        try {
-            const data = await getMemberContributions(projectId, {
-                sprintId: selectedSprintId || undefined,
-                fromDate: fromDate || undefined,
-                toDate: toDate || undefined,
+    useEffect(() => {
+        if (initialSprints && initialSprints.length > 0) {
+            setSprintList(initialSprints);
+        } else if (projectId) {
+            getProjectSprints(projectId).then((data) => {
+                if (data && data.length > 0) {
+                    setSprintList(data);
+                }
             });
-            setReportData(data);
-        } catch (err) {
-            setError(err.message || "Lỗi khi tải dữ liệu đóng góp thành viên");
-        } finally {
-            setLoading(false);
         }
-    };
+    }, [projectId, initialSprints]);
+
+    const loadData = useCallback(
+        async (overrideFilters = null) => {
+            if (!projectId) return;
+            setLoading(true);
+            setError(null);
+
+            const sprintIdToUse =
+                overrideFilters && overrideFilters.sprintId !== undefined
+                    ? overrideFilters.sprintId
+                    : selectedSprintId;
+            const fromDateToUse =
+                overrideFilters && overrideFilters.fromDate !== undefined
+                    ? overrideFilters.fromDate
+                    : fromDate;
+            const toDateToUse =
+                overrideFilters && overrideFilters.toDate !== undefined
+                    ? overrideFilters.toDate
+                    : toDate;
+
+            try {
+                const data = await getMemberContributions(projectId, {
+                    sprintId: sprintIdToUse || undefined,
+                    fromDate: fromDateToUse || undefined,
+                    toDate: toDateToUse || undefined,
+                });
+                setReportData(data);
+            } catch (err) {
+                setError(
+                    err.message || "Lỗi khi tải dữ liệu đóng góp thành viên.",
+                );
+                setReportData(null);
+            } finally {
+                setLoading(false);
+            }
+        },
+        [projectId, selectedSprintId, fromDate, toDate],
+    );
 
     useEffect(() => {
         loadData();
     }, [projectId]);
 
-    const handleApplyFilter = (e) => {
+    const handleApply = (e) => {
         e.preventDefault();
         loadData();
     };
 
-    const handleResetFilter = () => {
+    const handleReset = () => {
         setSelectedSprintId("");
         setFromDate("");
         setToDate("");
-        setTimeout(() => loadData(), 0);
+        loadData({ sprintId: "", fromDate: "", toDate: "" });
     };
 
     const members =
@@ -97,142 +133,174 @@ export default function MemberContributionComponent({
                 </div>
 
                 <form
-                    onSubmit={handleApplyFilter}
+                    onSubmit={handleApply}
                     style={{
                         display: "flex",
                         alignItems: "center",
-                        gap: "10px",
+                        justifyContent: "space-between",
+                        gap: "12px",
                         flexWrap: "wrap",
+                        width: "100%",
                     }}
                 >
                     <div
                         style={{
                             display: "flex",
                             alignItems: "center",
-                            gap: "6px",
+                            gap: "10px",
+                            flexWrap: "wrap",
                         }}
                     >
-                        <span
+                        <div
                             style={{
-                                fontSize: "12px",
-                                color: "#475569",
-                                fontWeight: 500,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "6px",
                             }}
                         >
-                            Sprint:
-                        </span>
-                        <select
-                            value={selectedSprintId}
-                            onChange={(e) =>
-                                setSelectedSprintId(e.target.value)
-                            }
+                            <span
+                                style={{
+                                    fontSize: "13px",
+                                    color: "#475569",
+                                    fontWeight: 500,
+                                    whiteSpace: "nowrap",
+                                }}
+                            >
+                                Sprint:
+                            </span>
+                            <select
+                                aria-label="Sprint"
+                                value={selectedSprintId}
+                                onChange={(e) =>
+                                    setSelectedSprintId(e.target.value)
+                                }
+                                style={{
+                                    minWidth: "130px",
+                                    maxWidth: "160px",
+                                    padding: "5px 8px",
+                                    fontSize: "13px",
+                                    borderRadius: "6px",
+                                    border: "1px solid #cbd5e1",
+                                    backgroundColor: "#ffffff",
+                                    outline: "none",
+                                    cursor: "pointer",
+                                }}
+                            >
+                                <option value="">Tất cả Sprint</option>
+                                {sprintList.map((sp) => (
+                                    <option
+                                        key={sp.sprintId || sp.id}
+                                        value={sp.sprintId || sp.id}
+                                    >
+                                        {sp.sprintName ||
+                                            sp.name ||
+                                            `Sprint #${sp.sprintId || sp.id}`}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div
                             style={{
-                                padding: "6px 12px",
-                                fontSize: "13px",
-                                borderRadius: "8px",
-                                border: "1px solid #cbd5e1",
-                                backgroundColor: "#ffffff",
-                                outline: "none",
-                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "6px",
                             }}
                         >
-                            <option value="">Tất cả Sprint</option>
-                            {sprints.map((sp) => (
-                                <option
-                                    key={sp.id || sp.sprintId}
-                                    value={sp.id || sp.sprintId}
-                                >
-                                    {sp.name ||
-                                        sp.sprintName ||
-                                        `Sprint #${sp.id || sp.sprintId}`}
-                                </option>
-                            ))}
-                        </select>
+                            <span
+                                style={{
+                                    fontSize: "13px",
+                                    color: "#475569",
+                                    fontWeight: 500,
+                                    whiteSpace: "nowrap",
+                                }}
+                            >
+                                Từ:
+                            </span>
+                            <input
+                                aria-label="Từ ngày"
+                                type="date"
+                                value={fromDate}
+                                onChange={(e) => setFromDate(e.target.value)}
+                                style={{
+                                    padding: "4px 6px",
+                                    fontSize: "12px",
+                                    borderRadius: "6px",
+                                    border: "1px solid #cbd5e1",
+                                    outline: "none",
+                                    width: "125px",
+                                }}
+                            />
+                            <span
+                                style={{
+                                    fontSize: "13px",
+                                    color: "#475569",
+                                    fontWeight: 500,
+                                    whiteSpace: "nowrap",
+                                }}
+                            >
+                                Đến:
+                            </span>
+                            <input
+                                aria-label="Đến ngày"
+                                type="date"
+                                value={toDate}
+                                onChange={(e) => setToDate(e.target.value)}
+                                style={{
+                                    padding: "4px 6px",
+                                    fontSize: "12px",
+                                    borderRadius: "6px",
+                                    border: "1px solid #cbd5e1",
+                                    outline: "none",
+                                    width: "125px",
+                                }}
+                            />
+                        </div>
                     </div>
 
                     <div
                         style={{
                             display: "flex",
                             alignItems: "center",
-                            gap: "6px",
+                            gap: "8px",
+                            flexShrink: 0,
                         }}
                     >
-                        <span
+                        <button
+                            type="submit"
                             style={{
-                                fontSize: "12px",
-                                color: "#475569",
-                                fontWeight: 500,
+                                padding: "6px 14px",
+                                backgroundColor: "#2563eb",
+                                color: "#ffffff",
+                                border: "none",
+                                borderRadius: "6px",
+                                cursor: "pointer",
+                                fontSize: "13px",
+                                fontWeight: 600,
+                                whiteSpace: "nowrap",
                             }}
                         >
-                            Từ:
-                        </span>
-                        <input
-                            type="date"
-                            value={fromDate}
-                            onChange={(e) => setFromDate(e.target.value)}
+                            Áp dụng
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={handleReset}
                             style={{
-                                padding: "5px 8px",
-                                fontSize: "13px",
-                                borderRadius: "8px",
-                                border: "1px solid #cbd5e1",
-                                outline: "none",
-                            }}
-                        />
-                        <span
-                            style={{
-                                fontSize: "12px",
+                                padding: "6px 14px",
+                                backgroundColor: "#f8fafc",
                                 color: "#475569",
+                                border: "1px solid #cbd5e1",
+                                borderRadius: "6px",
+                                cursor: "pointer",
+                                fontSize: "13px",
                                 fontWeight: 500,
+                                whiteSpace: "nowrap",
                             }}
                         >
-                            Đến:
-                        </span>
-                        <input
-                            type="date"
-                            value={toDate}
-                            onChange={(e) => setToDate(e.target.value)}
-                            style={{
-                                padding: "5px 8px",
-                                fontSize: "13px",
-                                borderRadius: "8px",
-                                border: "1px solid #cbd5e1",
-                                outline: "none",
-                            }}
-                        />
+                            Đặt lại
+                        </button>
                     </div>
-
-                    <button
-                        type="submit"
-                        style={{
-                            padding: "6px 16px",
-                            backgroundColor: "#2563eb",
-                            color: "#ffffff",
-                            border: "none",
-                            borderRadius: "8px",
-                            cursor: "pointer",
-                            fontSize: "13px",
-                            fontWeight: 600,
-                        }}
-                    >
-                        Áp dụng
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={handleResetFilter}
-                        style={{
-                            padding: "6px 14px",
-                            backgroundColor: "#f8fafc",
-                            color: "#475569",
-                            border: "1px solid #cbd5e1",
-                            borderRadius: "8px",
-                            cursor: "pointer",
-                            fontSize: "13px",
-                            fontWeight: 500,
-                        }}
-                    >
-                        Đặt lại
-                    </button>
                 </form>
             </div>
 
@@ -251,6 +319,7 @@ export default function MemberContributionComponent({
 
             {!loading && error && (
                 <div
+                    role="alert"
                     style={{
                         margin: "20px 24px",
                         padding: "14px 18px",
@@ -266,7 +335,7 @@ export default function MemberContributionComponent({
                 >
                     <span>{error}</span>
                     <button
-                        onClick={loadData}
+                        onClick={() => loadData()}
                         type="button"
                         style={{
                             padding: "6px 14px",
@@ -370,7 +439,7 @@ export default function MemberContributionComponent({
                             ) : (
                                 members.map((m, idx) => {
                                     const memberId =
-                                        m.memberId || m.userId || m.id || idx;
+                                        m.memberId || m.userId || idx;
                                     const displayName =
                                         m.fullName ||
                                         m.username ||
@@ -378,15 +447,12 @@ export default function MemberContributionComponent({
                                     const username = m.username
                                         ? `@${m.username}`
                                         : "";
-                                    const githubUser = m.githubUsername;
-                                    const completedTasks =
-                                        m.linkedTasks ?? m.completedTasks ?? 0;
-                                    const commits =
-                                        m.commits ?? m.commitCount ?? 0;
-                                    const pullRequests =
-                                        m.pullRequests ??
-                                        m.pullRequestCount ??
-                                        0;
+                                    const isGithubLinked = Boolean(
+                                        m.githubLinked,
+                                    );
+                                    const linkedTasks = m.linkedTasks ?? 0;
+                                    const commits = m.commits ?? 0;
+                                    const pullRequests = m.pullRequests ?? 0;
 
                                     return (
                                         <tr
@@ -427,21 +493,22 @@ export default function MemberContributionComponent({
                                             <td
                                                 style={{ padding: "14px 24px" }}
                                             >
-                                                {githubUser ? (
+                                                {isGithubLinked ? (
                                                     <span
                                                         style={{
                                                             display:
                                                                 "inline-block",
                                                             padding: "3px 8px",
                                                             backgroundColor:
-                                                                "#f1f5f9",
-                                                            color: "#0f172a",
+                                                                "#ecfdf5",
+                                                            color: "#065f46",
+                                                            border: "1px solid #a7f3d0",
                                                             borderRadius: "6px",
-                                                            fontWeight: 600,
                                                             fontSize: "12px",
+                                                            fontWeight: 600,
                                                         }}
                                                     >
-                                                        @{githubUser}
+                                                        Đã liên kết
                                                     </span>
                                                 ) : (
                                                     <span
@@ -454,7 +521,7 @@ export default function MemberContributionComponent({
                                                             color: "#b45309",
                                                             border: "1px solid #fef3c7",
                                                             borderRadius: "6px",
-                                                            fontSize: "11px",
+                                                            fontSize: "12px",
                                                             fontWeight: 500,
                                                         }}
                                                     >
@@ -471,71 +538,29 @@ export default function MemberContributionComponent({
                                                     color: "#0f172a",
                                                 }}
                                             >
-                                                {completedTasks}
+                                                {linkedTasks}
                                             </td>
 
                                             <td
                                                 style={{
                                                     padding: "14px 24px",
                                                     textAlign: "center",
+                                                    fontWeight: 700,
+                                                    color: "#334155",
                                                 }}
                                             >
-                                                {m.commitUrl ? (
-                                                    <a
-                                                        href={m.commitUrl}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        style={{
-                                                            color: "#2563eb",
-                                                            fontWeight: 700,
-                                                            textDecoration:
-                                                                "none",
-                                                        }}
-                                                    >
-                                                        {commits} ↗
-                                                    </a>
-                                                ) : (
-                                                    <span
-                                                        style={{
-                                                            fontWeight: 700,
-                                                            color: "#334155",
-                                                        }}
-                                                    >
-                                                        {commits}
-                                                    </span>
-                                                )}
+                                                {commits}
                                             </td>
 
                                             <td
                                                 style={{
                                                     padding: "14px 24px",
                                                     textAlign: "center",
+                                                    fontWeight: 700,
+                                                    color: "#334155",
                                                 }}
                                             >
-                                                {m.pullRequestUrl ? (
-                                                    <a
-                                                        href={m.pullRequestUrl}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        style={{
-                                                            color: "#2563eb",
-                                                            fontWeight: 700,
-                                                            textDecoration:
-                                                                "none",
-                                                        }}
-                                                    >
-                                                        {pullRequests} ↗
-                                                    </a>
-                                                ) : (
-                                                    <span
-                                                        style={{
-                                                            fontWeight: 700,
-                                                            color: "#334155",
-                                                        }}
-                                                    >
-                                                        {pullRequests}
-                                                    </span>
-                                                )}
+                                                {pullRequests}
                                             </td>
                                         </tr>
                                     );
@@ -548,3 +573,6 @@ export default function MemberContributionComponent({
         </div>
     );
 }
+
+export default MemberContributionComponent;
+export { MemberContributionComponent };

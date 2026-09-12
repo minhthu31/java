@@ -59,6 +59,7 @@ export default function Dashboard({ title }) {
     };
 
     const selectedProjectId = getProjectId();
+
     const handleLogout = () => {
         logout();
         navigate("/login");
