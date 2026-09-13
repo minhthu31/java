@@ -16,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.http.HttpStatus;
@@ -83,29 +84,32 @@ class GitHubCheckRunSyncServiceTest {
                 "2026-03-10",
                 Duration.ofSeconds(5));
 
-        localRepository = org.mockito.Mockito.mock(GitHubRepository.class);
+        localRepository = Mockito.mock(GitHubRepository.class);
 
-        remoteRepository = new vn.edu.cnpm.projectsupport.integration.github.GitHubRepository(
-                123L,
-                "node",
-                "Hello-World",
-                "octocat/Hello-World",
-                new vn.edu.cnpm.projectsupport.integration.github.GitHubRepository.Owner(
-                        42L,
-                        "octocat"),
-                false,
-                "main",
-                "https://github.com/octocat/Hello-World",
-                false,
-                Instant.parse("2026-09-10T00:00:00Z"),
-                null);
+        remoteRepository =
+                new vn.edu.cnpm.projectsupport.integration.github.GitHubRepository(
+                        123L,
+                        "node",
+                        "Hello-World",
+                        "octocat/Hello-World",
+                        new vn.edu.cnpm.projectsupport.integration.github.GitHubRepository.Owner(
+                                42L,
+                                "octocat"),
+                        false,
+                        "main",
+                        "https://github.com/octocat/Hello-World",
+                        false,
+                        Instant.parse("2026-09-10T00:00:00Z"),
+                        null);
     }
 
     private void stubSyncContext() {
         when(localRepository.getId())
                 .thenReturn(11L);
 
-        when(repositoryRepository.findByProjectIdAndGithubRepositoryId(1L, 123L))
+        when(repositoryRepository.findByProjectIdAndGithubRepositoryId(
+                1L,
+                123L))
                 .thenReturn(Optional.of(localRepository));
 
         when(repositoryRepository.saveAndFlush(localRepository))
@@ -132,17 +136,21 @@ class GitHubCheckRunSyncServiceTest {
     void syncsCheckRunsAndLinksCommitHeadToPullRequest() {
         stubSyncContext();
 
-        GitHubCheckRunResponse response = new GitHubCheckRunResponse(
-                9001L,
-                "build",
-                "completed",
-                "success",
-                "abc1234",
-                "https://github.com/octocat/Hello-World/runs/9001",
-                Instant.parse("2026-09-10T10:00:00Z"),
-                Instant.parse("2026-09-10T10:02:00Z"));
+        GitHubCheckRunResponse response =
+                new GitHubCheckRunResponse(
+                        9001L,
+                        "build",
+                        "completed",
+                        "success",
+                        "abc1234",
+                        "https://github.com/octocat/Hello-World/runs/9001",
+                        Instant.parse("2026-09-10T10:00:00Z"),
+                        Instant.parse("2026-09-10T10:02:00Z"));
 
-        when(gitHubRestClient.getCheckRunsPage(config, "main", 1))
+        when(gitHubRestClient.getCheckRunsPage(
+                config,
+                "main",
+                1))
                 .thenReturn(new GitHubPage<>(
                         List.of(response),
                         null,
@@ -175,7 +183,8 @@ class GitHubCheckRunSyncServiceTest {
                 .isTrue();
 
         var captor =
-                org.mockito.ArgumentCaptor.forClass(GitHubCheckRun.class);
+                org.mockito.ArgumentCaptor.forClass(
+                        GitHubCheckRun.class);
 
         verify(checkRunRepository)
                 .save(captor.capture());
@@ -197,27 +206,32 @@ class GitHubCheckRunSyncServiceTest {
     void rerunningSameCheckRunUpdatesInsteadOfCreatingDuplicate() {
         stubSyncContext();
 
-        GitHubCheckRun existing = new GitHubCheckRun(
-                11L,
-                9001L,
-                "abc1234",
-                "build",
-                GitHubCheckRunStatus.PENDING,
-                "old-url",
-                null,
-                null);
+        GitHubCheckRun existing =
+                new GitHubCheckRun(
+                        11L,
+                        9001L,
+                        "abc1234",
+                        "build",
+                        GitHubCheckRunStatus.PENDING,
+                        "old-url",
+                        null,
+                        null);
 
-        GitHubCheckRunResponse response = new GitHubCheckRunResponse(
-                9001L,
-                "build",
-                "completed",
-                "failure",
-                "abc1234",
-                "new-url",
-                null,
-                Instant.parse("2026-09-10T10:02:00Z"));
+        GitHubCheckRunResponse response =
+                new GitHubCheckRunResponse(
+                        9001L,
+                        "build",
+                        "completed",
+                        "failure",
+                        "abc1234",
+                        "new-url",
+                        null,
+                        Instant.parse("2026-09-10T10:02:00Z"));
 
-        when(gitHubRestClient.getCheckRunsPage(config, "main", 1))
+        when(gitHubRestClient.getCheckRunsPage(
+                config,
+                "main",
+                1))
                 .thenReturn(new GitHubPage<>(
                         List.of(response),
                         null,
@@ -251,7 +265,10 @@ class GitHubCheckRunSyncServiceTest {
     void actionsDisabledIsReportedWithoutFailingSync() {
         stubSyncContext();
 
-        when(gitHubRestClient.getCheckRunsPage(config, "main", 1))
+        when(gitHubRestClient.getCheckRunsPage(
+                config,
+                "main",
+                1))
                 .thenThrow(new GitHubApiException(
                         HttpStatus.CONFLICT,
                         "GITHUB_ACTIONS_DISABLED",
@@ -272,7 +289,7 @@ class GitHubCheckRunSyncServiceTest {
         assertThat(result.errors())
                 .isZero();
 
-        verify(syncLogRepository, org.mockito.Mockito.atLeastOnce())
+        verify(syncLogRepository, Mockito.atLeastOnce())
                 .save(any(SyncLog.class));
     }
 
@@ -301,5 +318,77 @@ class GitHubCheckRunSyncServiceTest {
                         "completed",
                         "cancelled"))
                 .isEqualTo(GitHubCheckRunStatus.CANCELLED);
+
+        assertThat(
+                GitHubCheckRunSyncService.mapStatus(
+                        "completed",
+                        "skipped"))
+                .isEqualTo(GitHubCheckRunStatus.SKIPPED);
+
+        assertThat(
+                GitHubCheckRunSyncService.mapStatus(
+                        "completed",
+                        "neutral"))
+                .isEqualTo(GitHubCheckRunStatus.NEUTRAL);
     }
+
+    @Test
+    void listCheckRunsUsesInternalRepositoryId() {
+        GitHubRepository repository =
+                Mockito.mock(GitHubRepository.class);
+
+        when(repository.getId())
+                .thenReturn(11L);
+
+        when(repository.getProjectId())
+                .thenReturn(1L);
+
+        GitHubCheckRun checkRun =
+                Mockito.mock(GitHubCheckRun.class);
+
+        when(repositoryRepository.findById(11L))
+                .thenReturn(Optional.of(repository));
+
+        when(checkRunRepository.findByRepositoryIdOrderByCompletedAtDesc(11L))
+                .thenReturn(List.of(checkRun));
+
+        List<GitHubCheckRun> result =
+                service.listCheckRuns(1L, 11L);
+
+        assertThat(result)
+                .containsExactly(checkRun);
+
+        verify(repositoryRepository)
+                .findById(11L);
+
+        verify(checkRunRepository)
+                .findByRepositoryIdOrderByCompletedAtDesc(11L);
+
+        verify(repositoryRepository, never())
+                .findByProjectIdAndGithubRepositoryId(1L, 11L);
+    }
+
+    @Test
+    void listCheckRunsRejectsRepositoryFromAnotherProject() {
+        GitHubRepository repository =
+            Mockito.mock(GitHubRepository.class);
+
+        when(repository.getProjectId())
+              .thenReturn(2L);
+
+        when(repositoryRepository.findById(11L))
+              .thenReturn(Optional.of(repository));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+               () -> service.listCheckRuns(1L, 11L))
+               .isInstanceOf(IllegalArgumentException.class)
+               .hasMessage(
+                      "GitHub repository does not belong to project");
+
+        verify(repositoryRepository)
+                .findById(11L);
+
+        verify(checkRunRepository, never())
+                .findByRepositoryIdOrderByCompletedAtDesc(any());
+  }
 }
