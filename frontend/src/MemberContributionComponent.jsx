@@ -16,8 +16,9 @@ function MemberContributionComponent({ projectId, sprints }) {
 
     const lastFetchedSprintProjectIdRef = useRef(null);
     const lastFetchedReportProjectIdRef = useRef(null);
+    const abortControllerRef = useRef(null);
+    const latestRequestIdRef = useRef(0);
 
-    // 1. Tải danh sách Sprint khi projectId thay đổi (hoặc khi không truyền prop sprints)
     const loadSprints = (targetProjectId) => {
         if (!targetProjectId) return;
         lastFetchedSprintProjectIdRef.current = targetProjectId;
@@ -26,7 +27,6 @@ function MemberContributionComponent({ projectId, sprints }) {
                 if (data) setSprintList(data);
             })
             .catch((err) => {
-                // Reset ref nếu tải lỗi để người dùng có thể retry
                 lastFetchedSprintProjectIdRef.current = null;
                 setError(err.message || "Không thể tải danh sách Sprint.");
             });
@@ -45,9 +45,17 @@ function MemberContributionComponent({ projectId, sprints }) {
         loadSprints(projectId);
     }, [projectId, sprints]);
 
-    // 2. Hàm gọi API lấy báo cáo tổng hợp
     const fetchData = async (filters = {}) => {
         if (!projectId) return;
+
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
+        const requestId = ++latestRequestIdRef.current;
+
         setLoading(true);
         setError(null);
 
@@ -65,37 +73,56 @@ function MemberContributionComponent({ projectId, sprints }) {
                 sprintId: sprintIdToUse || undefined,
                 fromDate: fromDateToUse || undefined,
                 toDate: toDateToUse || undefined,
+                signal: controller.signal,
             });
+            if (requestId !== latestRequestIdRef.current) {
+                return;
+            }
+
             setReportData(data);
         } catch (err) {
+            if (err.name === "AbortError") return;
+
+            if (requestId !== latestRequestIdRef.current) {
+                return;
+            }
+
             setError(err.message || "Máy chủ báo lỗi khi tải dữ liệu.");
             setReportData(null);
         } finally {
-            setLoading(false);
+            if (
+                abortControllerRef.current === controller &&
+                requestId === latestRequestIdRef.current
+            ) {
+                setLoading(false);
+            }
         }
     };
 
-    // 3. Khởi tạo dữ liệu khi mở trang hoặc khi đổi sang projectId khác
     useEffect(() => {
         if (!projectId || lastFetchedReportProjectIdRef.current === projectId) {
             return;
         }
         lastFetchedReportProjectIdRef.current = projectId;
         fetchData();
+
+        return () => {
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+        };
     }, [projectId]);
 
-    // 4. Xử lý nút Áp dụng (Client-side validation chặn fromDate >= toDate)
     const handleApply = (e) => {
         e.preventDefault();
-        if (fromDate && toDate && fromDate >= toDate) {
-            setDateError("Ngày bắt đầu phải nhỏ hơn ngày kết thúc.");
+        if (fromDate && toDate && fromDate > toDate) {
+            setDateError("Ngày bắt đầu không được lớn hơn ngày kết thúc.");
             return;
         }
         setDateError("");
         fetchData({ sprintId: selectedSprintId, fromDate, toDate });
     };
 
-    // 5. Xử lý nút Đặt lại
     const handleReset = () => {
         setSelectedSprintId("");
         setFromDate("");
@@ -104,7 +131,6 @@ function MemberContributionComponent({ projectId, sprints }) {
         fetchData({ sprintId: "", fromDate: "", toDate: "" });
     };
 
-    // 6. Xử lý nút Thử lại: retry cả Sprint nếu trước đó fail, sau đó retry Report
     const handleRetry = () => {
         if (sprintList.length === 0 && !Array.isArray(sprints)) {
             loadSprints(projectId);
@@ -116,6 +142,13 @@ function MemberContributionComponent({ projectId, sprints }) {
         reportData?.memberContributions ||
         reportData?.members ||
         (Array.isArray(reportData) ? reportData : []);
+
+    const dataStatus = reportData?.dataStatus;
+    const warnings = Array.isArray(reportData?.warnings)
+        ? reportData.warnings
+        : [];
+    const isDataSyncIncomplete =
+        Boolean(dataStatus && dataStatus !== "COMPLETE") || warnings.length > 0;
 
     return (
         <div
@@ -358,6 +391,33 @@ function MemberContributionComponent({ projectId, sprints }) {
                     </div>
                 )}
             </div>
+
+            {isDataSyncIncomplete && !loading && !error && (
+                <div
+                    data-testid="sync-warning-banner"
+                    style={{
+                        margin: "14px 24px 0",
+                        padding: "10px 16px",
+                        backgroundColor: "#fffbeb",
+                        border: "1px solid #fef3c7",
+                        borderRadius: "8px",
+                        color: "#92400e",
+                        fontSize: "13px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "4px",
+                    }}
+                >
+                    <div style={{ fontWeight: 600 }}>
+                        Trạng thái dữ liệu: {dataStatus || "CHƯA HOÀN TẤT"}
+                    </div>
+                    <div style={{ fontSize: "12px" }}>
+                        {warnings.length > 0
+                            ? warnings.join(" | ")
+                            : "Dữ liệu GitHub đang đồng bộ hoặc chưa cập nhật mới nhất. Các chỉ số có thể chưa phản ánh đầy đủ đóng góp thực tế."}
+                    </div>
+                </div>
+            )}
 
             {loading && (
                 <div

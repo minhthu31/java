@@ -14,10 +14,10 @@ const getAuthHeaders = () => {
     };
 };
 
-export const getProjectSprints = async (projectId) => {
+export const getProjectSprints = async (projectId, { signal } = {}) => {
     if (!projectId) return [];
     const url = `${getBaseUrl()}/projects/${projectId}/reports/progress`;
-    const response = await fetch(url, { headers: getAuthHeaders() });
+    const response = await fetch(url, { headers: getAuthHeaders(), signal });
 
     if (!response.ok) {
         if (response.status === 401) {
@@ -49,7 +49,7 @@ export const getProjectSprints = async (projectId) => {
 
 export const getMemberContributions = async (
     projectId,
-    { sprintId, fromDate, toDate } = {},
+    { sprintId, fromDate, toDate, signal } = {},
 ) => {
     if (!projectId) {
         throw new Error("projectId không hợp lệ.");
@@ -67,7 +67,7 @@ export const getMemberContributions = async (
     const queryString = params.toString() ? `?${params.toString()}` : "";
     const url = `${getBaseUrl()}/projects/${projectId}/reports/summary${queryString}`;
 
-    const response = await fetch(url, { headers: getAuthHeaders() });
+    const response = await fetch(url, { headers: getAuthHeaders(), signal });
 
     if (!response.ok) {
         if (response.status === 401) {

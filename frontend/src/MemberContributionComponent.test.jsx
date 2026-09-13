@@ -18,6 +18,8 @@ describe("CNPM-107 MemberContributionComponent Tests", () => {
         ]);
         service.getMemberContributions.mockResolvedValue({
             memberContributions: [],
+            dataStatus: "COMPLETE",
+            warnings: [],
         });
     });
 
@@ -31,12 +33,10 @@ describe("CNPM-107 MemberContributionComponent Tests", () => {
                     githubLinked: false,
                     commits: 5,
                     pullRequests: 2,
-                    openPullRequests: 1,
-                    closedPullRequests: 1,
-                    mergedPullRequests: 0,
                     linkedTasks: 3,
                 },
             ],
+            dataStatus: "COMPLETE",
         });
 
         render(<MemberContributionComponent projectId={1} />);
@@ -75,6 +75,7 @@ describe("CNPM-107 MemberContributionComponent Tests", () => {
                     linkedTasks: 2,
                 },
             ],
+            dataStatus: "COMPLETE",
         });
 
         render(<MemberContributionComponent projectId={1} />);
@@ -95,10 +96,9 @@ describe("CNPM-107 MemberContributionComponent Tests", () => {
         });
     });
 
-    test("4. Chặn gọi API và hiển thị thông báo lỗi khi fromDate >= toDate", async () => {
+    test("4. Cho phép lọc 1 ngày duy nhất (fromDate === toDate) và chặn khi fromDate > toDate", async () => {
         render(<MemberContributionComponent projectId={1} />);
 
-        // Đợi lần fetch khởi tạo ban đầu hoàn tất
         await waitFor(() => {
             expect(screen.getByText("Sprint 1")).toBeInTheDocument();
         });
@@ -109,61 +109,97 @@ describe("CNPM-107 MemberContributionComponent Tests", () => {
             target: { value: "2026-09-15" },
         });
         fireEvent.change(screen.getByLabelText("Đến ngày"), {
-            target: { value: "2026-09-10" },
+            target: { value: "2026-09-15" },
+        });
+        fireEvent.click(screen.getByRole("button", { name: /Áp dụng/i }));
+
+        expect(service.getMemberContributions).toHaveBeenCalledTimes(1);
+
+        fireEvent.change(screen.getByLabelText("Từ ngày"), {
+            target: { value: "2026-09-16" },
+        });
+        fireEvent.change(screen.getByLabelText("Đến ngày"), {
+            target: { value: "2026-09-15" },
         });
         fireEvent.click(screen.getByRole("button", { name: /Áp dụng/i }));
 
         expect(
-            screen.getByText("Ngày bắt đầu phải nhỏ hơn ngày kết thúc."),
+            screen.getByText("Ngày bắt đầu không được lớn hơn ngày kết thúc."),
         ).toBeInTheDocument();
-
-        // Đảm bảo không có request mới nào bị bắn lên
-        expect(service.getMemberContributions).not.toHaveBeenCalled();
+        expect(service.getMemberContributions).toHaveBeenCalledTimes(1);
     });
 
-    test("5. Kiểm tra component xử lý và hiển thị đúng theo schema ReportSummaryResponse", async () => {
-        const backendPayload = {
-            projectId: 1,
-            sprintId: null,
-            memberId: null,
-            from: null,
-            to: null,
-            asOf: "2026-09-13T00:00:00Z",
-            taskMetrics: {
-                totalTasks: 2,
-                completedTasks: 1,
-                overdueTasks: 0,
-                statusBreakdown: { DONE: 1, IN_PROGRESS: 1 },
-            },
-            memberContributions: [
-                {
-                    memberId: 1,
-                    username: "leader.test",
-                    fullName: "Test Team Leader",
-                    githubLinked: true,
-                    commits: 8,
-                    pullRequests: 3,
-                    openPullRequests: 1,
-                    closedPullRequests: 0,
-                    mergedPullRequests: 2,
-                    linkedTasks: 2,
-                },
-            ],
-            dataStatus: "COMPLETE",
-            sources: [],
-            warnings: [],
-        };
-
-        service.getMemberContributions.mockResolvedValueOnce(backendPayload);
+    test("5. Hiển thị cảnh báo đồng bộ khi dataStatus không phải COMPLETE hoặc có warnings", async () => {
+        service.getMemberContributions.mockResolvedValueOnce({
+            dataStatus: "PARTIAL",
+            warnings: ["GitHub sync is in progress"],
+            memberContributions: [],
+        });
 
         render(<MemberContributionComponent projectId={1} />);
 
         await waitFor(() => {
-            expect(screen.getByText("Test Team Leader")).toBeInTheDocument();
-            expect(screen.getByText("@leader.test")).toBeInTheDocument();
-            expect(screen.getByText("Đã liên kết")).toBeInTheDocument();
-            expect(screen.getByText("2")).toBeInTheDocument();
-            expect(screen.getByText("8")).toBeInTheDocument();
+            expect(
+                screen.getByTestId("sync-warning-banner"),
+            ).toBeInTheDocument();
+            expect(screen.getByText(/PARTIAL/i)).toBeInTheDocument();
+            expect(
+                screen.getByText(/GitHub sync is in progress/i),
+            ).toBeInTheDocument();
+        });
+    });
+
+    test("6. Chống race condition khi bấm lọc liên tiếp: chỉ giữ kết quả của request mới nhất", async () => {
+        let resolveSlowRequest;
+        const slowPromise = new Promise((resolve) => {
+            resolveSlowRequest = resolve;
+        });
+        const fastPromise = Promise.resolve({
+            dataStatus: "COMPLETE",
+            memberContributions: [
+                {
+                    memberId: 101,
+                    fullName: "Dữ liệu Mới Nhất",
+                    linkedTasks: 5,
+                    commits: 5,
+                    pullRequests: 5,
+                },
+            ],
+        });
+
+        render(<MemberContributionComponent projectId={1} />);
+        await waitFor(() =>
+            expect(screen.getByText("Sprint 1")).toBeInTheDocument(),
+        );
+
+        service.getMemberContributions.mockReturnValueOnce(slowPromise);
+        fireEvent.click(screen.getByRole("button", { name: /Áp dụng/i }));
+
+        service.getMemberContributions.mockReturnValueOnce(fastPromise);
+        fireEvent.click(screen.getByRole("button", { name: /Áp dụng/i }));
+
+        await waitFor(() => {
+            expect(screen.getByText("Dữ liệu Mới Nhất")).toBeInTheDocument();
+        });
+
+        resolveSlowRequest({
+            dataStatus: "COMPLETE",
+            memberContributions: [
+                {
+                    memberId: 99,
+                    fullName: "Dữ liệu Cũ Lạc Hậu",
+                    linkedTasks: 0,
+                    commits: 0,
+                    pullRequests: 0,
+                },
+            ],
+        });
+
+        await waitFor(() => {
+            expect(
+                screen.queryByText("Dữ liệu Cũ Lạc Hậu"),
+            ).not.toBeInTheDocument();
+            expect(screen.getByText("Dữ liệu Mới Nhất")).toBeInTheDocument();
         });
     });
 });
