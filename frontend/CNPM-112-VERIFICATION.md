@@ -1,70 +1,84 @@
-# CNPM-112 - Báo cáo tích hợp và hoàn thiện giao diện Sprint 5
+# CNPM-112 - Báo Cáo Nghiệm Thu Tích Hợp Frontend & Hoàn Thiện Hệ Thống
 
-## 1. Mục tiêu
+## 1. Mục tiêu & Phạm vi rà soát
 
-Hoàn tất việc tích hợp toàn bộ các màn hình frontend với API thật, chuẩn hóa contract theo đúng các phương thức HTTP (GET, POST, PUT), loại bỏ dữ liệu giả lập (mock data), che giấu thông tin nhạy cảm và bảo đảm chất lượng hệ thống qua bộ kiểm thử tự động cùng bản build production.
+Thực hiện chuẩn hóa toàn bộ contract tích hợp giữa Frontend và Backend REST API (`/api/v1`), loại bỏ triệt để lỗi phân mảnh biến môi trường (Config Drift), đối chiếu và đồng bộ phương thức HTTP lưu cấu hình theo đúng Controller Backend, bổ sung kiểm thử tự động cho cấu hình Base URL, đồng thời cung cấp đầy đủ bằng chứng kiểm thử thực tế trên Chrome DevTools (Console sạch 0 lỗi và Network xác nhận HTTP 200 OK) chứng minh cả hai luồng tích hợp Jira và GitHub đều kết nối thành công (Happy Path), không có bất kỳ lỗi Runtime Error / TypeError nào trên trình duyệt.
 
-## 2. Phạm vi tích hợp
+---
 
-| Phân hệ / Màn hình         | Contract & Endpoint thực tế                                                                                                     |       Phương thức       | Kết quả tích hợp                                                                                                                          |
-| :------------------------- | :------------------------------------------------------------------------------------------------------------------------------ | :---------------------: | :---------------------------------------------------------------------------------------------------------------------------------------- |
-| **Cấu hình Jira**          | `/projects/{projectId}/integrations/jira/config`                                                                                |        GET, POST        | Dùng API thật; lấy và lưu cấu hình; ẩn `apiToken` qua `type="password"`; xử lý thông báo thành công/lỗi                                   |
-| **Kiểm tra kết nối Jira**  | `/projects/{projectId}/integrations/jira/test-connection`                                                                       |          POST           | Gửi request test kết nối Jira, xử lý hiển thị `errorCode`                                                                                 |
-| **Thông tin Jira Issue**   | `/projects/{projectId}/integrations/jira/issues/{issueKey}`                                                                     |           GET           | Lấy thông tin issue liên kết từ Jira                                                                                                      |
-| **Đồng bộ Jira Task**      | `/projects/{projectId}/integrations/jira/tasks/{taskId}/sync`<br>`/projects/{projectId}/integrations/jira/tasks/{taskId}/retry` |          POST           | Dùng API thật; tự động cập nhật liên kết Jira Issue Key và hỗ trợ retry khi lỗi                                                           |
-| **Cấu hình GitHub**        | `/projects/{projectId}/integrations/github/config`                                                                              |        GET, POST        | Dùng API thật; lấy và lưu cấu hình; ẩn `Personal Access Token (PAT)`                                                                      |
-| **Kiểm tra & Sync GitHub** | `/projects/{projectId}/integrations/github/test-connection`<br>`/projects/{projectId}/integrations/github/sync`                 |          POST           | Dùng API thật; test kết nối token và kích hoạt đồng bộ commit/PR                                                                          |
-| **Hoạt động GitHub**       | `/projects/{projectId}/integrations/github/activities`<br>`/projects/{projectId}/integrations/github/tasks/{taskId}/activities` |           GET           | Dùng API thật; hiển thị commit/PR liên kết mã Jira; có xử lý danh sách rỗng                                                               |
-| **Quản lý Task**           | `/projects/{projectId}/tasks`<br>`/projects/{projectId}/tasks/{taskId}`<br>`/projects/{projectId}/tasks/{taskId}/status`        | GET, POST<br>GET<br>PUT | Dùng API thật; lấy danh sách, tạo mới, xem chi tiết và cập nhật trạng thái; có loading/error/empty state; sanitize chuỗi nhạy cảm trên UI |
-| **Báo cáo đóng góp**       | `/projects/{projectId}/reports/progress`<br>`/projects/{projectId}/reports/summary`                                             |           GET           | Dùng API thật; có banner cảnh báo trạng thái đồng bộ; chống xung đột dữ liệu (race condition) khi lọc ngày                                |
+## 2. Chuẩn hóa API Contract & Endpoint thực tế
 
-Base tích hợp là commit `e4abc5b` của nhánh `origin/main`.
+Đã đối soát trực tiếp mã nguồn Controller Backend (`src/main/java/**/JiraIntegrationController.java` và `GitHubConfigController.java`). Các endpoint lưu cấu hình được xác định chuẩn xác dùng phương thức **PUT**:
 
-## 3. Bằng chứng kiểm thử kỹ thuật
+| Phân hệ / Màn hình             | Endpoint thực tế                                                                                                                |                Method                 | Kết quả tích hợp & Trạng thái                                                                                                                 |
+| :----------------------------- | :------------------------------------------------------------------------------------------------------------------------------ | :-----------------------------------: | :-------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Cấu hình Jira**              | `/projects/{projectId}/integrations/jira/config`                                                                                |          **GET**<br>**PUT**           | Lấy cấu hình (GET) và **lưu/cập nhật cấu hình (PUT)**. Trường `apiToken` che giấu bằng `type="password"`.                                     |
+| **Kiểm tra Jira**              | `/projects/{projectId}/integrations/jira/test-connection`                                                                       |               **POST**                | Gửi yêu cầu test kết nối tới Jira Cloud. Đã kiểm chứng trực tiếp trên Network trả về **HTTP 200 OK** và UI hiển thị `CONNECTED`.              |
+| **Đồng bộ Jira Task**          | `/projects/{projectId}/integrations/jira/tasks/{taskId}/sync`<br>`/projects/{projectId}/integrations/jira/tasks/{taskId}/retry` |               **POST**                | Thực thi đồng bộ task và cơ chế retry khi lỗi mạng.                                                                                           |
+| **Cấu hình GitHub**            | `/projects/{projectId}/integrations/github/config`                                                                              |          **GET**<br>**PUT**           | Lấy cấu hình (GET) và **lưu/cập nhật cấu hình (PUT)**. PAT được bảo mật, không lộ trên UI.                                                    |
+| **Kiểm tra & Sync GitHub**     | `/projects/{projectId}/integrations/github/test-connection`<br>`/projects/{projectId}/integrations/github/sync`                 |               **POST**                | Xác thực kết nối PAT và kích hoạt đồng bộ activities. Đã kiểm chứng trực tiếp trên Network trả về **HTTP 200 OK** và UI hiển thị `Connected`. |
+| **Hoạt động GitHub**           | `/projects/{projectId}/integrations/github/activities`<br>`/projects/{projectId}/integrations/github/tasks/{taskId}/activities` |                **GET**                | Lấy danh sách commit/PR liên kết Jira task; hỗ trợ đầy đủ empty state.                                                                        |
+| **Quản lý Yêu cầu**            | `/projects/{projectId}/requirements`<br>`/projects/{projectId}/requirements/{id}`                                               | **GET**, **POST**<br>**GET**, **PUT** | Quản lý vòng đời requirement; parse dữ liệu chuẩn cấu trúc `data.content`.                                                                    |
+| **Báo cáo tiến độ & đóng góp** | `/projects/{projectId}/reports/progress`<br>`/projects/{projectId}/reports/summary`                                             |                **GET**                | Truy vấn dữ liệu thống kê tổng hợp; xử lý trạng thái tải trang (loading state) mượt mà.                                                       |
 
-### a. Rà soát Mock Data & Endpoint tĩnh
+---
 
-- **Lệnh kiểm tra:** `git grep -nEi 'mockData|dummyData|sampleData|fakeData|demoData' src/ ':!*.test.*'`
-- **Kết quả:** Không tìm thấy dữ liệu giả lập trong luồng mã nguồn chính thức.
-- **Base URL:** Toàn bộ service (`RequirementService`, `api.js`, `memberContributionService`, `progressService`) đều trỏ về biến môi trường `REACT_APP_API_BASE_URL` hoặc fallback chuẩn `http://localhost:8080/api/v1`.
+## 3. Khắc phục lỗi Config Drift & Thống nhất Base URL
 
-### b. Kiểm tra bảo mật và thông tin nhạy cảm
+- **Vấn đề phát hiện:** `api.js` trước đây đọc `REACT_APP_API_URL`, trong khi một số service khác lại đọc `REACT_APP_API_BASE_URL`. File mẫu `.env.example` ghi `REACT_APP_API_URL`, gây lệch cấu hình khi đổi cổng API (Config Drift).
+- **Giải pháp xử lý:**
+    - Cập nhật chuẩn hóa file mẫu `.env.example`:
+        ```env
+        REACT_APP_API_BASE_URL=http://localhost:8080/api/v1
+        ```
+    - Thống nhất toàn bộ frontend sử dụng biến `REACT_APP_API_BASE_URL` với fallback chuẩn `http://localhost:8080/api/v1`.
+    - **Rà soát mã nguồn:** Biến cũ `REACT_APP_API_URL` **không còn sử dụng trong code chạy thực tế** (production runtime code). Biến này hiện chỉ còn tồn tại trong test suite `src/api.test.js` để kiểm thử khả năng tương thích ngược và logic fallback.
+    - **Bổ sung Unit Test:** Thêm test suite tại `src/api.test.js` để kiểm chứng client nhận đúng custom Base URL và fallback chuẩn xác khi thiếu biến môi trường.
 
-- **Lệnh kiểm tra:** `git grep -i "password\|token\|secret" src/ ':!*.test.*'`
-- **Kết quả:**
-    - Trường PAT của GitHub (`#token-input`) và Token của Jira (`#jira-api-token`) đều được thiết lập `type="password"`, `autoComplete="new-password"`.
-    - Không truyền token qua màn hình hiển thị; regex che chuỗi bí mật `Bearer`, `token=`, `secret_` tại chi tiết Task.
-    - Quét `git grep -i "console.log" src/ ':!*.test.*'` trả về 0 kết quả (không rò rỉ token ra trình duyệt).
+---
 
-### c. Kiểm thử tự động (Unit & Integration Tests)
+## 4. Bằng chứng kiểm thử thực tế trên Chrome DevTools (End-to-End Success Verification)
 
-- **Lệnh thực thi:** `npm test -- --watchAll=false`
-- **Kết quả:**
-    - **Test Suites:** `15 passed, 15 total`
-    - **Tests:** `111 passed, 111 total`
-    - **Thời gian chạy:** `7.386 s`
-    - Toàn bộ các suite: `RequirementForm`, `RequirementList`, `GitHubConfigComponent`, `GitHubActivityComponent`, `SrsPreview`, `ProjectProgressComponent`, `GitHubTaskActivityPanel`, `JiraConfigComponent`, `memberContributionService`, `JiraIntegrationService`, `GitHubActivityService`, `TaskService`, `MemberContributionComponent`, `Dashboard`, `TaskComponent` đều đạt trạng thái PASS.
+Toàn bộ quá trình tích hợp được kiểm chứng thực tế với workspace thật, đáp ứng đầy đủ cả hai góc độ: **Tab Console (xác thực không có lỗi runtime)** và **Tab Network (xác thực trực tiếp mã phản hồi HTTP 200 OK)**:
 
-### d. Kiểm thử đóng gói (Production Build)
+### a. Bằng chứng tích hợp Jira (Console sạch & Network HTTP 200 OK)
 
-- **Lệnh thực thi:** `npm run build`
-- **Kết quả:** `Compiled successfully.`
-    - Bundle JS: `95.87 kB` (sau gzip)
-    - Bundle CSS: `1.21 kB` (sau gzip)
-    - Thư mục `build/` đã sẵn sàng phục vụ triển khai server.
+- **Tab Console (0 runtime error):**
+  ![DevTools Jira Console](docs/evidence/devtools-jira.png)
+    - UI hiển thị banner thông báo màu xanh lá: **`Kết nối tới Jira thành công!`** cùng badge **`CONNECTED`**.
+    - Tab Console xác nhận sạch hoàn toàn (`No messages`, `No errors`), không có TypeError hoặc unhandled rejection, thanh DevTools không có bộ đếm lỗi đỏ.
 
-## 4. Checklist nghiệm thu (Acceptance Criteria)
+- **Tab Network (Trực tiếp HTTP 200 OK):**
+  ![DevTools Jira Network](docs/evidence/devtools-jira-network.png)
+    - Request `POST /api/v1/projects/1/integrations/jira/test-connection` (loại XHR) phản hồi trực tiếp mã trạng thái **HTTP 200 OK** (chấm xanh lá).
 
-| Tiêu chí nghiệm thu                                        | Trạng thái | Ghi chú                                                                 |
-| :--------------------------------------------------------- | :--------: | :---------------------------------------------------------------------- |
-| Các màn hình Jira, GitHub, Task và Report sử dụng API thật |  **Đạt**   | Kết nối trực tiếp qua các service REST API `/api/v1` chuẩn GET/POST/PUT |
-| Không còn URL hoặc dữ liệu mock dùng trong luồng demo      |  **Đạt**   | Quét sạch mock data trong toàn bộ thư mục `src/`                        |
-| Trạng thái loading, lỗi và không có dữ liệu được xử lý     |  **Đạt**   | Đầy đủ spinner, nút retry khi lỗi, empty placeholder và banner đồng bộ  |
-| Không hiển thị token hoặc thông tin nhạy cảm               |  **Đạt**   | Input PAT/Token dùng `type="password"`, regex lọc chuỗi nhạy cảm        |
-| Không có lỗi console nghiêm trọng trong luồng demo         |  **Đạt**   | `console.log` đã dọn sạch, không rò rỉ dữ liệu ra log                   |
-| Frontend build thành công                                  |  **Đạt**   | `npm run build` tạo artifact production thành công                      |
-| Frontend test hiện có đều pass                             |  **Đạt**   | 15/15 test suites pass (111/111 unit & integration tests)               |
+### b. Bằng chứng tích hợp GitHub (Console sạch & Network HTTP 200 OK)
 
-## 5. Kết luận
+- **Tab Console (0 runtime error):**
+  ![DevTools GitHub Console](docs/evidence/devtools-github.png)
+    - UI phản hồi thành công và hiển thị: **`Trạng thái kết nối: Connected`** màu xanh lá.
+    - Tab Console sạch hoàn toàn (`No messages`, `No errors`), không có runtime error, không gây crash màn hình trắng.
 
-Mã nguồn frontend đã hoàn thiện toàn diện các tiêu chí tích hợp và kiểm thử của Sprint 5. Nhánh `feature/CNPM-112-frontend-integration-and-polish` sẵn sàng tạo Pull Request để hợp nhất và chuyển trạng thái task sang **Done**.
+- **Tab Network (Trực tiếp HTTP 200 OK):**
+  ![DevTools GitHub Network](docs/evidence/devtools-github-network.png)
+    - Request `POST /api/v1/projects/1/integrations/github/test-connection` (loại XHR) phản hồi trực tiếp mã trạng thái **HTTP 200 OK** (chấm xanh lá).
+
+### c. Kiểm thử tự động & Đóng gói (Automated Test & Build)
+
+- `npm test -- src/api.test.js --watchAll=false`: **PASS** toàn bộ các case kiểm thử Base URL.
+- `npm run build`: **Compiled successfully**, ứng dụng sẵn sàng triển khai.
+
+---
+
+## 5. Bảng checklist nghiệm thu
+
+| Tiêu chí                                      | Trạng thái | Bằng chứng đối chiếu                                                                                      |
+| :-------------------------------------------- | :--------: | :-------------------------------------------------------------------------------------------------------- |
+| Khớp đúng phương thức HTTP lưu config         |  **ĐẠT**   | Backend `@PutMapping`, frontend gọi `PUT`, tài liệu ghi `PUT`.                                            |
+| Đồng bộ biến môi trường Base URL              |  **ĐẠT**   | Toàn bộ frontend runtime và `.env.example` dùng `REACT_APP_API_BASE_URL`.                                 |
+| Rà soát biến môi trường cũ                    |  **ĐẠT**   | `REACT_APP_API_URL` không còn sử dụng trong code chạy thực tế (chỉ giữ trong unit test để test fallback). |
+| Bổ sung test case cho Custom Base URL         |  **ĐẠT**   | Đã tạo và pass unit test tại `src/api.test.js`.                                                           |
+| Luồng tích hợp Jira thành công (Happy Path)   |  **ĐẠT**   | UI hiển thị `CONNECTED`, banner xanh; Network trả về trực tiếp **HTTP 200 OK**.                           |
+| Luồng tích hợp GitHub thành công (Happy Path) |  **ĐẠT**   | UI hiển thị `Connected`; Network trả về trực tiếp **HTTP 200 OK**.                                        |
+| Trình duyệt không có lỗi runtime              |  **ĐẠT**   | Cả 2 ảnh Console đều sạch (`0 errors`), không có đếm lỗi đỏ trên thanh DevTools.                          |
+| Build & Test tự động                          |  **ĐẠT**   | Pass unit test, `npm run build` thành công không có lỗi.                                                  |
