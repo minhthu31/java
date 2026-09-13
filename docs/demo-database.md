@@ -268,7 +268,7 @@ FROM requirements;
 Kiểm tra feature:
 
 ```sql
-SELECT id, jira_issue_key, name
+SELECT id, jira_epic_key, name
 FROM features;
 ```
 
