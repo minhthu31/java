@@ -3,6 +3,7 @@ package vn.edu.cnpm.projectsupport.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -16,6 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,7 +44,6 @@ import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubRepository
 import vn.edu.cnpm.projectsupport.integration.jira.JiraClient;
 import vn.edu.cnpm.projectsupport.integration.jira.JiraProject;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationConfig;
-import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.JiraIssueSnapshot;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraIssueDto;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraPageDto;
@@ -69,13 +70,13 @@ class JiraGitHubReportIntegrationTest {
     @Autowired private GitHubCommitRepository gitHubCommitRepository;
     @Autowired private GitHubPullRequestRepository gitHubPullRequestRepository;
     @Autowired private GitHubRepositoryRepository gitHubRepositoryRepository;
-    @Autowired private GitHubIntegrationConfigRepository gitHubIntegrationConfigRepository;
-    @Autowired private IntegrationSecretService integrationSecretService;
     @Autowired private ProjectRepository projectRepository;
     @Autowired private TaskRepository taskRepository;
 
     @MockitoBean private JiraClient jiraClient;
     @MockitoBean private GitHubRestClient gitHubRestClient;
+    @MockitoBean private GitHubIntegrationConfigRepository gitHubIntegrationConfigRepository;
+    @MockitoBean private IntegrationSecretService integrationSecretService;
 
     private String validCreateBody(String title) {
         return String.format("""
@@ -88,16 +89,12 @@ class JiraGitHubReportIntegrationTest {
                 """, title);
     }
 
-    private void setupGitHubIntegrationConfig(Long projectId, String repoFullName) {
-        gitHubIntegrationConfigRepository.findGitHubConfigByProjectId(projectId).ifPresent(gitHubIntegrationConfigRepository::delete);
-
-        IntegrationConfig config = new IntegrationConfig();
-        config.setProjectId(projectId);
-        config.setProvider(IntegrationProvider.GITHUB);
-        config.setAccountIdentifier(repoFullName);
-        config.setEncryptedSecret(integrationSecretService.encrypt("mock-github-token"));
-        config.setCreatedAt(Instant.now());
-        gitHubIntegrationConfigRepository.save(config);
+    private void mockGitHubIntegrationConfig(Long projectId, String repoFullName) {
+        IntegrationConfig mockConfig = mock(IntegrationConfig.class);
+        when(mockConfig.getAccountIdentifier()).thenReturn(repoFullName);
+        when(mockConfig.getEncryptedSecret()).thenReturn("encrypted-mock-token");
+        when(gitHubIntegrationConfigRepository.findGitHubConfigByProjectId(projectId)).thenReturn(Optional.of(mockConfig));
+        when(integrationSecretService.decrypt("encrypted-mock-token")).thenReturn("decrypted-token");
     }
 
     private void ensureProjectHasJiraKey(Long projectId, String jiraKey) {
@@ -193,7 +190,7 @@ class JiraGitHubReportIntegrationTest {
         JsonNode login = assertLogin("leader.test", "password");
         long projectId = login.path("projectId").asLong();
 
-        setupGitHubIntegrationConfig(projectId, "org/repo");
+        mockGitHubIntegrationConfig(projectId, "org/repo");
 
         GitHubRepository remoteRepo = createMockRemoteRepo(8801L, "repo", "org/repo", "org");
         when(gitHubRestClient.getRepository(any())).thenReturn(remoteRepo);
@@ -227,7 +224,7 @@ class JiraGitHubReportIntegrationTest {
         GitHubPullRequest listedPr = mock(GitHubPullRequest.class);
         when(listedPr.number()).thenReturn(11);
 
-        GitHubPullRequest fullPr = mock(GitHubPullRequest.class);
+        GitHubPullRequest fullPr = mock(GitHubPullRequest.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
         when(fullPr.id()).thenReturn(301L);
         when(fullPr.number()).thenReturn(11);
         when(fullPr.title()).thenReturn("feat: [CNPM-110] implementation PR");
@@ -237,15 +234,9 @@ class JiraGitHubReportIntegrationTest {
         when(fullPr.htmlUrl()).thenReturn("https://github.com/org/repo/pull/11");
         when(fullPr.createdAt()).thenReturn(Instant.now());
         when(fullPr.user()).thenReturn(null);
-
-        var headRefMock = mock(GitHubPullRequest.HeadRef.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
-        when(fullPr.head()).thenReturn(headRefMock);
-        when(headRefMock.ref()).thenReturn("feature/CNPM-110");
-        when(headRefMock.sha()).thenReturn(commitSha);
-
-        var baseRefMock = mock(GitHubPullRequest.BaseRef.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
-        when(fullPr.base()).thenReturn(baseRefMock);
-        when(baseRefMock.ref()).thenReturn("main");
+        when(fullPr.head().ref()).thenReturn("feature/CNPM-110");
+        when(fullPr.head().sha()).thenReturn(commitSha);
+        when(fullPr.base().ref()).thenReturn("main");
 
         GitHubPage<GitHubPullRequest> prPage = mock(GitHubPage.class);
         when(prPage.items()).thenReturn(List.of(listedPr));
@@ -334,7 +325,7 @@ class JiraGitHubReportIntegrationTest {
         assertThat(jiraCount1).isEqualTo(jiraCount2);
 
         // Idempotent GitHub Commit Sync
-        setupGitHubIntegrationConfig(projectId, "org/repo-idemp");
+        mockGitHubIntegrationConfig(projectId, "org/repo-idemp");
         GitHubRepository remoteRepo = createMockRemoteRepo(9902L, "repo-idemp", "org/repo-idemp", "org");
         when(gitHubRestClient.getRepository(any())).thenReturn(remoteRepo);
 
