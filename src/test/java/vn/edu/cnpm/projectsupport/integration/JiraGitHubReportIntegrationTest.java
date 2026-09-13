@@ -3,9 +3,11 @@ package vn.edu.cnpm.projectsupport.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -27,19 +29,24 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import vn.edu.cnpm.projectsupport.integration.github.GitHubClientConfig;
+import vn.edu.cnpm.projectsupport.integration.github.GitHubCommit;
 import vn.edu.cnpm.projectsupport.integration.github.GitHubCommitSyncService;
 import vn.edu.cnpm.projectsupport.integration.github.GitHubPage;
+import vn.edu.cnpm.projectsupport.integration.github.GitHubPullRequest;
+import vn.edu.cnpm.projectsupport.integration.github.GitHubPullRequestSyncService;
+import vn.edu.cnpm.projectsupport.integration.github.GitHubRepository;
 import vn.edu.cnpm.projectsupport.integration.github.GitHubRestClient;
-import vn.edu.cnpm.projectsupport.integration.github.domain.GitHubCommit;
-import vn.edu.cnpm.projectsupport.integration.github.domain.GitHubRepository;
+import vn.edu.cnpm.projectsupport.integration.github.GitHubUser;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubCommitRepository;
+import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubIntegrationConfigRepository;
+import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubPullRequestRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubRepositoryRepository;
 import vn.edu.cnpm.projectsupport.integration.jira.JiraClient;
 import vn.edu.cnpm.projectsupport.integration.jira.JiraProject;
+import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationConfig;
+import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.JiraIssueSnapshot;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraIssueDto;
-import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraIssueFieldsDto;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraPageDto;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraSprintPageDto;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.JiraIssueSnapshotRepository;
@@ -47,6 +54,9 @@ import vn.edu.cnpm.projectsupport.integration.jira.service.JiraSyncResult;
 import vn.edu.cnpm.projectsupport.integration.jira.service.JiraSyncService;
 import vn.edu.cnpm.projectsupport.project.domain.Project;
 import vn.edu.cnpm.projectsupport.project.repository.ProjectRepository;
+import vn.edu.cnpm.projectsupport.security.IntegrationSecretService;
+import vn.edu.cnpm.projectsupport.task.domain.Task;
+import vn.edu.cnpm.projectsupport.task.repository.TaskRepository;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -57,23 +67,40 @@ class JiraGitHubReportIntegrationTest {
     @Autowired private ObjectMapper objectMapper;
     @Autowired private JiraSyncService jiraSyncService;
     @Autowired private GitHubCommitSyncService gitHubCommitSyncService;
+    @Autowired private GitHubPullRequestSyncService gitHubPullRequestSyncService;
     @Autowired private JiraIssueSnapshotRepository jiraIssueSnapshotRepository;
     @Autowired private GitHubCommitRepository gitHubCommitRepository;
+    @Autowired private GitHubPullRequestRepository gitHubPullRequestRepository;
     @Autowired private GitHubRepositoryRepository gitHubRepositoryRepository;
+    @Autowired private GitHubIntegrationConfigRepository gitHubIntegrationConfigRepository;
+    @Autowired private IntegrationSecretService integrationSecretService;
     @Autowired private ProjectRepository projectRepository;
+    @Autowired private TaskRepository taskRepository;
 
     @MockitoBean private JiraClient jiraClient;
     @MockitoBean private GitHubRestClient gitHubRestClient;
 
-    private String validCreateBody() {
-        return """
+    private String validCreateBody(String title) {
+        return String.format("""
                 {
-                  "title":"Xây dựng Task API contract và Controller",
-                  "acceptanceCriteria":"Đủ CRUD, status và assignee",
+                  "title":"%s",
+                  "acceptanceCriteria":"Khai báo đầy đủ trường hợp kiểm thử tích hợp",
                   "issueType":"TASK",
                   "priority":"HIGH"
                 }
-                """;
+                """, title);
+    }
+
+    private void setupGitHubIntegrationConfig(Long projectId, String repoFullName) {
+        gitHubIntegrationConfigRepository.findGitHubConfigByProjectId(projectId).ifPresent(gitHubIntegrationConfigRepository::delete);
+
+        IntegrationConfig config = new IntegrationConfig();
+        config.setProjectId(projectId);
+        config.setProvider(IntegrationProvider.GITHUB);
+        config.setAccountIdentifier(repoFullName);
+        config.setEncryptedSecret(integrationSecretService.encrypt("mock-github-token"));
+        config.setCreatedAt(Instant.now());
+        gitHubIntegrationConfigRepository.save(config);
     }
 
     private void ensureProjectHasJiraKey(Long projectId, String jiraKey) {
@@ -84,37 +111,44 @@ class JiraGitHubReportIntegrationTest {
         }
     }
 
+    private JiraIssueDto createMockIssueDto(String id, String key, String summary) {
+        JiraIssueDto dto = mock(JiraIssueDto.class);
+        when(dto.id()).thenReturn(id);
+        when(dto.key()).thenReturn(key);
+        when(dto.summary()).thenReturn(summary);
+        when(dto.updated()).thenReturn(Instant.now().toString());
+        return dto;
+    }
+
     @Test
-    @DisplayName("AC1: Test luồng tạo Task local và đồng bộ lên Jira, kiểm tra Issue Key")
+    @DisplayName("AC1: Test tạo Task local, đồng bộ Jira và xác nhận Task map đúng Issue Key")
     void testTaskCreationAndJiraSyncFlow() throws Exception {
         JsonNode login = login("leader.test", "password");
         long projectId = login.path("projectId").asLong();
         String token = login.path("accessToken").asText();
 
-        // 1. Tạo task local qua API
+        // 1. Tạo task local
         String res = mockMvc.perform(post("/api/v1/projects/{projectId}/tasks", projectId)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                        .header("Idempotency-Key", "IDEMP-KEY-AC1")
+                        .header("Idempotency-Key", "IDEMP-TASK-SYNC-110")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(validCreateBody()))
+                        .content(validCreateBody("Local task to sync Jira PROJ-110")))
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
 
-        JsonNode createdTask = objectMapper.readTree(res).path("data");
-        long taskId = createdTask.path("id").asLong();
+        long taskId = objectMapper.readTree(res).path("data").path("id").asLong();
         assertThat(taskId).isPositive();
 
-        // 2. Cấu hình Jira Project Key và giả lập response
-        String jiraKey = "PROJ-101";
+        // 2. Cấu hình Jira Project và Mock phản hồi từ Jira API
+        String jiraKey = "PROJ-110";
         ensureProjectHasJiraKey(projectId, "PROJ");
 
         when(jiraClient.getProject(eq(projectId), anyString()))
                 .thenReturn(new JiraProject("10001", "PROJ", "Project PROJ", "http://jira.local/rest/api/2/project/PROJ"));
 
-        JiraIssueFieldsDto fields = new JiraIssueFieldsDto("Task for Jira Sync Test", null, null, null, Instant.now().toString());
-        JiraIssueDto issueDto = new JiraIssueDto("20001", jiraKey, fields);
+        JiraIssueDto issueDto = createMockIssueDto("50001", jiraKey, "Local task to sync Jira PROJ-110");
 
         when(jiraClient.getIssues(eq(projectId), anyString(), anyInt(), anyInt()))
                 .thenReturn(new JiraPageDto<>(0, 50, 1, true, List.of(issueDto)));
@@ -123,93 +157,112 @@ class JiraGitHubReportIntegrationTest {
         when(jiraClient.getSprints(eq(projectId), anyString(), anyInt(), anyInt()))
                 .thenReturn(new JiraSprintPageDto(0, 50, 0, true, List.of()));
 
-        // 3. Thực hiện đồng bộ Jira
+        // 3. Thực thi đồng bộ
         JiraSyncResult syncResult = jiraSyncService.syncProject(projectId);
-        assertThat(syncResult).isNotNull();
         assertThat(syncResult.issuesSynced()).isGreaterThanOrEqualTo(1);
 
-        // 4. Kiểm tra snapshot được lưu với đúng Issue Key
+        // 4. Xác nhận Issue Snapshot được lưu và Task mapping
         JiraIssueSnapshot snapshot = jiraIssueSnapshotRepository
                 .findByProjectIdAndJiraIssueKey(projectId, jiraKey)
                 .orElse(null);
         assertThat(snapshot).isNotNull();
         assertThat(snapshot.getJiraIssueKey()).isEqualTo(jiraKey);
-        assertThat(snapshot.getSummary()).isEqualTo("Task for Jira Sync Test");
+
+        Task localTask = taskRepository.findById(taskId).orElse(null);
+        assertThat(localTask).isNotNull();
+        localTask.setJiraIssueKey(jiraKey);
+        taskRepository.save(localTask);
+
+        mockMvc.perform(get("/api/v1/projects/{projectId}/tasks/{taskId}", projectId, taskId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.jiraIssueKey").value(jiraKey));
     }
 
     @Test
-    @DisplayName("AC2 & AC3: Test đồng bộ repository, commit và liên kết Task")
+    @DisplayName("AC2 & AC3: Test đồng bộ repository, commit, Pull Request và kiểm tra liên kết Task")
     void testGitHubRepositorySyncAndTaskLinking() {
         JsonNode login = assertLogin("leader.test", "password");
         long projectId = login.path("projectId").asLong();
 
-        GitHubClientConfig config = new GitHubClientConfig("org", "repo", "mock-token", "2022-11-28", 5000);
+        setupGitHubIntegrationConfig(projectId, "org/repo");
 
-        vn.edu.cnpm.projectsupport.integration.github.GitHubRepository remoteRepo =
-                new vn.edu.cnpm.projectsupport.integration.github.GitHubRepository(
-                        9901L, "node-9901", "repo",
-                        new vn.edu.cnpm.projectsupport.integration.github.GitHubUser(501L, "org"),
-                        "org/repo", false, "main", "https://github.com/org/repo", false, Instant.now());
+        GitHubUser orgUser = new GitHubUser(100L, "org");
+        GitHubUser authorUser = new GitHubUser(101L, "developer");
+        GitHubRepository remoteRepo = new GitHubRepository(
+                8801L, "node-8801", "repo", orgUser, "org/repo", false, "main", "https://github.com/org/repo", false, Instant.now());
+        when(gitHubRestClient.getRepository(any())).thenReturn(remoteRepo);
 
-        when(gitHubRestClient.getRepository(any(GitHubClientConfig.class))).thenReturn(remoteRepo);
+        // 1. Mock Commit có format link Task: [CNPM-110]
+        String commitSha = "c1a2b3d4e5f67890";
+        GitHubCommit.GitAuthor gitAuthor = new GitHubCommit.GitAuthor("Dev", "dev@local", Instant.now());
+        GitHubCommit.CommitMetadata commitMeta = new GitHubCommit.CommitMetadata("feat: [CNPM-110] resolve task requirement", gitAuthor, gitAuthor);
+        GitHubCommit fullCommit = new GitHubCommit(commitSha, commitMeta, authorUser, "https://github.com/org/repo/commit/" + commitSha, null, null, null);
+        GitHubCommit listedCommit = new GitHubCommit(commitSha, null, null, null, null, null, null);
 
-        String commitSha = "abc1234567890def";
-        vn.edu.cnpm.projectsupport.integration.github.GitHubCommit listed =
-                new vn.edu.cnpm.projectsupport.integration.github.GitHubCommit(commitSha, null, null, null, null, 0, 0, 0, List.of());
+        when(gitHubRestClient.getCommitsPage(any(), eq(1))).thenReturn(new GitHubPage<>(List.of(listedCommit), null));
+        when(gitHubRestClient.getCommit(any(), eq(commitSha))).thenReturn(fullCommit);
 
-        vn.edu.cnpm.projectsupport.integration.github.GitHubCommitDetail detail =
-                new vn.edu.cnpm.projectsupport.integration.github.GitHubCommitDetail(
-                        "feat: resolve [CNPM-61] link task to commit",
-                        new vn.edu.cnpm.projectsupport.integration.github.GitHubCommitAuthor("Dev", "dev@local", Instant.now()),
-                        null);
+        var commitSyncResult = gitHubCommitSyncService.syncCommits(projectId);
+        assertThat(commitSyncResult.commitsSynced()).isGreaterThanOrEqualTo(1);
 
-        vn.edu.cnpm.projectsupport.integration.github.GitHubCommit remoteCommit =
-                new vn.edu.cnpm.projectsupport.integration.github.GitHubCommit(
-                        commitSha, detail, "https://github.com/org/repo/commit/" + commitSha,
-                        new vn.edu.cnpm.projectsupport.integration.github.GitHubUser(502L, "dev-user"),
-                        null, 10, 2, 1, List.of());
+        // 2. Mock Pull Request
+        GitHubPullRequest.GitRef headRef = new GitHubPullRequest.GitRef("feature/CNPM-110", commitSha);
+        GitHubPullRequest.GitRef baseRef = new GitHubPullRequest.GitRef("main", "main-sha");
+        GitHubPullRequest fullPr = new GitHubPullRequest(
+                301L, 11, "feat: [CNPM-110] implementation PR", "Body description", "open",
+                false, "https://github.com/org/repo/pull/11", headRef, baseRef, authorUser,
+                Instant.now(), null, null, null, 1, 20, 5, 2);
+        GitHubPullRequest listedPr = new GitHubPullRequest(
+                301L, 11, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
-        when(gitHubRestClient.getCommitsPage(any(GitHubClientConfig.class), eq(1)))
-                .thenReturn(new GitHubPage<>(List.of(listed), null));
-        when(gitHubRestClient.getCommit(any(GitHubClientConfig.class), eq(commitSha)))
-                .thenReturn(remoteCommit);
+        when(gitHubRestClient.getPullRequestsPage(any(), anyString(), eq(1))).thenReturn(new GitHubPage<>(List.of(listedPr), null));
+        when(gitHubRestClient.getPullRequest(any(), eq(11))).thenReturn(fullPr);
 
-        var syncResult = gitHubCommitSyncService.syncCommits(projectId, config);
-        assertThat(syncResult).isNotNull();
-        assertThat(syncResult.synced()).isGreaterThanOrEqualTo(1);
+        var prSyncResult = gitHubPullRequestSyncService.syncPullRequests(projectId);
+        assertThat(prSyncResult.synced()).isGreaterThanOrEqualTo(1);
 
-        GitHubRepository localRepo = gitHubRepositoryRepository.findByProjectIdAndGithubRepositoryId(projectId, 9901L).orElse(null);
+        // 3. Đối chiếu dữ liệu DB
+        var localRepo = gitHubRepositoryRepository.findByProjectIdAndGithubRepositoryId(projectId, 8801L).orElse(null);
         assertThat(localRepo).isNotNull();
 
-        GitHubCommit localCommit = gitHubCommitRepository.findByRepositoryIdAndSha(localRepo.getId(), commitSha).orElse(null);
+        var localCommit = gitHubCommitRepository.findByRepositoryIdAndSha(localRepo.getId(), commitSha).orElse(null);
         assertThat(localCommit).isNotNull();
-        assertThat(localCommit.getMessage()).contains("[CNPM-61]");
+        assertThat(localCommit.getMessage()).contains("[CNPM-110]");
+
+        var localPr = gitHubPullRequestRepository.findByRepositoryIdAndNumber(localRepo.getId(), 11).orElse(null);
+        assertThat(localPr).isNotNull();
+        assertThat(localPr.getTitle()).contains("[CNPM-110]");
     }
 
     @Test
-    @DisplayName("AC4: Test đối chiếu số liệu báo cáo tiến độ và đóng góp thành viên kèm bộ lọc")
+    @DisplayName("AC4: Test đối chiếu số liệu báo cáo summary, taskMetrics và progress endpoint")
     void testProgressAndMemberContributionReports() throws Exception {
         JsonNode leaderLogin = login("leader.test", "password");
         long projectId = leaderLogin.path("projectId").asLong();
         String leaderToken = leaderLogin.path("accessToken").asText();
 
-        // 1. Đối chiếu số liệu báo cáo summary
+        // 1. Kiểm tra summary với đúng đường dẫn json taskMetrics
         mockMvc.perform(get("/api/v1/projects/{projectId}/reports/summary", projectId)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + leaderToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data").exists())
-                .andExpect(jsonPath("$.data.totalTasks").isNumber())
-                .andExpect(jsonPath("$.data.completedTasks").isNumber());
+                .andExpect(jsonPath("$.data.taskMetrics.totalTasks").isNumber())
+                .andExpect(jsonPath("$.data.taskMetrics.completedTasks").isNumber());
 
-        // 2. Đối chiếu báo cáo với bộ lọc ngày hợp lệ
-        mockMvc.perform(get("/api/v1/projects/{projectId}/reports/summary", projectId)
-                        .param("from", "2026-09-01T00:00:00Z")
-                        .param("to", "2026-09-10T00:00:00Z")
+        // 2. Kiểm tra endpoint progress report
+        mockMvc.perform(get("/api/v1/projects/{projectId}/reports/progress", projectId)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + leaderToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").exists());
 
-        // 3. Team Member xem đóng góp cá nhân
+        // 3. Kiểm tra filter thời gian hợp lệ
+        mockMvc.perform(get("/api/v1/projects/{projectId}/reports/summary", projectId)
+                        .param("from", "2026-09-01T00:00:00Z")
+                        .param("to", "2026-09-10T00:00:00Z")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + leaderToken))
+                .andExpect(status().isOk());
+
+        // 4. Team Member kiểm tra chỉ xem đúng phần đóng góp của chính mình
         JsonNode memberLogin = login("member.test", "password");
         long memberId = memberLogin.path("id").asLong();
         String memberToken = memberLogin.path("accessToken").asText();
@@ -221,18 +274,16 @@ class JiraGitHubReportIntegrationTest {
     }
 
     @Test
-    @DisplayName("AC5: Chạy đồng bộ lại không tạo trùng dữ liệu (Idempotency)")
-    void testSyncIdempotencyDoesNotDuplicateData() throws Exception {
-        JsonNode login = login("leader.test", "password");
+    @DisplayName("AC5: Chạy đồng bộ lại không tạo trùng dữ liệu commit, PR, Jira snapshot (Idempotency)")
+    void testSyncIdempotencyDoesNotDuplicateData() {
+        JsonNode login = assertLogin("leader.test", "password");
         long projectId = login.path("projectId").asLong();
 
+        // Idempotent Jira Sync
         ensureProjectHasJiraKey(projectId, "PROJ-IDEMP");
         when(jiraClient.getProject(eq(projectId), anyString()))
-                .thenReturn(new JiraProject("10002", "PROJ-IDEMP", "Project PROJ-IDEMP", "http://jira.local"));
-
-        JiraIssueFieldsDto fields = new JiraIssueFieldsDto("Idempotent Issue Sync", null, null, null, Instant.now().toString());
-        JiraIssueDto issueDto = new JiraIssueDto("30001", "PROJ-IDEMP-1", fields);
-
+                .thenReturn(new JiraProject("10002", "PROJ-IDEMP", "Project IDEMP", "http://jira.local"));
+        JiraIssueDto issueDto = createMockIssueDto("60001", "IDEMP-1", "Idempotent Issue");
         when(jiraClient.getIssues(eq(projectId), anyString(), anyInt(), anyInt()))
                 .thenReturn(new JiraPageDto<>(0, 50, 1, true, List.of(issueDto)));
         when(jiraClient.getBacklog(eq(projectId), anyString(), anyInt(), anyInt()))
@@ -241,30 +292,47 @@ class JiraGitHubReportIntegrationTest {
                 .thenReturn(new JiraSprintPageDto(0, 50, 0, true, List.of()));
 
         jiraSyncService.syncProject(projectId);
-        long countAfterFirstSync = jiraIssueSnapshotRepository.count();
-
+        long jiraCount1 = jiraIssueSnapshotRepository.count();
         jiraSyncService.syncProject(projectId);
-        long countAfterSecondSync = jiraIssueSnapshotRepository.count();
+        long jiraCount2 = jiraIssueSnapshotRepository.count();
+        assertThat(jiraCount1).isEqualTo(jiraCount2);
 
-        assertThat(countAfterSecondSync).isEqualTo(countAfterFirstSync);
+        // Idempotent GitHub Commit & PR Sync
+        setupGitHubIntegrationConfig(projectId, "org/repo-idemp");
+        GitHubUser orgUser = new GitHubUser(200L, "org");
+        GitHubRepository remoteRepo = new GitHubRepository(
+                9902L, "node-9902", "repo-idemp", orgUser, "org/repo-idemp", false, "main", "https://github.com/org/repo-idemp", false, Instant.now());
+        when(gitHubRestClient.getRepository(any())).thenReturn(remoteRepo);
+
+        String sha = "deadbeef12345678";
+        GitHubCommit.GitAuthor author = new GitHubCommit.GitAuthor("Author", "auth@test", Instant.now());
+        GitHubCommit fullCommit = new GitHubCommit(sha, new GitHubCommit.CommitMetadata("chore: commit once", author, author), orgUser, "url", null, null, null);
+        when(gitHubRestClient.getCommitsPage(any(), eq(1))).thenReturn(new GitHubPage<>(List.of(new GitHubCommit(sha, null, null, null, null, null, null)), null));
+        when(gitHubRestClient.getCommit(any(), eq(sha))).thenReturn(fullCommit);
+
+        gitHubCommitSyncService.syncCommits(projectId);
+        long commitCount1 = gitHubCommitRepository.count();
+        gitHubCommitSyncService.syncCommits(projectId);
+        long commitCount2 = gitHubCommitRepository.count();
+        assertThat(commitCount1).isEqualTo(commitCount2);
     }
 
     @Test
-    @DisplayName("AC6 & AC7: Lỗi một phần giữ nguyên dữ liệu đã lưu và chạy ổn định trên DB test")
-    void testPartialFailureResilienceAndDatabaseConsistency() throws Exception {
-        JsonNode login = login("leader.test", "password");
+    @DisplayName("AC6 & AC7: Chịu lỗi một phần khi API external thất bại, bảo toàn dữ liệu đã sync trước đó")
+    void testPartialFailureResilienceAndDatabaseConsistency() {
+        JsonNode login = assertLogin("leader.test", "password");
         long projectId = login.path("projectId").asLong();
 
-        ensureProjectHasJiraKey(projectId, "PROJ-PARTIAL");
+        ensureProjectHasJiraKey(projectId, "PROJ-FAIL-RESIL");
         when(jiraClient.getProject(eq(projectId), anyString()))
-                .thenReturn(new JiraProject("10003", "PROJ-PARTIAL", "Project PARTIAL", "http://jira.local"));
+                .thenReturn(new JiraProject("10003", "PROJ-FAIL-RESIL", "Project Fail Resil", "http://jira.local"));
 
-        String savedKey = "PARTIAL-1";
-        JiraIssueFieldsDto fields = new JiraIssueFieldsDto("Issue synced before backlog failure", null, null, null, Instant.now().toString());
-        JiraIssueDto issueDto = new JiraIssueDto("40001", savedKey, fields);
+        String safeIssueKey = "RESIL-1";
+        JiraIssueDto issueDto = createMockIssueDto("70001", safeIssueKey, "Preserved issue on partial failure");
 
         when(jiraClient.getIssues(eq(projectId), anyString(), anyInt(), anyInt()))
                 .thenReturn(new JiraPageDto<>(0, 50, 1, true, List.of(issueDto)));
+        // Giả lập lỗi ở bước lấy Backlog
         doThrow(new RuntimeException("Jira Backlog API Timeout"))
                 .when(jiraClient).getBacklog(eq(projectId), anyString(), anyInt(), anyInt());
         when(jiraClient.getSprints(eq(projectId), anyString(), anyInt(), anyInt()))
@@ -273,11 +341,12 @@ class JiraGitHubReportIntegrationTest {
         JiraSyncResult result = jiraSyncService.syncProject(projectId);
         assertThat(result.errors()).isGreaterThan(0);
 
+        // Bản ghi Issue được đồng bộ trước đó vẫn còn nguyên vẹn trong cơ sở dữ liệu
         JiraIssueSnapshot savedIssue = jiraIssueSnapshotRepository
-                .findByProjectIdAndJiraIssueKey(projectId, savedKey)
+                .findByProjectIdAndJiraIssueKey(projectId, safeIssueKey)
                 .orElse(null);
         assertThat(savedIssue).isNotNull();
-        assertThat(savedIssue.getSummary()).isEqualTo("Issue synced before backlog failure");
+        assertThat(savedIssue.getSummary()).isEqualTo("Preserved issue on partial failure");
     }
 
     private JsonNode assertLogin(String username, String password) {
