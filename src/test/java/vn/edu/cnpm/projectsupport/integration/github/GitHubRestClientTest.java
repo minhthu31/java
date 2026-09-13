@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.io.IOException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -285,7 +286,7 @@ class GitHubRestClientTest {
     }
 
     @Test
-    void rejectsUntrustedPaginationUrl() throws Exception {
+     void rejectsUntrustedPaginationUrl() throws Exception {
         when(transport.get(eq("https://api.github.com/repos/octocat/Hello-World/commits?per_page=100&page=1"), any(), any()))
                 .thenReturn(new GitHubHttpResponse(200, "[]", Map.of(
                         "link", "<https://evil.example/steal?token=none>; rel=\"next\"")));
@@ -294,4 +295,48 @@ class GitHubRestClientTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("trusted");
     }
+    @Test
+    void readsCheckRunsAndFollowsPagination() throws Exception{
+        String firstUrl = "https://api.github.com/repos/octocat/Hello-World/commits/abc1234/check-runs?per_page=100&page=1";
+        String secondUrl = "https://api.github.com/repos/octocat/Hello-World/commits/abc1234/check-runs?per_page=100&page=2";
+
+        when(transport.get(eq(firstUrl), any(), any()))
+                .thenReturn(new GitHubHttpResponse(200,
+                        "{\"total_count\":2,\"check_runs\":[{\"id\":101,\"name\":\"build\",\"status\":\"completed\",\"conclusion\":\"success\",\"head_sha\":\"abc1234\",\"html_url\":\"https://example/build/101\",\"started_at\":\"2026-09-10T10:00:00Z\",\"completed_at\":\"2026-09-10T10:02:00Z\"}]}",
+                        Map.of("link", "<" + secondUrl + ">; rel=\"next\"")));
+        when(transport.get(eq(secondUrl), any(), any()))
+                .thenReturn(new GitHubHttpResponse(200,
+                        "{\"total_count\":2,\"check_runs\":[{\"id\":102,\"name\":\"test\",\"status\":\"completed\",\"conclusion\":\"failure\",\"head_sha\":\"abc1234\",\"html_url\":\"https://example/test/102\"}]}",
+                        Map.of()));
+
+        GitHubPage<GitHubCheckRunResponse> first = client.getCheckRunsPage(config, "abc1234", 1);
+        GitHubPage<GitHubCheckRunResponse> second = client.getCheckRunsPage(config, "abc1234", 2);
+
+        assertThat(first.items()).singleElement().satisfies(run -> {
+            assertThat(run.id()).isEqualTo(101L);
+            assertThat(run.conclusion()).isEqualTo("success");
+            assertThat(run.headSha()).isEqualTo("abc1234");
+        });
+        assertThat(first.nextUrl()).isEqualTo(secondUrl);
+        assertThat(second.items()).singleElement().extracting(GitHubCheckRunResponse::id)
+                .isEqualTo(102L);
+    }
+
+    @Test
+    void mapsActionsDisabledConflictToSafeError() throws Exception {
+        String url = "https://api.github.com/repos/octocat/Hello-World/commits/main/check-runs?per_page=100&page=1";
+        when(transport.get(eq(url), any(), any()))
+                .thenReturn(new GitHubHttpResponse(409, "{\"message\":\"Actions are disabled\"}", Map.of()));
+
+        assertThatThrownBy(() -> client.getCheckRunsPage(config, "main", 1))
+                .isInstanceOf(GitHubApiException.class)
+                .satisfies(error -> {
+                    GitHubApiException exception = (GitHubApiException) error;
+                    assertThat(exception.getStatus()).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(exception.getErrorCode()).isEqualTo("GITHUB_ACTIONS_DISABLED");
+                    assertThat(exception.getMessage()).doesNotContain("Actions are disabled");
+                });
+    }
+
+
 }
