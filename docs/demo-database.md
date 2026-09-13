@@ -13,7 +13,7 @@ Database demo được chuẩn bị để phục vụ:
 - Demo dữ liệu GitHub.
 - Kiểm tra API báo cáo và thống kê.
 
-Database demo sử dụng Flyway để chạy migration theo thứ tự từ `V1` đến `V13`.
+Database demo sử dụng Flyway. Các migration schema chạy theo thứ tự; dữ liệu demo được seed bởi migration lặp `R__seed_final_demo_data.sql` để có thể bật demo cả sau khi database đã khởi tạo bình thường.
 
 ---
 
@@ -46,18 +46,18 @@ CREATE DATABASE cnpm_project_support
   COLLATE utf8mb4_unicode_ci;
 
 CREATE USER IF NOT EXISTS 'cnpm_user'@'localhost'
-  IDENTIFIED BY 'password';
+  IDENTIFIED BY 'change-me';
 
 GRANT ALL PRIVILEGES ON cnpm_project_support.* TO 'cnpm_user'@'localhost';
 
 FLUSH PRIVILEGES;
 ```
 
-Nếu `cnpm_user` đã tồn tại nhưng password không phải `password`, có thể cập nhật:
+Nếu `cnpm_user` đã tồn tại nhưng password không phải `change-me`, có thể cập nhật:
 
 ```sql
 ALTER USER 'cnpm_user'@'localhost'
-IDENTIFIED BY 'password';
+IDENTIFIED BY 'change-me';
 
 GRANT ALL PRIVILEGES ON cnpm_project_support.* TO 'cnpm_user'@'localhost';
 
@@ -78,55 +78,100 @@ cnpm_project_support
 
 ---
 
-## 4. Cấu hình kết nối database
+## 4. Cấu hình kết nối database và biến môi trường
 
-File cấu hình:
+File cấu hình ứng dụng là:
 
 ```text
 src/main/resources/application.yml
 ```
 
-Cấu hình local demo có thể sử dụng:
-
-```yaml
-spring:
-  datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/${DB_NAME:cnpm_project_support}?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Ho_Chi_Minh}
-    username: ${DB_USERNAME:cnpm_user}
-    password: ${DB_PASSWORD:password}
-```
-
-Các biến môi trường có thể được cấu hình riêng:
+Các biến **bắt buộc** khi chạy ứng dụng:
 
 ```text
-DB_URL
-DB_NAME
 DB_USERNAME
 DB_PASSWORD
 JWT_SECRET
-JWT_EXPIRATION_MS
 INTEGRATION_ENCRYPTION_KEY
 ```
 
----
+Các biến có giá trị mặc định nên không bắt buộc:
 
-## 5. Chạy migration
+```text
+DB_NAME=cnpm_project_support
+APP_PORT=8080
+JWT_EXPIRATION_MS=3600000
+```
 
-Từ thư mục gốc của project, chạy:
+File mẫu:
+
+```text
+.env.example
+```
+
+Ví dụ thiết lập trong PowerShell (mở terminal mới hoặc chạy lại các lệnh này khi cần):
 
 ```powershell
+$env:DB_NAME = "cnpm_project_support"
+$env:DB_USERNAME = "cnpm_user"
+$env:DB_PASSWORD = "change-me"
+$env:JWT_SECRET = "demo-jwt-secret-key-with-at-least-32-characters"
+$env:INTEGRATION_ENCRYPTION_KEY = "demo-encryption-key-with-at-least-32-characters"
+$env:JWT_EXPIRATION_MS = "3600000"
+$env:APP_PORT = "8080"
+```
+
+Lưu ý: project hiện không tự đọc file `.env`; cần khai báo các biến môi trường trong terminal/IDE trước khi chạy. Không dùng các giá trị mẫu này cho production.
+
+Mật khẩu database ở ví dụ trên là `change-me`, đúng với `.env.example`. Mật khẩu của **tài khoản demo ứng dụng** vẫn là `password` và là hai loại mật khẩu khác nhau.
+
+## 5. Chạy migration và seed dữ liệu demo
+
+**Phải bật chế độ demo ngay lần đầu nếu muốn database có dữ liệu demo.** Có hai cách tương đương:
+
+### Cách 1 — dùng profile `demo`
+
+```powershell
+$env:SPRING_PROFILES_ACTIVE = "demo"
 .\mvnw.cmd clean spring-boot:run
 ```
 
-Khi ứng dụng khởi động, Flyway sẽ tự động chạy các migration.
+`application-demo.yml` đặt `demoSeedEnabled=true`.
 
-Migration demo cuối cùng là:
+### Cách 2 — bật biến môi trường `DEMO_SEED_ENABLED`
 
-```text
-src/main/resources/db/migration/V13__seed_final_demo_data.sql
+```powershell
+$env:DEMO_SEED_ENABLED = "true"
+.\mvnw.cmd clean spring-boot:run
 ```
 
----
+Không bắt buộc phải dùng profile `demo` nếu đã đặt `DEMO_SEED_ENABLED=true`.
+
+### Trường hợp đã chạy bình thường trước đó
+
+Nếu trước đây đã chạy ứng dụng với `DEMO_SEED_ENABLED=false` hoặc không đặt biến này, Flyway sẽ **không chạy lại V13** vì V13 là migration versioned và đã được ghi nhận là đã chạy. Để xử lý trường hợp này, project có thêm migration lặp:
+
+```text
+src/main/resources/db/migration/R__seed_final_demo_data.sql
+```
+
+Migration `R__seed_final_demo_data.sql` dùng cùng placeholder `demoSeedEnabled`. Khi database đã chạy bình thường với giá trị `false`, sau đó đổi sang `true`, checksum của repeatable migration thay đổi và Flyway chạy migration này để bổ sung dữ liệu demo.
+
+Vì vậy có thể làm:
+
+```powershell
+# Lần đầu: chạy bình thường
+$env:DEMO_SEED_ENABLED = "false"
+.\mvnw.cmd clean spring-boot:run
+
+# Sau đó muốn bật demo
+$env:DEMO_SEED_ENABLED = "true"
+.\mvnw.cmd clean spring-boot:run
+```
+
+Seed demo sử dụng `INSERT ... SELECT` + `NOT EXISTS` và các cập nhật Jira dùng `COALESCE`, nên không tự ghi đè cấu hình Jira đã tồn tại của project mẫu.
+
+Sau khi seed demo xong, lần chạy thông thường có thể bỏ `DEMO_SEED_ENABLED` hoặc đặt lại `false`.
 
 ## 6. Dữ liệu demo được tạo
 
@@ -346,7 +391,7 @@ Ví dụ:
 
 ```json
 {
-  "username": "admin.test",
+  "usernameOrEmail": "admin.test",
   "password": "password"
 }
 ```
