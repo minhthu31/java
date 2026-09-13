@@ -127,7 +127,7 @@ Mật khẩu database ở ví dụ trên là `change-me`, đúng với `.env.exa
 
 ## 5. Chạy migration và seed dữ liệu demo
 
-**Phải bật chế độ demo ngay lần đầu nếu muốn database có dữ liệu demo.** Có hai cách tương đương:
+Không bắt buộc phải bật chế độ demo ngay lần đầu. Có thể khởi tạo database và chạy ứng dụng bình thường trước, sau đó bật demo ở một lần chạy sau. Có hai cách tương đương:
 
 ### Cách 1 — dùng profile `demo`
 
@@ -172,6 +172,39 @@ $env:DEMO_SEED_ENABLED = "true"
 Seed demo sử dụng `INSERT ... SELECT` + `NOT EXISTS` và các cập nhật Jira dùng `COALESCE`, nên không tự ghi đè cấu hình Jira đã tồn tại của project mẫu.
 
 Sau khi seed demo xong, lần chạy thông thường có thể bỏ `DEMO_SEED_ENABLED` hoặc đặt lại `false`.
+
+
+### Lưu ý khi ghép các branch có migration Flyway
+
+Trước khi đưa cả hai nhánh vào `main`, cần kiểm tra toàn bộ thư mục migration để bảo đảm mỗi version chỉ xuất hiện một lần. Ví dụ, nếu một nhánh có:
+
+```text
+V13__github_check_runs.sql
+```
+
+và nhánh khác có:
+
+```text
+V13__seed_final_demo_data.sql
+```
+
+thì khi ghép cả hai, Flyway sẽ báo lỗi:
+
+```text
+Found more than one migration with version 13
+```
+
+**Không tự ý đổi tên hoặc sửa nội dung một migration versioned đã được chạy trên database.** Việc thống nhất version phải được thực hiện trong quá trình chuẩn bị merge/rebase của các branch, theo quy ước migration của nhóm và có kế hoạch xử lý database đã tồn tại. Sau khi hai branch đã thống nhất version, mới đưa cả hai migration vào `main`.
+
+Có thể kiểm tra nhanh trước khi merge bằng:
+
+```powershell
+Get-ChildItem src/main/resources/db/migration -Filter "V*.sql" |
+  Select-Object -ExpandProperty Name |
+  Sort-Object
+```
+
+Nếu phát hiện hai file cùng version (ví dụ cùng bắt đầu bằng `V13__`), **dừng merge và thống nhất với branch chứa migration còn lại trước**. Không sửa V13 đã chạy chỉ để làm cho Git merge được.
 
 ## 6. Dữ liệu demo được tạo
 
