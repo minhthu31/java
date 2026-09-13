@@ -63,7 +63,8 @@ public class ProjectAuthorizationService {
 
     public boolean canViewReports(Long projectId) {
         return currentUserService.findCurrentUser()
-                .map(user -> isLeader(user, projectId)
+                .map(user -> isAdmin(user)
+                        || isLeader(user, projectId)
                         || isLecturer(user, projectId)
                         || isMember(user, projectId))
                 .orElse(false);
@@ -111,6 +112,10 @@ public class ProjectAuthorizationService {
 
     public boolean canGenerateSrs(Long projectId) {
         return canManageRequirements(projectId);
+    }
+
+    private boolean isAdmin(User user) {
+        return role(user) == RoleCode.ADMIN;
     }
 
     private boolean isLeader(User user, Long projectId) {
