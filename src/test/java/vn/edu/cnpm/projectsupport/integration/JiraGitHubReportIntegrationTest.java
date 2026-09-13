@@ -3,7 +3,6 @@ package vn.edu.cnpm.projectsupport.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -40,6 +39,7 @@ import vn.edu.cnpm.projectsupport.integration.jira.JiraClient;
 import vn.edu.cnpm.projectsupport.integration.jira.JiraProject;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.JiraIssueSnapshot;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraIssueDto;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraIssueFieldsDto;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraPageDto;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraSprintPageDto;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.JiraIssueSnapshotRepository;
@@ -106,21 +106,15 @@ class JiraGitHubReportIntegrationTest {
         long taskId = createdTask.path("id").asLong();
         assertThat(taskId).isPositive();
 
-        // 2. Chuẩn bị Jira project key và giả lập response từ Jira
+        // 2. Cấu hình Jira Project Key và giả lập response
         String jiraKey = "PROJ-101";
         ensureProjectHasJiraKey(projectId, "PROJ");
 
         when(jiraClient.getProject(eq(projectId), anyString()))
-                .thenReturn(new JiraProject("10001", "PROJ", "http://jira.local/rest/api/2/project/PROJ"));
+                .thenReturn(new JiraProject("10001", "PROJ", "Project PROJ", "http://jira.local/rest/api/2/project/PROJ"));
 
-        JiraIssueDto issueDto = new JiraIssueDto(
-                "20001",
-                jiraKey,
-                "Task for Jira Sync Test",
-                null,
-                null,
-                null,
-                Instant.now().toString());
+        JiraIssueFieldsDto fields = new JiraIssueFieldsDto("Task for Jira Sync Test", null, null, null, Instant.now().toString());
+        JiraIssueDto issueDto = new JiraIssueDto("20001", jiraKey, fields);
 
         when(jiraClient.getIssues(eq(projectId), anyString(), anyInt(), anyInt()))
                 .thenReturn(new JiraPageDto<>(0, 50, 1, true, List.of(issueDto)));
@@ -180,12 +174,10 @@ class JiraGitHubReportIntegrationTest {
         when(gitHubRestClient.getCommit(any(GitHubClientConfig.class), eq(commitSha)))
                 .thenReturn(remoteCommit);
 
-        // Chạy đồng bộ commit GitHub
         var syncResult = gitHubCommitSyncService.syncCommits(projectId, config);
         assertThat(syncResult).isNotNull();
         assertThat(syncResult.synced()).isGreaterThanOrEqualTo(1);
 
-        // Kiểm tra repository và commit được lưu vào DB
         GitHubRepository localRepo = gitHubRepositoryRepository.findByProjectIdAndGithubRepositoryId(projectId, 9901L).orElse(null);
         assertThat(localRepo).isNotNull();
 
@@ -209,7 +201,7 @@ class JiraGitHubReportIntegrationTest {
                 .andExpect(jsonPath("$.data.totalTasks").isNumber())
                 .andExpect(jsonPath("$.data.completedTasks").isNumber());
 
-        // 2. Đối chiếu báo cáo tiến độ theo bộ lọc thời gian hợp lệ
+        // 2. Đối chiếu báo cáo với bộ lọc ngày hợp lệ
         mockMvc.perform(get("/api/v1/projects/{projectId}/reports/summary", projectId)
                         .param("from", "2026-09-01T00:00:00Z")
                         .param("to", "2026-09-10T00:00:00Z")
@@ -217,7 +209,7 @@ class JiraGitHubReportIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").exists());
 
-        // 3. Team Member xem đóng góp cá nhân và kiểm tra đúng ID thành viên
+        // 3. Team Member xem đóng góp cá nhân
         JsonNode memberLogin = login("member.test", "password");
         long memberId = memberLogin.path("id").asLong();
         String memberToken = memberLogin.path("accessToken").asText();
@@ -236,16 +228,10 @@ class JiraGitHubReportIntegrationTest {
 
         ensureProjectHasJiraKey(projectId, "PROJ-IDEMP");
         when(jiraClient.getProject(eq(projectId), anyString()))
-                .thenReturn(new JiraProject("10002", "PROJ-IDEMP", "http://jira.local"));
+                .thenReturn(new JiraProject("10002", "PROJ-IDEMP", "Project PROJ-IDEMP", "http://jira.local"));
 
-        JiraIssueDto issueDto = new JiraIssueDto(
-                "30001",
-                "PROJ-IDEMP-1",
-                "Idempotent Issue Sync",
-                null,
-                null,
-                null,
-                Instant.now().toString());
+        JiraIssueFieldsDto fields = new JiraIssueFieldsDto("Idempotent Issue Sync", null, null, null, Instant.now().toString());
+        JiraIssueDto issueDto = new JiraIssueDto("30001", "PROJ-IDEMP-1", fields);
 
         when(jiraClient.getIssues(eq(projectId), anyString(), anyInt(), anyInt()))
                 .thenReturn(new JiraPageDto<>(0, 50, 1, true, List.of(issueDto)));
@@ -254,39 +240,29 @@ class JiraGitHubReportIntegrationTest {
         when(jiraClient.getSprints(eq(projectId), anyString(), anyInt(), anyInt()))
                 .thenReturn(new JiraSprintPageDto(0, 50, 0, true, List.of()));
 
-        // Chạy đồng bộ lần 1
         jiraSyncService.syncProject(projectId);
         long countAfterFirstSync = jiraIssueSnapshotRepository.count();
 
-        // Chạy đồng bộ lại lần 2
         jiraSyncService.syncProject(projectId);
         long countAfterSecondSync = jiraIssueSnapshotRepository.count();
 
-        // Số lượng snapshot trong DB không bị tăng gấp đôi
         assertThat(countAfterSecondSync).isEqualTo(countAfterFirstSync);
     }
 
     @Test
-    @DisplayName("AC6 & AC7: Lỗi một phần (Jira partial error) giữ nguyên dữ liệu đã lưu và chạy ổn định trên DB test")
+    @DisplayName("AC6 & AC7: Lỗi một phần giữ nguyên dữ liệu đã lưu và chạy ổn định trên DB test")
     void testPartialFailureResilienceAndDatabaseConsistency() throws Exception {
         JsonNode login = login("leader.test", "password");
         long projectId = login.path("projectId").asLong();
 
         ensureProjectHasJiraKey(projectId, "PROJ-PARTIAL");
         when(jiraClient.getProject(eq(projectId), anyString()))
-                .thenReturn(new JiraProject("10003", "PROJ-PARTIAL", "http://jira.local"));
+                .thenReturn(new JiraProject("10003", "PROJ-PARTIAL", "Project PARTIAL", "http://jira.local"));
 
         String savedKey = "PARTIAL-1";
-        JiraIssueDto issueDto = new JiraIssueDto(
-                "40001",
-                savedKey,
-                "Issue synced before backlog failure",
-                null,
-                null,
-                null,
-                Instant.now().toString());
+        JiraIssueFieldsDto fields = new JiraIssueFieldsDto("Issue synced before backlog failure", null, null, null, Instant.now().toString());
+        JiraIssueDto issueDto = new JiraIssueDto("40001", savedKey, fields);
 
-        // Giả lập: Lấy Issue thành công, nhưng lấy Backlog bị lỗi
         when(jiraClient.getIssues(eq(projectId), anyString(), anyInt(), anyInt()))
                 .thenReturn(new JiraPageDto<>(0, 50, 1, true, List.of(issueDto)));
         doThrow(new RuntimeException("Jira Backlog API Timeout"))
@@ -294,11 +270,9 @@ class JiraGitHubReportIntegrationTest {
         when(jiraClient.getSprints(eq(projectId), anyString(), anyInt(), anyInt()))
                 .thenReturn(new JiraSprintPageDto(0, 50, 0, true, List.of()));
 
-        // Chạy đồng bộ Jira trong điều kiện lỗi 1 phần
         JiraSyncResult result = jiraSyncService.syncProject(projectId);
         assertThat(result.errors()).isGreaterThan(0);
 
-        // Dữ liệu Issue đã lưu trước đó vẫn còn nguyên vẹn, không bị xóa mất
         JiraIssueSnapshot savedIssue = jiraIssueSnapshotRepository
                 .findByProjectIdAndJiraIssueKey(projectId, savedKey)
                 .orElse(null);
