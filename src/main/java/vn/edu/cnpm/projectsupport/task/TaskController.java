@@ -8,6 +8,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import vn.edu.cnpm.projectsupport.common.api.ApiResponse;
 import vn.edu.cnpm.projectsupport.common.api.PageResponse;
+import vn.edu.cnpm.projectsupport.task.domain.TaskStatus;
 import vn.edu.cnpm.projectsupport.task.dto.*;
 import vn.edu.cnpm.projectsupport.task.service.TaskService;
 
@@ -23,64 +24,64 @@ public class TaskController {
     }
 
     @GetMapping
-    @PreAuthorize("@projectAuthorization.canViewTasks(#projectId)")
+    @PreAuthorize("hasAnyRole('TEAM_LEADER', 'LECTURER', 'TEAM_MEMBER')")
     public ApiResponse<PageResponse<TaskResponse>> getTasks(
-            @PathVariable Long projectId,
+            @PathVariable("projectId") Long projectId,
             @ModelAttribute TaskFilterRequest filter) {
         return ApiResponse.success(taskService.getTasks(projectId, filter));
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("@projectAuthorization.canManageTasks(#projectId)")
+    @PreAuthorize("hasRole('TEAM_LEADER')")
     public ApiResponse<TaskResponse> createTask(
-            @PathVariable Long projectId,
+            @PathVariable("projectId") Long projectId,
             @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody CreateTaskRequest request) {
         return ApiResponse.success(taskService.createTask(projectId, request, idempotencyKey));
     }
 
     @GetMapping("/{taskId}")
-    @PreAuthorize("@projectAuthorization.canViewTask(#projectId, #taskId)")
+    @PreAuthorize("hasAnyRole('TEAM_LEADER', 'LECTURER', 'TEAM_MEMBER')")
     public ApiResponse<TaskResponse> getTaskById(
-            @PathVariable Long projectId,
-            @PathVariable Long taskId) {
+            @PathVariable("projectId") Long projectId,
+            @PathVariable("taskId") Long taskId) {
         return ApiResponse.success(taskService.getTaskById(projectId, taskId));
     }
 
     @PutMapping("/{taskId}")
-    @PreAuthorize("@projectAuthorization.canManageTasks(#projectId)")
+    @PreAuthorize("hasRole('TEAM_LEADER')")
     public ApiResponse<TaskResponse> updateTask(
-            @PathVariable Long projectId,
-            @PathVariable Long taskId,
+            @PathVariable("projectId") Long projectId,
+            @PathVariable("taskId") Long taskId,
             @Valid @RequestBody UpdateTaskRequest request) {
         return ApiResponse.success(taskService.updateTask(projectId, taskId, request));
     }
 
     @PatchMapping("/{taskId}/status")
-    @PreAuthorize("@projectAuthorization.canUpdateTask(#projectId, #taskId)")
+    @PreAuthorize("hasAnyRole('TEAM_LEADER', 'TEAM_MEMBER')")
     public ApiResponse<TaskResponse> updateTaskStatus(
-            @PathVariable Long projectId,
-            @PathVariable Long taskId,
+            @PathVariable("projectId") Long projectId,
+            @PathVariable("taskId") Long taskId,
             @Valid @RequestBody TaskStatusUpdateRequest request) {
         return ApiResponse.success(taskService.updateTaskStatus(projectId, taskId, request));
     }
 
     @PatchMapping("/{taskId}/assignee")
-    @PreAuthorize("@projectAuthorization.canManageTasks(#projectId)")
+    @PreAuthorize("hasRole('TEAM_LEADER')")
     public ApiResponse<TaskResponse> updateTaskAssignee(
-            @PathVariable Long projectId,
-            @PathVariable Long taskId,
+            @PathVariable("projectId") Long projectId,
+            @PathVariable("taskId") Long taskId,
             @Valid @RequestBody TaskAssigneeUpdateRequest request) {
         return ApiResponse.success(taskService.updateTaskAssignee(projectId, taskId, request));
     }
 
     @DeleteMapping("/{taskId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("@projectAuthorization.canManageTasks(#projectId)")
+    @PreAuthorize("hasRole('TEAM_LEADER')")
     public ResponseEntity<Void> deleteTask(
-            @PathVariable Long projectId,
-            @PathVariable Long taskId) {
+            @PathVariable("projectId") Long projectId,
+            @PathVariable("taskId") Long taskId) {
         taskService.deleteTask(projectId, taskId);
         return ResponseEntity.noContent().build();
     }
