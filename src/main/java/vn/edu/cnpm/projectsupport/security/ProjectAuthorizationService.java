@@ -63,10 +63,7 @@ public class ProjectAuthorizationService {
 
     public boolean canViewReports(Long projectId) {
         return currentUserService.findCurrentUser()
-                .map(user -> role(user) == RoleCode.ADMIN
-                        || isLeader(user, projectId)
-                        || isLecturer(user, projectId)
-                        || isMember(user, projectId))
+                .map(user -> isLeader(user, projectId) || isLecturer(user, projectId))
                 .orElse(false);
     }
 
