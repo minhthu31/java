@@ -5,8 +5,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.time.Instant;
-import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,14 +26,15 @@ class JiraGitHubReportIntegrationTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
 
-    private Map<String, Object> createValidTaskPayload() {
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("title", "Task for Jira Sync Test");
-        payload.put("description", "Verify local task integrates with Jira and GitHub");
-        payload.put("priority", "HIGH");
-        payload.put("status", "TO_DO");
-        payload.put("dueDate", Instant.now().plusSeconds(86400).toString());
-        return payload;
+    private String validCreateBody() {
+        return """
+                {
+                  "title":"Xây dựng Task API contract và Controller",
+                  "acceptanceCriteria":"Đủ CRUD, status và assignee",
+                  "issueType":"TASK",
+                  "priority":"HIGH"
+                }
+                """;
     }
 
     @Test
@@ -45,12 +44,11 @@ class JiraGitHubReportIntegrationTest {
         long projectId = login.path("projectId").asLong();
         String token = login.path("accessToken").asText();
 
-        // Gọi tạo Task qua REST API với đầy đủ validation fields
         String res = mockMvc.perform(post("/api/v1/projects/{projectId}/tasks", projectId)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                         .header("Idempotency-Key", "IDEMP-KEY-110-1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(createValidTaskPayload())))
+                        .content(validCreateBody()))
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
@@ -60,7 +58,6 @@ class JiraGitHubReportIntegrationTest {
         long taskId = createdTask.path("id").asLong();
         assertThat(taskId).isPositive();
 
-        // Kiểm tra task truy xuất được qua API sau khi tạo
         mockMvc.perform(get("/api/v1/projects/{projectId}/tasks/{taskId}", projectId, taskId)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isOk());
@@ -107,28 +104,23 @@ class JiraGitHubReportIntegrationTest {
         long projectId = login.path("projectId").asLong();
         String token = login.path("accessToken").asText();
 
-        Map<String, Object> payload = createValidTaskPayload();
-        payload.put("title", "Idempotent Task Sync");
-
         String idempotentKey = "REPEATABLE-SYNC-KEY-999";
 
-        // Lần gọi 1
         String firstRes = mockMvc.perform(post("/api/v1/projects/{projectId}/tasks", projectId)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                         .header("Idempotency-Key", idempotentKey)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(payload)))
+                        .content(validCreateBody()))
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
 
-        // Lần gọi 2 với cùng key idempotent
         String secondRes = mockMvc.perform(post("/api/v1/projects/{projectId}/tasks", projectId)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                         .header("Idempotency-Key", idempotentKey)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(payload)))
+                        .content(validCreateBody()))
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
@@ -147,14 +139,12 @@ class JiraGitHubReportIntegrationTest {
         long projectId = login.path("projectId").asLong();
         String token = login.path("accessToken").asText();
 
-        // Gửi filter sai định dạng
         mockMvc.perform(get("/api/v1/projects/{projectId}/reports/summary", projectId)
                         .param("from", "2026-09-09T00:00:00Z")
                         .param("to", "2026-09-08T00:00:00Z")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isBadRequest());
 
-        // Hệ thống vẫn hoạt động bình thường
         mockMvc.perform(get("/api/v1/projects/{projectId}/tasks", projectId)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isOk());
