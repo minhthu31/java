@@ -18,8 +18,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import vn.edu.cnpm.projectsupport.task.dto.CreateTaskRequest;
-import vn.edu.cnpm.projectsupport.task.dto.TaskResponse;
-import vn.edu.cnpm.projectsupport.task.service.TaskService;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -28,7 +26,6 @@ class JiraGitHubReportIntegrationTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
-    @Autowired private TaskService taskService;
 
     @Test
     @DisplayName("AC1: Test luồng tạo Task và đồng bộ lên Jira")
@@ -41,12 +38,23 @@ class JiraGitHubReportIntegrationTest {
         req.setTitle("Task for Jira Sync Test");
         req.setDescription("Verify local task integrates with Jira");
 
-        TaskResponse task = taskService.createTask(projectId, req, "IDEMP-KEY-110-1");
-        assertThat(task).isNotNull();
-        assertThat(task.getId()).isNotNull();
+        // Gọi tạo Task qua REST API với Bearer token của Leader
+        String res = mockMvc.perform(post("/api/v1/projects/{projectId}/tasks", projectId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .header("Idempotency-Key", "IDEMP-KEY-110-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        JsonNode createdTask = objectMapper.readTree(res).path("data");
+        long taskId = createdTask.path("id").asLong();
+        assertThat(taskId).isPositive();
 
         // Kiểm tra task truy xuất được qua API sau khi tạo
-        mockMvc.perform(get("/api/v1/projects/{projectId}/tasks/{taskId}", projectId, task.getId())
+        mockMvc.perform(get("/api/v1/projects/{projectId}/tasks/{taskId}", projectId, taskId)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isOk());
     }
@@ -76,7 +84,7 @@ class JiraGitHubReportIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + leaderToken))
                 .andExpect(status().isOk());
 
-        // 2. Leader xem báo cáo tiến độ (vừa bảo vệ ở CNPM-109)
+        // 2. Leader xem báo cáo tiến độ
         mockMvc.perform(get("/api/v1/projects/{projectId}/reports/progress", projectId)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + leaderToken))
                 .andExpect(status().isOk());
@@ -94,16 +102,40 @@ class JiraGitHubReportIntegrationTest {
     void testSyncIdempotencyDoesNotDuplicateData() throws Exception {
         JsonNode login = login("leader.test", "password");
         long projectId = login.path("projectId").asLong();
+        String token = login.path("accessToken").asText();
 
         CreateTaskRequest req = new CreateTaskRequest();
         req.setTitle("Idempotent Task Sync");
 
         String idempotentKey = "REPEATABLE-SYNC-KEY-999";
-        TaskResponse firstCall = taskService.createTask(projectId, req, idempotentKey);
-        TaskResponse secondCall = taskService.createTask(projectId, req, idempotentKey);
+
+        // Lần gọi 1
+        String firstRes = mockMvc.perform(post("/api/v1/projects/{projectId}/tasks", projectId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .header("Idempotency-Key", idempotentKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        // Lần gọi 2 với cùng key idempotent
+        String secondRes = mockMvc.perform(post("/api/v1/projects/{projectId}/tasks", projectId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .header("Idempotency-Key", idempotentKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        long firstId = objectMapper.readTree(firstRes).path("data").path("id").asLong();
+        long secondId = objectMapper.readTree(secondRes).path("data").path("id").asLong();
 
         // Đảm bảo không nhân đôi bản ghi khi gửi lặp lại
-        assertThat(firstCall.getId()).isEqualTo(secondCall.getId());
+        assertThat(firstId).isEqualTo(secondId);
     }
 
     @Test
@@ -113,14 +145,14 @@ class JiraGitHubReportIntegrationTest {
         long projectId = login.path("projectId").asLong();
         String token = login.path("accessToken").asText();
 
-        // Gửi một request filter không hợp lệ
+        // Gửi một request filter không hợp lệ (từ > đến)
         mockMvc.perform(get("/api/v1/projects/{projectId}/reports/summary", projectId)
                         .param("from", "2026-09-09T00:00:00Z")
                         .param("to", "2026-09-08T00:00:00Z")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isBadRequest());
 
-        // Dữ liệu và hệ thống vẫn ổn định cho các request hợp lệ tiếp theo
+        // Hệ thống vẫn hoạt động ổn định bình thường cho các request hợp lệ tiếp theo
         mockMvc.perform(get("/api/v1/projects/{projectId}/tasks", projectId)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isOk());
