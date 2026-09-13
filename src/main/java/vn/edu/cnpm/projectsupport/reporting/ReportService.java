@@ -7,12 +7,11 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
 import vn.edu.cnpm.projectsupport.identity.domain.RoleCode;
 import vn.edu.cnpm.projectsupport.identity.domain.User;
 import vn.edu.cnpm.projectsupport.integration.github.domain.GitHubPullRequestState;
@@ -60,23 +59,18 @@ public class ReportService {
         if (projectId == null || projectId < 1) {
             throw new IllegalArgumentException("projectId must be positive");
         }
-
         if (!projectRepository.existsById(projectId)) {
-            throw new vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException(
-                    "Project not found: " + projectId);
+            throw new ResourceNotFoundException("Project not found: " + projectId);
         }
 
-        ReportFilterRequest safeFilter =
-                filter == null
-                        ? new ReportFilterRequest(null, null, null, null)
-                        : filter;
-
+        ReportFilterRequest safeFilter = (filter == null)
+                ? new ReportFilterRequest(null, null, null, null)
+                : filter;
         validateTimeRange(safeFilter);
 
         if (safeFilter.sprintId() != null
                 && sprintRepository.findByIdAndProjectId(safeFilter.sprintId(), projectId).isEmpty()) {
-            throw new vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException(
-                    "Sprint not found: " + safeFilter.sprintId());
+            throw new ResourceNotFoundException("Sprint not found: " + safeFilter.sprintId());
         }
 
         User currentUser = currentUserService.findCurrentUser()
@@ -84,13 +78,11 @@ public class ReportService {
 
         Long effectiveMemberId = resolveMemberId(projectId, safeFilter.memberId(), currentUser);
         if (effectiveMemberId != null && !isActiveProjectMember(projectId, effectiveMemberId)) {
-            throw new vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException(
-                    "Member not found: " + effectiveMemberId);
+            throw new ResourceNotFoundException("Member not found: " + effectiveMemberId);
         }
 
         Instant asOf = Instant.now();
-        TaskMetricsResponse taskMetrics =
-                calculateTaskMetrics(projectId, safeFilter, effectiveMemberId, asOf);
+        TaskMetricsResponse taskMetrics = calculateTaskMetrics(projectId, safeFilter, effectiveMemberId, asOf);
 
         List<MemberContributionResponse> contributions = projectRepository.findActiveMembers(projectId)
                 .stream()
@@ -111,9 +103,15 @@ public class ReportService {
         addSourceWarning(warnings, ReportSource.GITHUB, github.status());
         addSourceWarning(warnings, ReportSource.JIRA, jira.status());
 
-        if (effectiveMemberId != null
-                && contributions.stream().noneMatch(MemberContributionResponse::githubLinked)) {
-            warnings.add("GITHUB_ACCOUNT_NOT_LINKED");
+        // Cảnh báo chính xác theo từng member hoặc toàn project
+        if (effectiveMemberId != null) {
+            if (contributions.stream().noneMatch(MemberContributionResponse::githubLinked)) {
+                warnings.add("GITHUB_ACCOUNT_NOT_LINKED");
+            }
+        } else {
+            if (contributions.stream().anyMatch(m -> !m.githubLinked())) {
+                warnings.add("GITHUB_ACCOUNT_NOT_LINKED");
+            }
         }
 
         ReportDataStatus dataStatus = calculateDataStatus(jira.status(), github.status());
@@ -147,17 +145,14 @@ public class ReportService {
     private ReportDataStatus calculateDataStatus(
             ReportSourceStatus jiraStatus,
             ReportSourceStatus githubStatus) {
-
         if (jiraStatus == ReportSourceStatus.NOT_SYNCED
                 && githubStatus == ReportSourceStatus.NOT_SYNCED) {
             return ReportDataStatus.NOT_SYNCED;
         }
-
         if (jiraStatus != ReportSourceStatus.CURRENT
                 || githubStatus != ReportSourceStatus.CURRENT) {
             return ReportDataStatus.PARTIAL;
         }
-
         return ReportDataStatus.COMPLETE;
     }
 
@@ -165,9 +160,7 @@ public class ReportService {
             List<String> warnings,
             ReportSource source,
             ReportSourceStatus status) {
-
         String prefix = source.name();
-
         if (status == ReportSourceStatus.SYNC_FAILED) {
             warnings.add(prefix + "_SYNC_FAILED");
         } else if (status == ReportSourceStatus.NOT_SYNCED) {
@@ -182,10 +175,8 @@ public class ReportService {
             IntegrationProvider provider,
             Instant to,
             Instant asOf) {
-
         Optional<ReportingRepository.LatestSyncProjection> latest =
                 reportingRepository.findLatestSync(projectId, provider.name());
-
         Instant lastSuccessful =
                 reportingRepository.findLastSuccessfulSync(projectId, provider.name());
 
@@ -193,16 +184,13 @@ public class ReportService {
                 && "FAILED".equalsIgnoreCase(latest.get().getStatus())) {
             return new SyncSource(ReportSourceStatus.SYNC_FAILED, lastSuccessful);
         }
-
         if (lastSuccessful == null) {
             return new SyncSource(ReportSourceStatus.NOT_SYNCED, null);
         }
 
-        ReportSourceStatus status =
-                isCurrent(lastSuccessful, to, asOf)
-                        ? ReportSourceStatus.CURRENT
-                        : ReportSourceStatus.STALE;
-
+        ReportSourceStatus status = isCurrent(lastSuccessful, to, asOf)
+                ? ReportSourceStatus.CURRENT
+                : ReportSourceStatus.STALE;
         return new SyncSource(status, lastSuccessful);
     }
 
@@ -218,11 +206,9 @@ public class ReportService {
         if (currentUser.getRole().getCode() != RoleCode.TEAM_MEMBER) {
             return requestedMemberId;
         }
-
         if (!isActiveProjectMember(projectId, currentUser.getId())) {
             throw new AccessDeniedException("Bạn không phải thành viên của Project");
         }
-
         if (requestedMemberId != null && !requestedMemberId.equals(currentUser.getId())) {
             throw new AccessDeniedException("TEAM_MEMBER chỉ được xem thống kê của chính mình");
         }
@@ -230,9 +216,13 @@ public class ReportService {
     }
 
     private boolean isActiveProjectMember(Long projectId, Long userId) {
-        return projectRepository.findActiveMembers(projectId)
+        boolean activeMember = projectRepository.findActiveMembers(projectId)
                 .stream()
                 .anyMatch(member -> userId.equals(member.getId()));
+        boolean activeLeader = projectRepository.findActiveLeader(projectId)
+                .map(leader -> userId.equals(leader.getId()))
+                .orElse(false);
+        return activeMember || activeLeader;
     }
 
     private TaskMetricsResponse calculateTaskMetrics(
@@ -240,15 +230,12 @@ public class ReportService {
             ReportFilterRequest filter,
             Long memberId,
             Instant asOf) {
-
         Map<TaskStatus, Long> counts = new EnumMap<>(TaskStatus.class);
         for (TaskStatus status : TaskStatus.values()) {
             counts.put(status, 0L);
         }
-
         long total = 0;
         long completed = 0;
-
         for (ReportingRepository.StatusCountProjection row :
                 reportingRepository.countTasksByStatus(
                         projectId,
@@ -257,16 +244,13 @@ public class ReportService {
                         filter.from(),
                         filter.to(),
                         asOf)) {
-
             TaskStatus status = TaskStatus.valueOf(row.getStatus());
             counts.put(status, row.getCount());
             total += row.getCount();
-
             if (status == TaskStatus.DONE) {
                 completed = row.getCount();
             }
         }
-
         long overdue = countOverdue(projectId, filter, memberId, asOf);
         return new TaskMetricsResponse(total, completed, overdue, counts);
     }
@@ -276,7 +260,6 @@ public class ReportService {
             ReportFilterRequest filter,
             Long memberId,
             Instant asOf) {
-
         return reportingRepository.countOverdueTasks(
                 projectId,
                 filter.sprintId(),
@@ -293,7 +276,6 @@ public class ReportService {
             String username,
             String fullName,
             Instant asOf) {
-
         boolean linked = reportingRepository.isGithubLinked(memberId);
         long commits = reportingRepository.countCommits(
                 projectId, filter.sprintId(), memberId, filter.from(), filter.to(), asOf);
@@ -310,7 +292,6 @@ public class ReportService {
                 GitHubPullRequestState.MERGED.name(), filter.from(), filter.to(), asOf);
         long linkedTasks = reportingRepository.countLinkedTasks(
                 projectId, filter.sprintId(), memberId, filter.from(), filter.to(), asOf);
-
         return new MemberContributionResponse(
                 memberId, username, fullName, linked,
                 commits, pullRequests, open, closed, merged, linkedTasks);
@@ -320,12 +301,9 @@ public class ReportService {
         if (to != null) {
             return !lastSyncedAt.isBefore(to) && !lastSyncedAt.isAfter(asOf);
         }
-
-        Duration threshold =
-                freshnessThreshold == null
-                        ? DEFAULT_FRESHNESS_THRESHOLD
-                        : freshnessThreshold;
-
+        Duration threshold = freshnessThreshold == null
+                ? DEFAULT_FRESHNESS_THRESHOLD
+                : freshnessThreshold;
         return !lastSyncedAt.isBefore(asOf.minus(threshold))
                 && !lastSyncedAt.isAfter(asOf);
     }
