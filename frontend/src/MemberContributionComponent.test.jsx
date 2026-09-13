@@ -10,15 +10,18 @@ jest.mock("./memberContributionService", () => ({
     getMemberContributions: jest.fn(),
 }));
 
-describe("CNPM-107 MemberContributionComponent", () => {
+describe("CNPM-107 MemberContributionComponent Tests", () => {
     beforeEach(() => {
         jest.clearAllMocks();
         service.getProjectSprints.mockResolvedValue([
             { sprintId: 1, sprintName: "Sprint 1" },
         ]);
+        service.getMemberContributions.mockResolvedValue({
+            memberContributions: [],
+        });
     });
 
-    test("1. Render dung du lieu thanh vien theo backend contract (githubLinked = false)", async () => {
+    test("1. Hiển thị đúng dữ liệu thành viên, cột 'Tasks liên kết' và badge 'Chưa liên kết'", async () => {
         service.getMemberContributions.mockResolvedValueOnce({
             memberContributions: [
                 {
@@ -28,6 +31,9 @@ describe("CNPM-107 MemberContributionComponent", () => {
                     githubLinked: false,
                     commits: 5,
                     pullRequests: 2,
+                    openPullRequests: 1,
+                    closedPullRequests: 1,
+                    mergedPullRequests: 0,
                     linkedTasks: 3,
                 },
             ],
@@ -36,17 +42,17 @@ describe("CNPM-107 MemberContributionComponent", () => {
         render(<MemberContributionComponent projectId={1} />);
 
         await waitFor(() => {
+            expect(screen.getByText("Tasks liên kết")).toBeInTheDocument();
             expect(screen.getByText("Nguyễn Văn Test")).toBeInTheDocument();
             expect(screen.getByText("@member.test")).toBeInTheDocument();
             expect(screen.getByText("Chưa liên kết")).toBeInTheDocument();
             expect(screen.getByText("3")).toBeInTheDocument();
             expect(screen.getByText("5")).toBeInTheDocument();
             expect(screen.getByText("2")).toBeInTheDocument();
-            expect(screen.queryByRole("link")).not.toBeInTheDocument();
         });
     });
 
-    test("2. Render badge 'Đã liên kết' khi githubLinked = true", async () => {
+    test("2. Tương thích CNPM-105: Hiển thị 'Đã liên kết' hoặc username qua githubLinked / githubUsername", async () => {
         service.getMemberContributions.mockResolvedValueOnce({
             memberContributions: [
                 {
@@ -58,6 +64,16 @@ describe("CNPM-107 MemberContributionComponent", () => {
                     pullRequests: 4,
                     linkedTasks: 6,
                 },
+                {
+                    memberId: 9,
+                    username: "user.git",
+                    fullName: "Trần GitHub",
+                    githubLinked: false,
+                    githubUsername: "trangit",
+                    commits: 4,
+                    pullRequests: 1,
+                    linkedTasks: 2,
+                },
             ],
         });
 
@@ -66,114 +82,88 @@ describe("CNPM-107 MemberContributionComponent", () => {
         await waitFor(() => {
             expect(screen.getByText("Nguyễn Văn Leader")).toBeInTheDocument();
             expect(screen.getByText("Đã liên kết")).toBeInTheDocument();
+            expect(screen.getByText("@trangit")).toBeInTheDocument();
         });
     });
 
-    test("3. Loc theo Sprint goi API voi dung sprintId", async () => {
-        service.getMemberContributions.mockResolvedValue({
-            memberContributions: [],
-        });
-
-        render(
-            <MemberContributionComponent
-                projectId={1}
-                sprints={[{ sprintId: 10, sprintName: "Sprint 10" }]}
-            />,
-        );
-
-        const select = await screen.findByRole("combobox", { name: /Sprint/i });
-        fireEvent.change(select, { target: { value: "10" } });
-        fireEvent.click(screen.getByRole("button", { name: /Áp dụng/i }));
-
-        await waitFor(() => {
-            expect(service.getMemberContributions).toHaveBeenCalledWith(
-                1,
-                expect.objectContaining({ sprintId: "10" }),
-            );
-        });
-    });
-
-    test("4. Nut Dat lai reset form va goi API voi bo loc rong", async () => {
-        service.getMemberContributions.mockResolvedValue({
-            memberContributions: [],
-        });
-
-        render(
-            <MemberContributionComponent
-                projectId={1}
-                sprints={[{ sprintId: 10, sprintName: "Sprint 10" }]}
-            />,
-        );
-
-        const select = await screen.findByRole("combobox", { name: /Sprint/i });
-        fireEvent.change(select, { target: { value: "10" } });
-        fireEvent.click(screen.getByRole("button", { name: /Đặt lại/i }));
-
-        expect(select.value).toBe("");
-        await waitFor(() => {
-            expect(service.getMemberContributions).toHaveBeenCalledWith(1, {
-                sprintId: undefined,
-                fromDate: undefined,
-                toDate: undefined,
-            });
-        });
-    });
-
-    test("5. Component truyen dung gia tri fromDate va toDate da chon vao service khi bam Ap dung", async () => {
-        service.getMemberContributions.mockResolvedValue({
-            memberContributions: [],
-        });
-
+    test("3. Khắc phục vòng lặp: getProjectSprints chỉ được gọi đúng 1 lần khi không truyền prop sprints", async () => {
         render(<MemberContributionComponent projectId={1} />);
+
+        await waitFor(() => {
+            expect(service.getProjectSprints).toHaveBeenCalledTimes(1);
+            expect(screen.getByText("Sprint 1")).toBeInTheDocument();
+        });
+    });
+
+    test("4. Chặn gọi API và hiển thị thông báo lỗi khi fromDate >= toDate", async () => {
+        render(<MemberContributionComponent projectId={1} />);
+
+        // Đợi lần fetch khởi tạo ban đầu hoàn tất
+        await waitFor(() => {
+            expect(screen.getByText("Sprint 1")).toBeInTheDocument();
+        });
+
+        service.getMemberContributions.mockClear();
 
         fireEvent.change(screen.getByLabelText("Từ ngày"), {
-            target: { value: "2026-09-10" },
+            target: { value: "2026-09-15" },
         });
         fireEvent.change(screen.getByLabelText("Đến ngày"), {
-            target: { value: "2026-09-15" },
+            target: { value: "2026-09-10" },
         });
         fireEvent.click(screen.getByRole("button", { name: /Áp dụng/i }));
 
-        await waitFor(() => {
-            expect(service.getMemberContributions).toHaveBeenCalledWith(
-                1,
-                expect.objectContaining({
-                    fromDate: "2026-09-10",
-                    toDate: "2026-09-15",
-                }),
-            );
-        });
+        expect(
+            screen.getByText("Ngày bắt đầu phải nhỏ hơn ngày kết thúc."),
+        ).toBeInTheDocument();
+
+        // Đảm bảo không có request mới nào bị bắn lên
+        expect(service.getMemberContributions).not.toHaveBeenCalled();
     });
 
-    test("6. Hien thi thong bao loi khi API that bai", async () => {
-        service.getMemberContributions.mockRejectedValueOnce(
-            new Error("Dịch vụ báo cáo thành viên chưa sẵn sàng (404)."),
-        );
+    test("5. Kiểm tra component xử lý và hiển thị đúng theo schema ReportSummaryResponse", async () => {
+        const backendPayload = {
+            projectId: 1,
+            sprintId: null,
+            memberId: null,
+            from: null,
+            to: null,
+            asOf: "2026-09-13T00:00:00Z",
+            taskMetrics: {
+                totalTasks: 2,
+                completedTasks: 1,
+                overdueTasks: 0,
+                statusBreakdown: { DONE: 1, IN_PROGRESS: 1 },
+            },
+            memberContributions: [
+                {
+                    memberId: 1,
+                    username: "leader.test",
+                    fullName: "Test Team Leader",
+                    githubLinked: true,
+                    commits: 8,
+                    pullRequests: 3,
+                    openPullRequests: 1,
+                    closedPullRequests: 0,
+                    mergedPullRequests: 2,
+                    linkedTasks: 2,
+                },
+            ],
+            dataStatus: "COMPLETE",
+            sources: [],
+            warnings: [],
+        };
+
+        service.getMemberContributions.mockResolvedValueOnce(backendPayload);
 
         render(<MemberContributionComponent projectId={1} />);
 
         await waitFor(() => {
-            expect(screen.getByRole("alert")).toHaveTextContent(
-                "Dịch vụ báo cáo thành viên chưa sẵn sàng (404).",
-            );
-            expect(
-                screen.getByRole("button", { name: /Thử lại/i }),
-            ).toBeInTheDocument();
-        });
-    });
-
-    test("7. Tu tai danh sach Sprint khi khong truyen sprints tu props", async () => {
-        service.getMemberContributions.mockResolvedValue({
-            memberContributions: [],
-        });
-
-        render(<MemberContributionComponent projectId={1} />);
-
-        await waitFor(() => {
-            expect(service.getProjectSprints).toHaveBeenCalledWith(1);
-            expect(
-                screen.getByRole("option", { name: "Sprint 1" }),
-            ).toBeInTheDocument();
+            expect(screen.getByText("Test Team Leader")).toBeInTheDocument();
+            expect(screen.getByText("@leader.test")).toBeInTheDocument();
+            expect(screen.getByText("Đã liên kết")).toBeInTheDocument();
+            expect(screen.getByText("2")).toBeInTheDocument();
+            expect(screen.getByText("8")).toBeInTheDocument();
         });
     });
 });

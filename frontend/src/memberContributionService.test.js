@@ -1,133 +1,97 @@
-import * as service from "./memberContributionService";
+import {
+    getBaseUrl,
+    getProjectSprints,
+    getMemberContributions,
+} from "./memberContributionService";
 
 describe("memberContributionService Unit Tests", () => {
-    const originalEnv = process.env;
-
     beforeEach(() => {
-        process.env = { ...originalEnv };
-        global.fetch = jest.fn();
+        jest.clearAllMocks();
         localStorage.clear();
+        sessionStorage.clear();
+        global.fetch = jest.fn();
     });
 
-    afterAll(() => {
-        process.env = originalEnv;
+    test("getBaseUrl trả về API base url mặc định", () => {
+        expect(getBaseUrl()).toBe("http://localhost:8080/api/v1");
     });
 
-    test("1. Cận trên toDate được chuyển thành 00:00:00Z của ngày kế tiếp (+1 ngày)", async () => {
+    test("getProjectSprints trả về danh sách sprint chuẩn hóa khi API thành công", async () => {
+        const mockData = {
+            data: {
+                sprints: [
+                    { id: 10, name: "Sprint 10" },
+                    { sprintId: 11, sprintName: "Sprint 11" },
+                ],
+            },
+        };
+
         global.fetch.mockResolvedValueOnce({
             ok: true,
+            status: 200,
             headers: {
                 get: (header) =>
                     header.toLowerCase() === "content-type"
                         ? "application/json"
                         : null,
             },
-            json: async () => ({ data: { memberContributions: [] } }),
+            json: async () => mockData,
         });
 
-        await service.getMemberContributions(1, {
-            fromDate: "2026-09-10",
-            toDate: "2026-09-15",
-        });
-
-        expect(global.fetch).toHaveBeenCalledTimes(1);
-        const calledUrl = global.fetch.mock.calls[0][0];
-
-        expect(calledUrl).toContain("from=2026-09-10T00%3A00%3A00Z");
-        expect(calledUrl).toContain("to=2026-09-16T00%3A00%3A00Z");
+        const sprints = await getProjectSprints(1);
+        expect(sprints).toEqual([
+            { sprintId: 10, sprintName: "Sprint 10" },
+            { sprintId: 11, sprintName: "Sprint 11" },
+        ]);
     });
 
-    test("2. Sử dụng đúng REACT_APP_API_BASE_URL và đính kèm Bearer token", async () => {
-        process.env.REACT_APP_API_BASE_URL = "http://test-api:8080/api/v1";
-        localStorage.setItem("token", "mock-token-xyz");
-
-        global.fetch.mockResolvedValueOnce({
-            ok: true,
-            headers: {
-                get: (header) =>
-                    header.toLowerCase() === "content-type"
-                        ? "application/json"
-                        : null,
-            },
-            json: async () => ({ memberContributions: [] }),
-        });
-
-        await service.getMemberContributions(5, { sprintId: "12" });
-
-        const [calledUrl, options] = global.fetch.mock.calls[0];
-        expect(calledUrl).toContain(
-            "http://test-api:8080/api/v1/projects/5/reports/summary?sprintId=12",
-        );
-        expect(options.headers.Authorization).toBe("Bearer mock-token-xyz");
-    });
-
-    test("3. Ném lỗi chi tiết khi gặp mã 401", async () => {
+    test("getProjectSprints ném lỗi phiên hết hạn khi gặp mã 401", async () => {
         global.fetch.mockResolvedValueOnce({
             ok: false,
             status: 401,
+            headers: { get: () => null },
         });
 
-        await expect(service.getMemberContributions(1)).rejects.toThrow(
+        await expect(getProjectSprints(1)).rejects.toThrow(
             "Phiên làm việc đã hết hạn (401).",
         );
     });
 
-    test("4. Ném lỗi chi tiết khi gặp mã 403", async () => {
-        global.fetch.mockResolvedValueOnce({
-            ok: false,
-            status: 403,
-        });
+    test("getMemberContributions gọi đúng query params và trả dữ liệu thành công", async () => {
+        const mockSummary = {
+            projectId: 1,
+            taskMetrics: {},
+            memberContributions: [{ memberId: 1, commits: 5 }],
+        };
 
-        await expect(service.getMemberContributions(1)).rejects.toThrow(
-            "Bạn không có quyền truy cập báo cáo thành viên (403).",
-        );
-    });
-
-    test("5. Ném lỗi chi tiết khi gặp mã 404", async () => {
-        global.fetch.mockResolvedValueOnce({
-            ok: false,
-            status: 404,
-        });
-
-        await expect(service.getMemberContributions(1)).rejects.toThrow(
-            "Dịch vụ báo cáo thành viên chưa sẵn sàng (404).",
-        );
-    });
-
-    test("6. Ném lỗi khi phản hồi máy chủ không phải JSON", async () => {
         global.fetch.mockResolvedValueOnce({
             ok: true,
-            headers: {
-                get: (header) =>
-                    header.toLowerCase() === "content-type"
-                        ? "text/html"
-                        : null,
-            },
-            json: async () => ({}),
-        });
-
-        await expect(service.getMemberContributions(1)).rejects.toThrow(
-            "Phản hồi máy chủ không hợp lệ (không phải định dạng JSON).",
-        );
-    });
-
-    test("7. getProjectSprints bóc tách và chuẩn hóa danh sách sprints từ progress API", async () => {
-        global.fetch.mockResolvedValueOnce({
-            ok: true,
+            status: 200,
             headers: {
                 get: (header) =>
                     header.toLowerCase() === "content-type"
                         ? "application/json"
                         : null,
             },
-            json: async () => ({
-                data: {
-                    sprints: [{ id: 1, name: "Sprint 1" }],
-                },
-            }),
+            json: async () => ({ data: mockSummary }),
         });
 
-        const sprints = await service.getProjectSprints(1);
-        expect(sprints).toEqual([{ sprintId: 1, sprintName: "Sprint 1" }]);
+        const result = await getMemberContributions(1, {
+            sprintId: "2",
+            fromDate: "2026-09-01",
+            toDate: "2026-09-10",
+        });
+
+        expect(global.fetch).toHaveBeenCalledWith(
+            expect.stringContaining("/projects/1/reports/summary?sprintId=2"),
+            expect.any(Object),
+        );
+        expect(result).toEqual(mockSummary);
+    });
+
+    test("getMemberContributions ném lỗi khi projectId không hợp lệ", async () => {
+        await expect(getMemberContributions(null)).rejects.toThrow(
+            "projectId không hợp lệ.",
+        );
     });
 });

@@ -668,7 +668,14 @@ export default function Dashboard({ title }) {
                                     </p>
                                 </div>
                             ) : (
-                                <div style={{ padding: "24px" }}>
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        gap: "24px",
+                                        padding: "20px",
+                                    }}
+                                >
                                     <ProjectProgressComponent
                                         key={selectedProjectId}
                                         projectId={selectedProjectId}

@@ -15,33 +15,46 @@ const getAuthHeaders = () => {
 };
 
 export const getProjectSprints = async (projectId) => {
-    try {
-        const response = await fetch(
-            `${getBaseUrl()}/projects/${projectId}/reports/progress`,
-            { headers: getAuthHeaders() },
-        );
-        if (!response.ok) return [];
-        const contentType = response.headers.get("content-type");
-        if (!contentType || !contentType.includes("application/json"))
-            return [];
-        const json = await response.json();
-        const data = json.data || json;
-        const rawSprints = data.sprints || [];
+    if (!projectId) return [];
+    const url = `${getBaseUrl()}/projects/${projectId}/reports/progress`;
+    const response = await fetch(url, { headers: getAuthHeaders() });
 
-        return rawSprints.map((s) => ({
-            sprintId: s.sprintId ?? s.id,
-            sprintName:
-                s.sprintName ?? s.name ?? `Sprint #${s.sprintId ?? s.id}`,
-        }));
-    } catch {
-        return [];
+    if (!response.ok) {
+        if (response.status === 401) {
+            throw new Error("Phiên làm việc đã hết hạn (401).");
+        }
+        if (response.status === 403) {
+            throw new Error("Bạn không có quyền xem danh sách Sprint (403).");
+        }
+        if (response.status === 404) {
+            throw new Error("Không tìm thấy dữ liệu Sprint dự án (404).");
+        }
+        throw new Error(`Lỗi tải danh sách Sprint (${response.status}).`);
     }
+
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Phản hồi danh sách Sprint không phải định dạng JSON.");
+    }
+
+    const json = await response.json();
+    const data = json.data || json;
+    const rawSprints = data.sprints || [];
+
+    return rawSprints.map((s) => ({
+        sprintId: s.sprintId ?? s.id,
+        sprintName: s.sprintName ?? s.name ?? `Sprint #${s.sprintId ?? s.id}`,
+    }));
 };
 
 export const getMemberContributions = async (
     projectId,
     { sprintId, fromDate, toDate } = {},
 ) => {
+    if (!projectId) {
+        throw new Error("projectId không hợp lệ.");
+    }
+
     const params = new URLSearchParams();
     if (sprintId) params.append("sprintId", sprintId);
     if (fromDate) params.append("from", `${fromDate}T00:00:00Z`);
@@ -57,14 +70,17 @@ export const getMemberContributions = async (
     const response = await fetch(url, { headers: getAuthHeaders() });
 
     if (!response.ok) {
-        if (response.status === 401)
+        if (response.status === 401) {
             throw new Error("Phiên làm việc đã hết hạn (401).");
-        if (response.status === 403)
+        }
+        if (response.status === 403) {
             throw new Error(
                 "Bạn không có quyền truy cập báo cáo thành viên (403).",
             );
-        if (response.status === 404)
+        }
+        if (response.status === 404) {
             throw new Error("Dịch vụ báo cáo thành viên chưa sẵn sàng (404).");
+        }
         throw new Error(
             `Máy chủ báo lỗi khi tải dữ liệu (${response.status}).`,
         );

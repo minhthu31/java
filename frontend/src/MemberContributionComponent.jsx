@@ -1,85 +1,115 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
     getMemberContributions,
     getProjectSprints,
 } from "./memberContributionService";
 
-function MemberContributionComponent({
-    projectId,
-    sprints: initialSprints = [],
-}) {
-    const [sprintList, setSprintList] = useState(initialSprints);
+function MemberContributionComponent({ projectId, sprints }) {
+    const [sprintList, setSprintList] = useState([]);
     const [selectedSprintId, setSelectedSprintId] = useState("");
     const [fromDate, setFromDate] = useState("");
     const [toDate, setToDate] = useState("");
+    const [dateError, setDateError] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [reportData, setReportData] = useState(null);
 
-    useEffect(() => {
-        if (initialSprints && initialSprints.length > 0) {
-            setSprintList(initialSprints);
-        } else if (projectId) {
-            getProjectSprints(projectId).then((data) => {
-                if (data && data.length > 0) {
-                    setSprintList(data);
-                }
+    const lastFetchedSprintProjectIdRef = useRef(null);
+    const lastFetchedReportProjectIdRef = useRef(null);
+
+    // 1. Tải danh sách Sprint khi projectId thay đổi (hoặc khi không truyền prop sprints)
+    const loadSprints = (targetProjectId) => {
+        if (!targetProjectId) return;
+        lastFetchedSprintProjectIdRef.current = targetProjectId;
+        getProjectSprints(targetProjectId)
+            .then((data) => {
+                if (data) setSprintList(data);
+            })
+            .catch((err) => {
+                // Reset ref nếu tải lỗi để người dùng có thể retry
+                lastFetchedSprintProjectIdRef.current = null;
+                setError(err.message || "Không thể tải danh sách Sprint.");
             });
-        }
-    }, [projectId, initialSprints]);
-
-    const loadData = useCallback(
-        async (overrideFilters = null) => {
-            if (!projectId) return;
-            setLoading(true);
-            setError(null);
-
-            const sprintIdToUse =
-                overrideFilters && overrideFilters.sprintId !== undefined
-                    ? overrideFilters.sprintId
-                    : selectedSprintId;
-            const fromDateToUse =
-                overrideFilters && overrideFilters.fromDate !== undefined
-                    ? overrideFilters.fromDate
-                    : fromDate;
-            const toDateToUse =
-                overrideFilters && overrideFilters.toDate !== undefined
-                    ? overrideFilters.toDate
-                    : toDate;
-
-            try {
-                const data = await getMemberContributions(projectId, {
-                    sprintId: sprintIdToUse || undefined,
-                    fromDate: fromDateToUse || undefined,
-                    toDate: toDateToUse || undefined,
-                });
-                setReportData(data);
-            } catch (err) {
-                setError(
-                    err.message || "Lỗi khi tải dữ liệu đóng góp thành viên.",
-                );
-                setReportData(null);
-            } finally {
-                setLoading(false);
-            }
-        },
-        [projectId, selectedSprintId, fromDate, toDate],
-    );
-
-    useEffect(() => {
-        loadData();
-    }, [projectId]);
-
-    const handleApply = (e) => {
-        e.preventDefault();
-        loadData();
     };
 
+    useEffect(() => {
+        if (Array.isArray(sprints) && sprints.length > 0) {
+            setSprintList(sprints);
+            return;
+        }
+
+        if (!projectId || lastFetchedSprintProjectIdRef.current === projectId) {
+            return;
+        }
+
+        loadSprints(projectId);
+    }, [projectId, sprints]);
+
+    // 2. Hàm gọi API lấy báo cáo tổng hợp
+    const fetchData = async (filters = {}) => {
+        if (!projectId) return;
+        setLoading(true);
+        setError(null);
+
+        const sprintIdToUse =
+            filters.sprintId !== undefined
+                ? filters.sprintId
+                : selectedSprintId;
+        const fromDateToUse =
+            filters.fromDate !== undefined ? filters.fromDate : fromDate;
+        const toDateToUse =
+            filters.toDate !== undefined ? filters.toDate : toDate;
+
+        try {
+            const data = await getMemberContributions(projectId, {
+                sprintId: sprintIdToUse || undefined,
+                fromDate: fromDateToUse || undefined,
+                toDate: toDateToUse || undefined,
+            });
+            setReportData(data);
+        } catch (err) {
+            setError(err.message || "Máy chủ báo lỗi khi tải dữ liệu.");
+            setReportData(null);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // 3. Khởi tạo dữ liệu khi mở trang hoặc khi đổi sang projectId khác
+    useEffect(() => {
+        if (!projectId || lastFetchedReportProjectIdRef.current === projectId) {
+            return;
+        }
+        lastFetchedReportProjectIdRef.current = projectId;
+        fetchData();
+    }, [projectId]);
+
+    // 4. Xử lý nút Áp dụng (Client-side validation chặn fromDate >= toDate)
+    const handleApply = (e) => {
+        e.preventDefault();
+        if (fromDate && toDate && fromDate >= toDate) {
+            setDateError("Ngày bắt đầu phải nhỏ hơn ngày kết thúc.");
+            return;
+        }
+        setDateError("");
+        fetchData({ sprintId: selectedSprintId, fromDate, toDate });
+    };
+
+    // 5. Xử lý nút Đặt lại
     const handleReset = () => {
         setSelectedSprintId("");
         setFromDate("");
         setToDate("");
-        loadData({ sprintId: "", fromDate: "", toDate: "" });
+        setDateError("");
+        fetchData({ sprintId: "", fromDate: "", toDate: "" });
+    };
+
+    // 6. Xử lý nút Thử lại: retry cả Sprint nếu trước đó fail, sau đó retry Report
+    const handleRetry = () => {
+        if (sprintList.length === 0 && !Array.isArray(sprints)) {
+            loadSprints(projectId);
+        }
+        fetchData();
     };
 
     const members =
@@ -127,7 +157,7 @@ function MemberContributionComponent({
                             color: "#64748b",
                         }}
                     >
-                        Thống kê công việc hoàn thành, commit và pull request
+                        Thống kê công việc liên kết, commit và pull request
                         tương ứng theo Sprint hoặc mốc thời gian
                     </p>
                 </div>
@@ -137,125 +167,135 @@ function MemberContributionComponent({
                     style={{
                         display: "flex",
                         alignItems: "center",
-                        justifyContent: "space-between",
+                        justifyContent: "flex-start",
                         gap: "12px",
-                        flexWrap: "wrap",
+                        flexWrap: "nowrap",
+                        overflowX: "auto",
                         width: "100%",
+                        paddingBottom: "4px",
                     }}
                 >
                     <div
                         style={{
                             display: "flex",
                             alignItems: "center",
-                            gap: "10px",
-                            flexWrap: "wrap",
+                            gap: "6px",
+                            flexShrink: 0,
                         }}
                     >
-                        <div
+                        <span
                             style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "6px",
+                                fontSize: "13px",
+                                color: "#475569",
+                                fontWeight: 500,
+                                whiteSpace: "nowrap",
                             }}
                         >
-                            <span
-                                style={{
-                                    fontSize: "13px",
-                                    color: "#475569",
-                                    fontWeight: 500,
-                                    whiteSpace: "nowrap",
-                                }}
-                            >
-                                Sprint:
-                            </span>
-                            <select
-                                aria-label="Sprint"
-                                value={selectedSprintId}
-                                onChange={(e) =>
-                                    setSelectedSprintId(e.target.value)
-                                }
-                                style={{
-                                    minWidth: "130px",
-                                    maxWidth: "160px",
-                                    padding: "5px 8px",
-                                    fontSize: "13px",
-                                    borderRadius: "6px",
-                                    border: "1px solid #cbd5e1",
-                                    backgroundColor: "#ffffff",
-                                    outline: "none",
-                                    cursor: "pointer",
-                                }}
-                            >
-                                <option value="">Tất cả Sprint</option>
-                                {sprintList.map((sp) => (
-                                    <option
-                                        key={sp.sprintId || sp.id}
-                                        value={sp.sprintId || sp.id}
-                                    >
-                                        {sp.sprintName ||
-                                            sp.name ||
-                                            `Sprint #${sp.sprintId || sp.id}`}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
+                            Sprint:
+                        </span>
+                        <select
+                            aria-label="Sprint"
+                            value={selectedSprintId}
+                            onChange={(e) =>
+                                setSelectedSprintId(e.target.value)
+                            }
+                            style={{
+                                minWidth: "120px",
+                                padding: "6px 10px",
+                                fontSize: "13px",
+                                borderRadius: "6px",
+                                border: "1px solid #cbd5e1",
+                                backgroundColor: "#ffffff",
+                                outline: "none",
+                                cursor: "pointer",
+                            }}
+                        >
+                            <option value="">Tất cả Sprint</option>
+                            {sprintList.map((sp) => (
+                                <option
+                                    key={sp.sprintId || sp.id}
+                                    value={sp.sprintId || sp.id}
+                                >
+                                    {sp.sprintName ||
+                                        sp.name ||
+                                        `Sprint #${sp.sprintId || sp.id}`}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
 
-                        <div
+                    <div
+                        style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            flexShrink: 0,
+                        }}
+                    >
+                        <span
                             style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "6px",
+                                fontSize: "13px",
+                                color: "#475569",
+                                fontWeight: 500,
+                                whiteSpace: "nowrap",
                             }}
                         >
-                            <span
-                                style={{
-                                    fontSize: "13px",
-                                    color: "#475569",
-                                    fontWeight: 500,
-                                    whiteSpace: "nowrap",
-                                }}
-                            >
-                                Từ:
-                            </span>
-                            <input
-                                aria-label="Từ ngày"
-                                type="date"
-                                value={fromDate}
-                                onChange={(e) => setFromDate(e.target.value)}
-                                style={{
-                                    padding: "4px 6px",
-                                    fontSize: "12px",
-                                    borderRadius: "6px",
-                                    border: "1px solid #cbd5e1",
-                                    outline: "none",
-                                    width: "125px",
-                                }}
-                            />
-                            <span
-                                style={{
-                                    fontSize: "13px",
-                                    color: "#475569",
-                                    fontWeight: 500,
-                                    whiteSpace: "nowrap",
-                                }}
-                            >
-                                Đến:
-                            </span>
-                            <input
-                                aria-label="Đến ngày"
-                                type="date"
-                                value={toDate}
-                                onChange={(e) => setToDate(e.target.value)}
-                                style={{
-                                    padding: "4px 6px",
-                                    fontSize: "12px",
-                                    borderRadius: "6px",
-                                    border: "1px solid #cbd5e1",
-                                    outline: "none",
-                                    width: "125px",
-                                }}
-                            />
-                        </div>
+                            Từ:
+                        </span>
+                        <input
+                            aria-label="Từ ngày"
+                            type="date"
+                            value={fromDate}
+                            onChange={(e) => {
+                                setFromDate(e.target.value);
+                                setDateError("");
+                            }}
+                            style={{
+                                padding: "5px 8px",
+                                fontSize: "13px",
+                                borderRadius: "6px",
+                                border: "1px solid #cbd5e1",
+                                outline: "none",
+                                width: "130px",
+                            }}
+                        />
+                    </div>
+
+                    <div
+                        style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            flexShrink: 0,
+                        }}
+                    >
+                        <span
+                            style={{
+                                fontSize: "13px",
+                                color: "#475569",
+                                fontWeight: 500,
+                                whiteSpace: "nowrap",
+                            }}
+                        >
+                            Đến:
+                        </span>
+                        <input
+                            aria-label="Đến ngày"
+                            type="date"
+                            value={toDate}
+                            onChange={(e) => {
+                                setToDate(e.target.value);
+                                setDateError("");
+                            }}
+                            style={{
+                                padding: "5px 8px",
+                                fontSize: "13px",
+                                borderRadius: "6px",
+                                border: "1px solid #cbd5e1",
+                                outline: "none",
+                                width: "130px",
+                            }}
+                        />
                     </div>
 
                     <div
@@ -264,6 +304,7 @@ function MemberContributionComponent({
                             alignItems: "center",
                             gap: "8px",
                             flexShrink: 0,
+                            marginLeft: "4px",
                         }}
                     >
                         <button
@@ -288,7 +329,7 @@ function MemberContributionComponent({
                             onClick={handleReset}
                             style={{
                                 padding: "6px 14px",
-                                backgroundColor: "#f8fafc",
+                                backgroundColor: "#ffffff",
                                 color: "#475569",
                                 border: "1px solid #cbd5e1",
                                 borderRadius: "6px",
@@ -302,6 +343,20 @@ function MemberContributionComponent({
                         </button>
                     </div>
                 </form>
+
+                {dateError && (
+                    <div
+                        role="alert"
+                        style={{
+                            marginTop: "8px",
+                            color: "#dc2626",
+                            fontSize: "12px",
+                            fontWeight: 500,
+                        }}
+                    >
+                        {dateError}
+                    </div>
+                )}
             </div>
 
             {loading && (
@@ -335,7 +390,7 @@ function MemberContributionComponent({
                 >
                     <span>{error}</span>
                     <button
-                        onClick={() => loadData()}
+                        onClick={handleRetry}
                         type="button"
                         style={{
                             padding: "6px 14px",
@@ -396,7 +451,7 @@ function MemberContributionComponent({
                                         textAlign: "center",
                                     }}
                                 >
-                                    Tasks hoàn thành
+                                    Tasks liên kết
                                 </th>
                                 <th
                                     style={{
@@ -447,8 +502,11 @@ function MemberContributionComponent({
                                     const username = m.username
                                         ? `@${m.username}`
                                         : "";
-                                    const isGithubLinked = Boolean(
-                                        m.githubLinked,
+
+                                    const isLinked = Boolean(
+                                        m.githubLinked ||
+                                        m.githubUsername ||
+                                        m.externalAccountId,
                                     );
                                     const linkedTasks = m.linkedTasks ?? 0;
                                     const commits = m.commits ?? 0;
@@ -493,7 +551,7 @@ function MemberContributionComponent({
                                             <td
                                                 style={{ padding: "14px 24px" }}
                                             >
-                                                {isGithubLinked ? (
+                                                {isLinked ? (
                                                     <span
                                                         style={{
                                                             display:
@@ -508,7 +566,9 @@ function MemberContributionComponent({
                                                             fontWeight: 600,
                                                         }}
                                                     >
-                                                        Đã liên kết
+                                                        {m.githubUsername
+                                                            ? `@${m.githubUsername}`
+                                                            : "Đã liên kết"}
                                                     </span>
                                                 ) : (
                                                     <span
