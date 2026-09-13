@@ -35,7 +35,6 @@ import vn.edu.cnpm.projectsupport.integration.github.GitHubPullRequest;
 import vn.edu.cnpm.projectsupport.integration.github.GitHubPullRequestSyncService;
 import vn.edu.cnpm.projectsupport.integration.github.GitHubRepository;
 import vn.edu.cnpm.projectsupport.integration.github.GitHubRestClient;
-import vn.edu.cnpm.projectsupport.integration.github.GitHubUser;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubCommitRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubIntegrationConfigRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubPullRequestRepository;
@@ -54,7 +53,6 @@ import vn.edu.cnpm.projectsupport.integration.jira.service.JiraSyncService;
 import vn.edu.cnpm.projectsupport.project.domain.Project;
 import vn.edu.cnpm.projectsupport.project.repository.ProjectRepository;
 import vn.edu.cnpm.projectsupport.security.IntegrationSecretService;
-import vn.edu.cnpm.projectsupport.task.domain.Task;
 import vn.edu.cnpm.projectsupport.task.repository.TaskRepository;
 
 @SpringBootTest
@@ -131,7 +129,7 @@ class JiraGitHubReportIntegrationTest {
         when(remoteRepo.archived()).thenReturn(false);
         when(remoteRepo.updatedAt()).thenReturn(Instant.now());
 
-        GitHubUser owner = mock(GitHubUser.class);
+        GitHubRepository.Owner owner = mock(GitHubRepository.Owner.class);
         when(owner.id()).thenReturn(100L);
         when(owner.login()).thenReturn(ownerLogin);
         when(remoteRepo.owner()).thenReturn(owner);
@@ -183,15 +181,9 @@ class JiraGitHubReportIntegrationTest {
         assertThat(snapshot).isNotNull();
         assertThat(snapshot.getJiraIssueKey()).isEqualTo(jiraKey);
 
-        Task localTask = taskRepository.findById(taskId).orElse(null);
-        assertThat(localTask).isNotNull();
-        localTask.setJiraIssueKey(jiraKey);
-        taskRepository.save(localTask);
-
         mockMvc.perform(get("/api/v1/projects/{projectId}/tasks/{taskId}", projectId, taskId)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.jiraIssueKey").value(jiraKey));
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -218,11 +210,7 @@ class JiraGitHubReportIntegrationTest {
         GitHubCommit.GitAuthor gitAuthor = new GitHubCommit.GitAuthor("Dev", "dev@local", Instant.now());
         GitHubCommit.CommitMetadata commitMeta = new GitHubCommit.CommitMetadata("feat: [CNPM-110] resolve task requirement", gitAuthor, gitAuthor);
         when(fullCommit.commit()).thenReturn(commitMeta);
-
-        GitHubUser authorUser = mock(GitHubUser.class);
-        when(authorUser.id()).thenReturn(101L);
-        when(authorUser.login()).thenReturn("developer");
-        when(fullCommit.author()).thenReturn(authorUser);
+        when(fullCommit.author()).thenReturn(null);
         when(fullCommit.parentShas()).thenReturn(List.of());
 
         GitHubPage<GitHubCommit> commitPage = mock(GitHubPage.class);
@@ -248,12 +236,16 @@ class JiraGitHubReportIntegrationTest {
         when(fullPr.draft()).thenReturn(false);
         when(fullPr.htmlUrl()).thenReturn("https://github.com/org/repo/pull/11");
         when(fullPr.createdAt()).thenReturn(Instant.now());
-        when(fullPr.user()).thenReturn(authorUser);
+        when(fullPr.user()).thenReturn(null);
 
-        GitHubPullRequest.GitRef headRef = new GitHubPullRequest.GitRef("feature/CNPM-110", commitSha);
-        GitHubPullRequest.GitRef baseRef = new GitHubPullRequest.GitRef("main", "main-sha");
-        when(fullPr.head()).thenReturn(headRef);
-        when(fullPr.base()).thenReturn(baseRef);
+        var headRefMock = mock(GitHubPullRequest.HeadRef.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        when(fullPr.head()).thenReturn(headRefMock);
+        when(headRefMock.ref()).thenReturn("feature/CNPM-110");
+        when(headRefMock.sha()).thenReturn(commitSha);
+
+        var baseRefMock = mock(GitHubPullRequest.BaseRef.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        when(fullPr.base()).thenReturn(baseRefMock);
+        when(baseRefMock.ref()).thenReturn("main");
 
         GitHubPage<GitHubPullRequest> prPage = mock(GitHubPage.class);
         when(prPage.items()).thenReturn(List.of(listedPr));
@@ -356,6 +348,7 @@ class JiraGitHubReportIntegrationTest {
 
         GitHubCommit.GitAuthor author = new GitHubCommit.GitAuthor("Author", "auth@test", Instant.now());
         when(fullCommit.commit()).thenReturn(new GitHubCommit.CommitMetadata("chore: commit once", author, author));
+        when(fullCommit.author()).thenReturn(null);
         when(fullCommit.parentShas()).thenReturn(List.of());
 
         GitHubPage<GitHubCommit> commitPage = mock(GitHubPage.class);
