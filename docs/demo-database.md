@@ -127,25 +127,25 @@ Mật khẩu database ở ví dụ trên là `change-me`, đúng với `.env.exa
 
 ## 5. Chạy migration và seed dữ liệu demo
 
-Không bắt buộc phải bật chế độ demo ngay lần đầu. Có thể khởi tạo database và chạy ứng dụng bình thường trước, sau đó bật demo ở một lần chạy sau. Có hai cách tương đương:
+Không bắt buộc phải bật chế độ demo ngay lần đầu. Có thể khởi tạo database và chạy ứng dụng bình thường trước, sau đó bật demo ở một lần chạy sau. Chỉ cần bật biến môi trường `DEMO_SEED_ENABLED=true` khi chạy lần mà bạn muốn có dữ liệu demo. Không cần profile `demo` và không có yêu cầu phải bật demo ngay lần đầu.
 
-### Cách 1 — dùng profile `demo`
+### Chạy bình thường
 
 ```powershell
-$env:SPRING_PROFILES_ACTIVE = "demo"
+$env:DEMO_SEED_ENABLED = "false"
 .\mvnw.cmd clean spring-boot:run
 ```
 
-`application-demo.yml` đặt `demoSeedEnabled=true`.
+Hoặc bỏ biến `DEMO_SEED_ENABLED` nếu cấu hình mặc định của project là `false`.
 
-### Cách 2 — bật biến môi trường `DEMO_SEED_ENABLED`
+### Bật seed demo
 
 ```powershell
 $env:DEMO_SEED_ENABLED = "true"
 .\mvnw.cmd clean spring-boot:run
 ```
 
-Không bắt buộc phải dùng profile `demo` nếu đã đặt `DEMO_SEED_ENABLED=true`.
+Không sử dụng `application-demo.yml` và không cần `SPRING_PROFILES_ACTIVE=demo`; chế độ seed demo được điều khiển trực tiếp bằng `DEMO_SEED_ENABLED`.
 
 ### Trường hợp đã chạy bình thường trước đó
 
@@ -172,6 +172,22 @@ $env:DEMO_SEED_ENABLED = "true"
 Seed demo sử dụng `INSERT ... SELECT` + `NOT EXISTS` và các cập nhật Jira dùng `COALESCE`, nên không tự ghi đè cấu hình Jira đã tồn tại của project mẫu.
 
 Sau khi seed demo xong, lần chạy thông thường có thể bỏ `DEMO_SEED_ENABLED` hoặc đặt lại `false`.
+
+### Nếu database đã chạy V13 của bản CNPM-113 cũ
+
+Nếu database cũ đã chạy `V13__seed_final_demo_data.sql` của bản 113 trước khi các branch được ghép, **không xóa file V13 và không sửa V13 để làm cho checksum khớp**. Khi nội dung migration versioned đã được ghi vào `flyway_schema_history`, thay đổi nội dung file có thể làm Flyway báo:
+
+```text
+Migration checksum mismatch for migration version 13
+```
+
+Cách xử lý phụ thuộc vào loại database:
+
+**Database demo/local có thể tạo lại:** đây là cách an toàn và đơn giản nhất. Sao lưu nếu cần, sau đó xóa database và tạo lại database sạch theo mục 3. Tiếp theo dùng đúng bộ migration của branch/main đã thống nhất version và chạy với `DEMO_SEED_ENABLED=true` nếu cần dữ liệu demo.
+
+**Database có dữ liệu thật cần giữ:** không tự ý `DROP DATABASE`, không xóa dòng trong `flyway_schema_history` và không chạy `flyway repair` chỉ để che lỗi checksum. Trước tiên phải thống nhất với branch chứa migration còn lại (`V13__github_check_runs.sql`) cách phân bổ version migration. Sau khi bộ migration trên main đã có version duy nhất, đánh giá checksum của database cũ và thực hiện quy trình Flyway migration/repair theo quyết định của nhóm. `repair` chỉ nên dùng khi nhóm đã xác nhận nội dung migration trong database là nội dung được chấp nhận; nó không giải quyết lỗi trùng version 13.
+
+**Quan trọng:** nếu main đang chứa cả `V13__github_check_runs.sql` và `V13__seed_final_demo_data.sql`, database sẽ không khởi động được với lỗi `Found more than one migration with version 13`. Phải giải quyết xung đột version trước khi nâng cấp database cũ. Không đổi tùy tiện tên hoặc nội dung của một migration V13 đã chạy trên database chỉ để vượt qua kiểm tra.
 
 
 ### Lưu ý khi ghép các branch có migration Flyway
