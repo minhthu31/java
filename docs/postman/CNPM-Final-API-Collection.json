@@ -1,0 +1,801 @@
+{
+  "info": {
+    "name": "CNPM Final API - CNPM-114",
+    "description": "Final API collection aligned with current controllers. Contains placeholders only; never commit real secrets.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 Authentication",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "",
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usernameOrEmail\": \"<username-or-email>\",\n  \"password\": \"<password>\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200',()=>pm.response.to.have.status(200));",
+                  "const b=pm.response.json();",
+                  "pm.test('Has access token',()=>pm.expect(b.data.accessToken).to.be.a('string').and.not.empty);",
+                  "pm.environment.set('token_admin', b.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 Task",
+      "item": [
+        {
+          "name": "List tasks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/tasks?page=0&size=20",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create task",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "cnpm114-{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/tasks",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Postman demo task\",\n  \"description\": \"Example only\",\n  \"acceptanceCriteria\": \"API returns a task\",\n  \"issueType\": \"TASK\",\n  \"priority\": \"HIGH\",\n  \"classification\": \"NEW_FEATURE\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201',()=>pm.response.to.have.status(201));",
+                  "const b=pm.response.json();",
+                  "pm.environment.set('taskId', b.data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get task",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/tasks/{{taskId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update task status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/tasks/{{taskId}}/status",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"IN_PROGRESS\",\n  \"reason\": \"Postman demo\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update assignee",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/tasks/{{taskId}}/assignee",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assigneeUserId\": 1\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Requirement",
+      "item": [
+        {
+          "name": "List requirements",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/requirements?page=0&size=20",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create requirement",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/requirements",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Postman demo requirement\",\n  \"actor\": \"Team Member\",\n  \"description\": \"Example only\",\n  \"priority\": \"HIGH\",\n  \"status\": \"DRAFT\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201',()=>pm.response.to.have.status(201));",
+                  "const b=pm.response.json();",
+                  "pm.environment.set('requirementId', b.data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get requirement",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/requirements/{{requirementId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Jira Integration",
+      "item": [
+        {
+          "name": "Get Jira config",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/integrations/jira/config",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Save Jira config",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/integrations/jira/config",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"siteUrl\": \"https://your-domain.atlassian.net\",\n  \"projectKey\": \"CNPM\",\n  \"email\": \"developer@example.com\",\n  \"apiToken\": \"<jira-api-token>\",\n  \"authType\": \"API_TOKEN\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Test Jira connection",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/integrations/jira/test-connection",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sync task to Jira",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "cnpm114-jira-sync-{{$guid}}"
+              }
+            ],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/integrations/jira/tasks/{{taskId}}/sync",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Jira issue",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/integrations/jira/issues/{{jiraIssueKey}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Retry Jira task",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "cnpm114-jira-retry-{{$guid}}"
+              }
+            ],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/integrations/jira/tasks/{{taskId}}/retry",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sync Jira to local",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/integrations/jira/sync",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Latest failed Jira sync",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/integrations/jira/sync/failed/latest",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 GitHub Integration",
+      "item": [
+        {
+          "name": "Get GitHub config",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/integrations/github/config",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Save GitHub config",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/integrations/github/config",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"repositoryOwner\": \"your-org\",\n  \"repositoryName\": \"your-repository\",\n  \"accessToken\": \"<github-token>\",\n  \"apiVersion\": \"2026-03-10\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Test GitHub connection",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/integrations/github/test-connection",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sync commits and pull requests",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/integrations/github/sync",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sync check runs",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/integrations/github/check-runs/sync",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List check runs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/integrations/github/check-runs?repositoryId={{repositoryId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List commits",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/integrations/github/repositories/{{repositoryId}}/commits?page=0&size=20",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List pull requests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/integrations/github/repositories/{{repositoryId}}/pull-requests?state=open&page=0&size=20",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List activities",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/integrations/github/activities?page=0&size=20",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Task activities",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/integrations/github/tasks/{{taskId}}/activities?page=0&size=20",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List unlinked members",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/integrations/github/members/unlinked",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Link GitHub account",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/integrations/github/members/{{memberUserId}}/account-link",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"githubUsername\": \"<github-username>\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Reports and Project",
+      "item": [
+        {
+          "name": "Project members",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/members",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Progress report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/reports/progress?sprintId={{sprintId}}&memberId={{memberId}}&from=2026-09-01T00:00:00Z&to=2026-09-30T23:59:59Z",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Summary report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "",
+            "url": "{{baseUrl}}/projects/{{projectId}}/reports/summary?sprintId={{sprintId}}&from=2026-09-01T00:00:00Z&to=2026-09-30T23:59:59Z",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "projectId",
+      "value": "1"
+    },
+    {
+      "key": "taskId",
+      "value": "1"
+    },
+    {
+      "key": "requirementId",
+      "value": "1"
+    },
+    {
+      "key": "repositoryId",
+      "value": "1"
+    },
+    {
+      "key": "memberUserId",
+      "value": "1"
+    },
+    {
+      "key": "memberId",
+      "value": "1"
+    },
+    {
+      "key": "sprintId",
+      "value": "1"
+    },
+    {
+      "key": "jiraIssueKey",
+      "value": "CNPM-1"
+    }
+  ]
+}

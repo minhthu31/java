@@ -114,6 +114,17 @@ vn.edu.cnpm.projectsupport
 
 Mỗi module nên tổ chức tiếp thành `controller`, `service`, `domain`, `repository`, `dto` và `mapper` khi bắt đầu phát triển. Không tạo một thư mục controller/service khổng lồ dùng chung cho mọi nghiệp vụ.
 
+## CNPM-114 — Tài liệu kỹ thuật và Postman
+
+Tài liệu final đã được đối chiếu với controller/DTO hiện tại:
+
+- [Tài liệu kỹ thuật + hướng dẫn chạy/config](docs/technical/CNPM-114-technical-and-postman.md)
+- [Postman Final API Collection](docs/postman/CNPM-Final-API-Collection.json)
+- [Postman Environment Example](docs/postman/CNPM-Final-API-Environment.example.json)
+
+Collection dùng `{{baseUrl}}`, `{{projectId}}` và các placeholder token/secret; không chứa credential thật hoặc URL Jira/GitHub riêng tư.
+Các endpoint Jira/GitHub, Task, Requirement và Reporting trong collection được lấy từ API hiện tại của backend.
+
 ## Tài liệu thiết kế
 
 Bộ tài liệu thiết kế đã đối chiếu với source code và Flyway migration hiện tại:
