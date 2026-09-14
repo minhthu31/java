@@ -105,7 +105,7 @@ npm start
 `frontend/.env.example`:
 
 ```env
-REACT_APP_API_URL=http://localhost:8080/api/v1
+REACT_APP_API_BASE_URL=http://localhost:8080/api/v1
 ```
 
 Mở:
@@ -374,6 +374,13 @@ Environment gồm:
 - `baseUrl`
 - `projectId`
 - `token_admin`: dùng cho API quản trị/tích hợp yêu cầu ADMIN.
+- `token_leader`: token của tài khoản có role `TEAM_LEADER`; dùng cho các API yêu cầu Leader của project, ví dụ đồng bộ Jira từ Jira về local.
+- `token_member`: token của tài khoản có role `TEAM_MEMBER`; dùng cho các API được phép của thành viên.
+- `login_admin_username` / `login_admin_password`: thông tin đăng nhập mẫu của tài khoản ADMIN (để trống và tự điền khi chạy).
+- `login_leader_username` / `login_leader_password`: thông tin đăng nhập mẫu của tài khoản TEAM_LEADER (để trống và tự điền khi chạy).
+- `login_member_username` / `login_member_password`: thông tin đăng nhập mẫu của tài khoản TEAM_MEMBER (để trống và tự điền khi chạy).
+
+Trong Postman, chạy `Login as Team Leader` để tự lưu access token vào `token_leader`, hoặc `Login as Team Member` để lưu vào `token_member`. Không dùng `token_admin` cho các endpoint yêu cầu Leader/Member. Không commit mật khẩu/token thật vào repository.
 - `token_leader`: dùng cho API quản lý Task/Requirement/Project members và báo cáo.
 - `token_member`: dùng cho API mà TEAM_MEMBER được phép xem/cập nhật trạng thái Task và dữ liệu GitHub theo quyền.
 - Jira placeholder values

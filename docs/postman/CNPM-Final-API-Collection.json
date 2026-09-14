@@ -18,7 +18,7 @@
                 "value": "application/json"
               }
             ],
-            "description": "",
+            "description": "Login bằng tài khoản ADMIN. Access token được lưu vào token_admin.",
             "url": "{{baseUrl}}/auth/login",
             "body": {
               "mode": "raw",
@@ -35,6 +35,60 @@
                   "const b=pm.response.json();",
                   "pm.test('Has access token',()=>pm.expect(b.data.accessToken).to.be.a('string').and.not.empty);",
                   "pm.environment.set('token_admin', b.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login as Team Leader",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "description": "Login bằng tài khoản TEAM_LEADER. Access token được lưu vào token_leader.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"usernameOrEmail\": \"{{login_leader_username}}\", \"password\": \"{{login_leader_password}}\"}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200',()=>pm.response.to.have.status(200));",
+                  "const b=pm.response.json();",
+                  "pm.test('Has access token',()=>pm.expect(b.data.accessToken).to.be.a('string').and.not.empty);",
+                  "pm.environment.set('token_leader', b.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login as Team Member",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "description": "Login bằng tài khoản TEAM_MEMBER. Access token được lưu vào token_member.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"usernameOrEmail\": \"{{login_member_username}}\", \"password\": \"{{login_member_password}}\"}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200',()=>pm.response.to.have.status(200));",
+                  "const b=pm.response.json();",
+                  "pm.test('Has access token',()=>pm.expect(b.data.accessToken).to.be.a('string').and.not.empty);",
+                  "pm.environment.set('token_member', b.data.accessToken);"
                 ]
               }
             }
@@ -418,7 +472,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{token_admin}}",
+                  "value": "{{token_leader}}",
                   "type": "string"
                 }
               ]
