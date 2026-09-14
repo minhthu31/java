@@ -57,7 +57,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{token_admin}}",
+                  "value": "{{token_member}}",
                   "type": "string"
                 }
               ]
@@ -85,7 +85,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{token_admin}}",
+                  "value": "{{token_leader}}",
                   "type": "string"
                 }
               ]
@@ -121,7 +121,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{token_admin}}",
+                  "value": "{{token_member}}",
                   "type": "string"
                 }
               ]
@@ -145,7 +145,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{token_admin}}",
+                  "value": "{{token_member}}",
                   "type": "string"
                 }
               ]
@@ -173,7 +173,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{token_admin}}",
+                  "value": "{{token_leader}}",
                   "type": "string"
                 }
               ]
@@ -201,7 +201,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{token_admin}}",
+                  "value": "{{token_leader}}",
                   "type": "string"
                 }
               ]
@@ -225,7 +225,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{token_admin}}",
+                  "value": "{{token_leader}}",
                   "type": "string"
                 }
               ]
@@ -261,7 +261,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{token_admin}}",
+                  "value": "{{token_leader}}",
                   "type": "string"
                 }
               ]
@@ -285,7 +285,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{token_admin}}",
+                  "value": "{{token_leader}}",
                   "type": "string"
                 }
               ]
@@ -316,7 +316,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"siteUrl\": \"https://your-domain.atlassian.net\",\n  \"projectKey\": \"CNPM\",\n  \"email\": \"developer@example.com\",\n  \"apiToken\": \"<jira-api-token>\",\n  \"authType\": \"API_TOKEN\"\n}"
+              "raw": "{\n  \"siteUrl\": \"{{jira_site_url}}\",\n  \"projectKey\": \"{{jira_project_key}}\",\n  \"email\": \"{{jira_email}}\",\n  \"apiToken\": \"{{jira_api_token}}\",\n  \"authType\": \"API_TOKEN\"\n}"
             }
           }
         },
@@ -375,7 +375,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{token_admin}}",
+                  "value": "{{token_leader}}",
                   "type": "string"
                 }
               ]
@@ -437,7 +437,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{token_admin}}",
+                  "value": "{{token_leader}}",
                   "type": "string"
                 }
               ]
@@ -492,7 +492,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"repositoryOwner\": \"your-org\",\n  \"repositoryName\": \"your-repository\",\n  \"accessToken\": \"<github-token>\",\n  \"apiVersion\": \"2026-03-10\"\n}"
+              "raw": "{\n  \"repositoryOwner\": \"{{github_owner}}\",\n  \"repositoryName\": \"{{github_repository}}\",\n  \"accessToken\": \"{{github_token}}\",\n  \"apiVersion\": \"{{github_api_version}}\"\n}"
             }
           }
         },
@@ -565,7 +565,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{token_admin}}",
+                  "value": "{{token_member}}",
                   "type": "string"
                 }
               ]
@@ -584,7 +584,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{token_admin}}",
+                  "value": "{{token_member}}",
                   "type": "string"
                 }
               ]
@@ -603,7 +603,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{token_admin}}",
+                  "value": "{{token_member}}",
                   "type": "string"
                 }
               ]
@@ -622,7 +622,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{token_admin}}",
+                  "value": "{{token_member}}",
                   "type": "string"
                 }
               ]
@@ -641,7 +641,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{token_admin}}",
+                  "value": "{{token_member}}",
                   "type": "string"
                 }
               ]
@@ -660,7 +660,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{token_admin}}",
+                  "value": "{{token_leader}}",
                   "type": "string"
                 }
               ]
@@ -684,7 +684,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{token_admin}}",
+                  "value": "{{token_leader}}",
                   "type": "string"
                 }
               ]
@@ -712,7 +712,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{token_admin}}",
+                  "value": "{{token_leader}}",
                   "type": "string"
                 }
               ]
@@ -731,7 +731,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{token_admin}}",
+                  "value": "{{token_leader}}",
                   "type": "string"
                 }
               ]
@@ -750,7 +750,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{token_admin}}",
+                  "value": "{{token_leader}}",
                   "type": "string"
                 }
               ]
@@ -763,7 +763,7 @@
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:8080"
+      "value": "http://localhost:8080/api/v1"
     },
     {
       "key": "projectId",

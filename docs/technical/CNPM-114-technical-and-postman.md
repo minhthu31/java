@@ -13,7 +13,8 @@
 - Maven Wrapper (`mvnw.cmd` trên Windows)
 - MySQL 8.x
 - Flyway quản lý schema
-- Backend mặc định: `http://localhost:8080`
+- Backend mặc định: `http://localhost:8080` (Actuator)
+- API base: `http://localhost:8080/api/v1`
 
 ### Frontend
 
@@ -50,7 +51,7 @@ $env:DB_USERNAME="cnpm_user"
 $env:DB_PASSWORD="<local-db-password>"
 $env:JWT_SECRET="<random-secret-at-least-32-bytes>"
 $env:INTEGRATION_ENCRYPTION_KEY="<random-secret-at-least-32-characters>"
-./mvnw spring-boot:run
+.\mvnw.cmd spring-boot:run
 ```
 
 Kiểm tra:
@@ -372,9 +373,9 @@ Environment gồm:
 
 - `baseUrl`
 - `projectId`
-- `token_admin`
-- `token_leader`
-- `token_member`
+- `token_admin`: dùng cho API quản trị/tích hợp yêu cầu ADMIN.
+- `token_leader`: dùng cho API quản lý Task/Requirement/Project members và báo cáo.
+- `token_member`: dùng cho API mà TEAM_MEMBER được phép xem/cập nhật trạng thái Task và dữ liệu GitHub theo quyền.
 - Jira placeholder values
 - GitHub placeholder values
 - `taskId`, `requirementId`, `repositoryId`, `jiraIssueKey`

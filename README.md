@@ -25,7 +25,7 @@ Website không thay thế Jira hoặc GitHub:
 
 Ứng dụng chạy trực tiếp trên máy Windows. Môi trường đã kiểm tra:
 
-- JDK 21 trở lên; máy hiện tại dùng Java 26.0.2.
+- JDK 21 trở lên.
 - Node.js 22 trở lên; máy hiện tại dùng Node.js 24.18.1 và npm 11.16.0.
 - MySQL Server 8.4; máy hiện tại dùng Windows service `MySQL84`.
 - Git và trình duyệt web.
@@ -142,7 +142,7 @@ Flyway là nguồn chuẩn của schema. Không dùng `spring.jpa.hibernate.ddl-
 
 - `V1__create_core_schema.sql`: schema theo Data Dictionary baseline 2.0.
 - `V2__seed_roles.sql`: bốn role nghiệp vụ.
-- `V3` đến `V11`: dữ liệu demo và schema phục vụ Jira/GitHub Integration.
+- `V3` đến `V13`: các migration bổ sung schema/dữ liệu phục vụ các module và tích hợp hiện tại.
 - Mỗi thay đổi schema tạo migration mới; không sửa migration đã merge vào `main`.
 
 ## Quy tắc kiến trúc
