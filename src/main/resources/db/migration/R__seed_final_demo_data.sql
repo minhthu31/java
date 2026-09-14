@@ -325,12 +325,19 @@ WHERE t.idempotency_key = 'CNPM-DEMO-REPORT-001'
                   WHERE l.task_id = t.id AND l.pull_request_id = pr.id)
   AND '${demoSeedEnabled}' = 'true';
 
+-- Older CNPM-113 demo seeds used INBOUND, but the Java enum accepts IMPORT/EXPORT.
+-- Convert those already-seeded rows before inserting the current demo Sync Logs.
+UPDATE sync_logs
+SET direction = 'IMPORT'
+WHERE direction = 'INBOUND'
+  AND '${demoSeedEnabled}' = 'true';
+
 INSERT INTO sync_logs (
     project_id, provider, entity_type, entity_id, direction, status,
     retry_count, correlation_id, started_at, completed_at,
     idempotency_key, request_fingerprint
 )
-SELECT p.id, 'JIRA', 'PROJECT', 'CNPM', 'INBOUND', 'SUCCESS', 0,
+SELECT p.id, 'JIRA', 'PROJECT', 'CNPM', 'IMPORT', 'SUCCESS', 0,
        'demo-jira-sync-001', '2026-09-13 00:59:00', '2026-09-13 01:00:00',
        'demo-jira-project-sync-001', 'demo-jira-fingerprint-001'
 FROM projects p
@@ -345,7 +352,7 @@ INSERT INTO sync_logs (
     retry_count, correlation_id, started_at, completed_at,
     idempotency_key, request_fingerprint
 )
-SELECT p.id, 'GITHUB', 'REPOSITORY', '990001', 'INBOUND', 'SUCCESS', 0,
+SELECT p.id, 'GITHUB', 'REPOSITORY', '990001', 'IMPORT', 'SUCCESS', 0,
        'demo-github-sync-001', '2026-09-13 00:59:00', '2026-09-13 01:00:00',
        'demo-github-repository-sync-001', 'demo-github-fingerprint-001'
 FROM projects p

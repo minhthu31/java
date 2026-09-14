@@ -149,13 +149,13 @@ Không sử dụng `application-demo.yml` và không cần `SPRING_PROFILES_ACTI
 
 ### Trường hợp đã chạy bình thường trước đó
 
-Nếu trước đây đã chạy ứng dụng với `DEMO_SEED_ENABLED=false` hoặc không đặt biến này, Flyway sẽ **không chạy lại V13** vì V13 là migration versioned và đã được ghi nhận là đã chạy. Để xử lý trường hợp này, project có thêm migration lặp:
+Nếu database đã khởi tạo bình thường trước đó, không cần chạy lại các migration versioned đã được ghi nhận trong `flyway_schema_history`. Dữ liệu demo hiện được tách sang migration lặp:
 
 ```text
 src/main/resources/db/migration/R__seed_final_demo_data.sql
 ```
 
-Migration `R__seed_final_demo_data.sql` dùng cùng placeholder `demoSeedEnabled`. Khi database đã chạy bình thường với giá trị `false`, sau đó đổi sang `true`, checksum của repeatable migration thay đổi và Flyway chạy migration này để bổ sung dữ liệu demo.
+`R__seed_final_demo_data.sql` dùng placeholder `demoSeedEnabled`. Khi chạy với `DEMO_SEED_ENABLED=true`, Flyway thực thi migration lặp này để bổ sung hoặc cập nhật dữ liệu demo. Vì đây là repeatable migration, nội dung thay đổi sẽ làm Flyway thực thi lại migration ở lần chạy phù hợp; không nên dựa vào việc chạy lại một migration versioned cũ để seed demo.
 
 Vì vậy có thể làm:
 
@@ -181,7 +181,7 @@ Nếu database cũ đã chạy `V13__seed_final_demo_data.sql` của bản 113 t
 Migration checksum mismatch for migration version 13
 ```
 
-Cách xử lý phụ thuộc vào loại database:
+Cách xử lý phụ thuộc vào loại database. Với dữ liệu demo CNPM-113 cũ, nếu `sync_logs.direction` còn giá trị `INBOUND`, migration lặp mới sẽ chuyển các bản ghi đó sang `IMPORT` trước khi seed dữ liệu hiện tại, tránh lỗi JPA `No enum constant SyncDirection.INBOUND`.
 
 **Database demo/local có thể tạo lại:** đây là cách an toàn và đơn giản nhất. Sao lưu nếu cần, sau đó xóa database và tạo lại database sạch theo mục 3. Tiếp theo dùng đúng bộ migration của branch/main đã thống nhất version và chạy với `DEMO_SEED_ENABLED=true` nếu cần dữ liệu demo.
 
@@ -376,8 +376,14 @@ FROM sprints;
 Kiểm tra task:
 
 ```sql
-SELECT id, title, status
-FROM tasks;
+SELECT
+    t.id,
+    t.title,
+    t.status,
+    u.username AS assignee
+FROM tasks t
+LEFT JOIN users u ON u.id = t.assignee_id
+ORDER BY t.id;
 ```
 
 Kiểm tra GitHub commit:
@@ -397,7 +403,7 @@ FROM github_pull_requests;
 Kiểm tra sync log:
 
 ```sql
-SELECT provider, status, started_at, completed_at
+SELECT provider, entity_type, direction, status, started_at, completed_at
 FROM sync_logs
 ORDER BY started_at DESC;
 ```
