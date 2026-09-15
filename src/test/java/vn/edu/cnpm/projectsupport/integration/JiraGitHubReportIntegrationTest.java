@@ -8,6 +8,8 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -18,6 +20,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +31,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import vn.edu.cnpm.projectsupport.integration.github.GitHubCommit;
@@ -37,18 +41,27 @@ import vn.edu.cnpm.projectsupport.integration.github.GitHubPullRequest;
 import vn.edu.cnpm.projectsupport.integration.github.GitHubPullRequestSyncService;
 import vn.edu.cnpm.projectsupport.integration.github.GitHubRepository;
 import vn.edu.cnpm.projectsupport.integration.github.GitHubRestClient;
+import vn.edu.cnpm.projectsupport.integration.github.GitHubUser;
+import vn.edu.cnpm.projectsupport.integration.github.domain.UserExternalAccount;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubCommitRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubIntegrationConfigRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubPullRequestRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubRepositoryRepository;
+import vn.edu.cnpm.projectsupport.integration.github.repository.TaskCommitLinkRepository;
+import vn.edu.cnpm.projectsupport.integration.github.repository.TaskPullRequestLinkRepository;
+import vn.edu.cnpm.projectsupport.integration.github.repository.UserExternalAccountRepository;
 import vn.edu.cnpm.projectsupport.integration.jira.JiraClient;
 import vn.edu.cnpm.projectsupport.integration.jira.JiraProject;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationConfig;
+import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider;
+import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraCreateIssueResponse;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.JiraIssueSnapshot;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraIssueDto;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraPageDto;
 import vn.edu.cnpm.projectsupport.integration.jira.dto.JiraSprintPageDto;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.JiraIssueSnapshotRepository;
+import vn.edu.cnpm.projectsupport.integration.jira.repository.IntegrationConfigRepository;
+import vn.edu.cnpm.projectsupport.integration.jira.repository.JiraIssueRepository;
 import vn.edu.cnpm.projectsupport.integration.jira.service.JiraSyncResult;
 import vn.edu.cnpm.projectsupport.integration.jira.service.JiraSyncService;
 import vn.edu.cnpm.projectsupport.project.domain.Project;
@@ -72,6 +85,11 @@ class JiraGitHubReportIntegrationTest {
     @Autowired private GitHubRepositoryRepository gitHubRepositoryRepository;
     @Autowired private ProjectRepository projectRepository;
     @Autowired private TaskRepository taskRepository;
+    @Autowired private IntegrationConfigRepository integrationConfigRepository;
+    @Autowired private JiraIssueRepository jiraIssueRepository;
+    @Autowired private TaskCommitLinkRepository taskCommitLinkRepository;
+    @Autowired private TaskPullRequestLinkRepository taskPullRequestLinkRepository;
+    @Autowired private UserExternalAccountRepository userExternalAccountRepository;
 
     @MockitoBean private JiraClient jiraClient;
     @MockitoBean private GitHubRestClient gitHubRestClient;
@@ -132,6 +150,163 @@ class JiraGitHubReportIntegrationTest {
         when(remoteRepo.owner()).thenReturn(owner);
 
         return remoteRepo;
+    }
+
+    @Test
+    @Transactional
+    @DisplayName("Task local -> Jira -> GitHub commit/PR -> report remains linked and idempotent")
+    void testCompleteJiraGitHubReportFlow() throws Exception {
+        JsonNode leader = login("leader.test", "password");
+        JsonNode member = login("member.test", "password");
+        long projectId = leader.path("projectId").asLong();
+        long memberId = member.path("id").asLong();
+        String leaderToken = leader.path("accessToken").asText();
+        String memberToken = member.path("accessToken").asText();
+        String suffix = Long.toString(100000L
+                + Math.floorMod(UUID.randomUUID().getMostSignificantBits(), 900000L));
+        String issueKey = "CNPM-" + suffix;
+        String repoFullName = "cnpm-test/flow-" + suffix;
+        long remoteRepositoryId = 100000L + Long.parseLong(suffix);
+        long externalUserId = 200000L + Long.parseLong(suffix);
+        int pullRequestNumber = Integer.parseInt(suffix);
+        String sha = "110" + suffix + "abcde1234567890";
+
+        JsonNode beforeReport = report(projectId, leaderToken);
+        long beforeTasks = beforeReport.path("taskMetrics").path("totalTasks").asLong();
+
+        String createResponse = mockMvc.perform(post("/api/v1/projects/{projectId}/tasks", projectId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + leaderToken)
+                        .header("Idempotency-Key", "create-" + suffix)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validCreateBody("CNPM-110 end-to-end " + suffix)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long taskId = objectMapper.readTree(createResponse).path("data").path("id").asLong();
+        assertThat(taskId).isPositive();
+
+        ensureProjectHasJiraKey(projectId, "CNPM");
+        IntegrationConfig jiraConfig = integrationConfigRepository
+                .findByProjectIdAndProvider(projectId, IntegrationProvider.JIRA)
+                .orElseGet(() -> new IntegrationConfig(
+                        projectId, IntegrationProvider.JIRA, "test-encrypted-token"));
+        jiraConfig.setBaseUrl("https://jira.test.local");
+        integrationConfigRepository.saveAndFlush(jiraConfig);
+        when(jiraClient.createIssue(eq(projectId), eq("CNPM"), any()))
+                .thenReturn(new JiraCreateIssueResponse(
+                        "remote-" + suffix, issueKey, "https://jira.test.local/browse/" + issueKey));
+
+        String syncKey = "sync-" + suffix;
+        mockMvc.perform(post("/api/v1/projects/{projectId}/integrations/jira/tasks/{taskId}/sync",
+                        projectId, taskId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + leaderToken)
+                        .header("Idempotency-Key", syncKey))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.jiraIssueKey").value(issueKey));
+        assertThat(jiraIssueRepository.findByTaskId(taskId)).isPresent()
+                .get().extracting(issue -> issue.getJiraIssueKey()).isEqualTo(issueKey);
+        mockMvc.perform(get("/api/v1/projects/{projectId}/tasks/{taskId}", projectId, taskId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + leaderToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.jiraIssueKey").value(issueKey));
+
+        mockGitHubIntegrationConfig(projectId, repoFullName);
+        var existingAccount = userExternalAccountRepository
+                .findByUserIdAndProvider(memberId, IntegrationProvider.GITHUB);
+        UserExternalAccount memberAccount = existingAccount.orElseGet(() -> new UserExternalAccount(
+                memberId, IntegrationProvider.GITHUB, String.valueOf(externalUserId),
+                "member-flow-" + suffix));
+        if (existingAccount.isPresent()) {
+            memberAccount.relink(String.valueOf(externalUserId), "member-flow-" + suffix,
+                    null, null);
+        }
+        userExternalAccountRepository.saveAndFlush(memberAccount);
+        GitHubUser remoteMember = new GitHubUser(externalUserId, "member-flow-" + suffix,
+                "Demo member", null, null, null);
+
+        GitHubRepository remoteRepo = createMockRemoteRepo(
+                remoteRepositoryId, "flow-" + suffix, repoFullName, "cnpm-test");
+        when(gitHubRestClient.getRepository(any())).thenReturn(remoteRepo);
+        GitHubCommit listedCommit = mock(GitHubCommit.class);
+        when(listedCommit.sha()).thenReturn(sha);
+        GitHubCommit fullCommit = mock(GitHubCommit.class);
+        when(fullCommit.sha()).thenReturn(sha);
+        when(fullCommit.htmlUrl()).thenReturn("https://github.com/" + repoFullName + "/commit/" + sha);
+        when(fullCommit.author()).thenReturn(remoteMember);
+        GitHubCommit.GitAuthor gitAuthor = new GitHubCommit.GitAuthor(
+                "Demo member", "member@local.test", Instant.now());
+        when(fullCommit.commit()).thenReturn(new GitHubCommit.CommitMetadata(
+                "feat: [" + issueKey + "] complete flow", gitAuthor, gitAuthor));
+        when(fullCommit.parentShas()).thenReturn(List.of());
+        GitHubPage<GitHubCommit> commitPage = mock(GitHubPage.class);
+        when(commitPage.items()).thenReturn(List.of(listedCommit));
+        when(commitPage.nextUrl()).thenReturn(null);
+        when(gitHubRestClient.getCommitsPage(any(), eq(1))).thenReturn(commitPage);
+        when(gitHubRestClient.getCommit(any(), eq(sha))).thenReturn(fullCommit);
+
+        GitHubPullRequest listedPr = mock(GitHubPullRequest.class);
+        when(listedPr.number()).thenReturn(pullRequestNumber);
+        GitHubPullRequest fullPr = mock(GitHubPullRequest.class,
+                org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        when(fullPr.id()).thenReturn(remoteRepositoryId + 1);
+        when(fullPr.number()).thenReturn(pullRequestNumber);
+        when(fullPr.title()).thenReturn("feat: [" + issueKey + "] pull request");
+        when(fullPr.body()).thenReturn("End-to-end task link");
+        when(fullPr.localState()).thenReturn("OPEN");
+        when(fullPr.draft()).thenReturn(false);
+        when(fullPr.htmlUrl()).thenReturn("https://github.com/" + repoFullName
+                + "/pull/" + pullRequestNumber);
+        when(fullPr.createdAt()).thenReturn(Instant.now());
+        when(fullPr.user()).thenReturn(remoteMember);
+        when(fullPr.head().ref()).thenReturn("feature/" + issueKey);
+        when(fullPr.head().sha()).thenReturn(sha);
+        when(fullPr.base().ref()).thenReturn("main");
+        GitHubPage<GitHubPullRequest> prPage = mock(GitHubPage.class);
+        when(prPage.items()).thenReturn(List.of(listedPr));
+        when(prPage.nextUrl()).thenReturn(null);
+        when(gitHubRestClient.getPullRequestsPage(any(), anyString(), eq(1)))
+                .thenReturn(prPage);
+        when(gitHubRestClient.getPullRequest(any(), eq(pullRequestNumber)))
+                .thenReturn(fullPr);
+
+        assertThat(gitHubCommitSyncService.syncCommits(projectId).linksCreated()).isEqualTo(1);
+        assertThat(gitHubPullRequestSyncService.syncPullRequests(projectId).linksCreated())
+                .isEqualTo(1);
+        assertThat(taskCommitLinkRepository.findByIdTaskId(taskId)).hasSize(1);
+        assertThat(taskPullRequestLinkRepository.findByIdTaskId(taskId)).hasSize(1);
+
+        JsonNode afterReport = report(projectId, leaderToken);
+        assertThat(afterReport.path("taskMetrics").path("totalTasks").asLong())
+                .isEqualTo(beforeTasks + 1);
+        mockMvc.perform(get("/api/v1/projects/{projectId}/reports/progress", projectId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + leaderToken))
+                .andExpect(status().isOk());
+        JsonNode memberReport = report(projectId, memberToken);
+        assertThat(memberReport.path("memberId").asLong()).isEqualTo(memberId);
+        assertThat(memberReport.path("memberContributions").size()).isEqualTo(1);
+        assertThat(memberReport.path("memberContributions").get(0).path("commits").asLong())
+                .isGreaterThanOrEqualTo(1);
+        assertThat(memberReport.path("memberContributions").get(0).path("pullRequests").asLong())
+                .isGreaterThanOrEqualTo(1);
+
+        mockMvc.perform(post("/api/v1/projects/{projectId}/integrations/jira/tasks/{taskId}/sync",
+                        projectId, taskId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + leaderToken)
+                        .header("Idempotency-Key", syncKey))
+                .andExpect(status().isOk());
+        verify(jiraClient, times(1)).createIssue(eq(projectId), eq("CNPM"), any());
+        assertThat(gitHubCommitSyncService.syncCommits(projectId).linksCreated()).isZero();
+        assertThat(gitHubPullRequestSyncService.syncPullRequests(projectId).linksCreated())
+                .isZero();
+        assertThat(taskCommitLinkRepository.findByIdTaskId(taskId)).hasSize(1);
+        assertThat(taskPullRequestLinkRepository.findByIdTaskId(taskId)).hasSize(1);
+    }
+
+    private JsonNode report(long projectId, String token) throws Exception {
+        String response = mockMvc.perform(get("/api/v1/projects/{projectId}/reports/summary", projectId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(response).path("data");
     }
 
     @Test
