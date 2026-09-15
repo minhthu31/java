@@ -256,7 +256,7 @@ SELECT r.id, 880001, a.id, 900001, 'demo-team-leader',
        'Synthetic Pull Request used for the final demo.', 'feature/demo-login',
        '1111111111111111111111111111111111111111', 'main', 'MERGED', FALSE,
        '2026-09-10 05:00:00', '3333333333333333333333333333333333333333',
-       2, 35, 8, 3, '2026-09-10 05:00:00',
+       1, 35, 8, 3, '2026-09-10 05:00:00',
        '2026-09-10 01:00:00',
        'https://github.com/demo/cnpm-project-support/pull/21'
 FROM github_repositories r
@@ -285,35 +285,41 @@ WHERE r.github_repository_id = 990001
   AND NOT EXISTS (SELECT 1 FROM github_pull_requests pr WHERE pr.github_pull_request_id = 880002)
   AND '${demoSeedEnabled}' = 'true';
 
+-- Keep the synthetic merged PR consistent with its head SHA and merge time.
+-- Older CNPM-113 demo seeds set commit_count to 2, but the second demo commit
+-- was created after this PR was merged and belongs to the later open PR.
+UPDATE github_pull_requests
+SET commit_count = 1
+WHERE github_pull_request_id = 880001
+  AND html_url = 'https://github.com/demo/cnpm-project-support/pull/21'
+  AND '${demoSeedEnabled}' = 'true';
+
 -- Demo relationship data for CNPM-95: GitHub Pull Request <-> commit.
--- Only links the synthetic CNPM-113 demo PR/commits and only runs when demo seed is enabled.
-INSERT INTO github_pull_request_commits (sha, pull_request_id)
-SELECT c.sha, pr.id
-FROM github_commits c
-JOIN github_pull_requests pr ON pr.github_pull_request_id = 880001
-WHERE c.sha IN (
-    '1111111111111111111111111111111111111111',
-    '2222222222222222222222222222222222222222'
-)
+-- Match the V14 schema and link commits only within the same demo repository.
+INSERT INTO github_pull_request_commits (pull_request_id, commit_id, commit_order)
+SELECT pr.id, c.id, 1
+FROM github_pull_requests pr
+JOIN github_commits c ON c.repository_id = pr.repository_id
+WHERE pr.github_pull_request_id = 880001
+  AND pr.html_url = 'https://github.com/demo/cnpm-project-support/pull/21'
+  AND c.sha = '1111111111111111111111111111111111111111'
   AND '${demoSeedEnabled}' = 'true'
   AND NOT EXISTS (
-      SELECT 1
-      FROM github_pull_request_commits pc
-      WHERE pc.sha = c.sha
-        AND pc.pull_request_id = pr.id
+      SELECT 1 FROM github_pull_request_commits pc
+      WHERE pc.pull_request_id = pr.id AND pc.commit_id = c.id
   );
 
-INSERT INTO github_pull_request_commits (sha, pull_request_id)
-SELECT c.sha, pr.id
-FROM github_commits c
-JOIN github_pull_requests pr ON pr.github_pull_request_id = 880002
-WHERE c.sha = '2222222222222222222222222222222222222222'
+INSERT INTO github_pull_request_commits (pull_request_id, commit_id, commit_order)
+SELECT pr.id, c.id, 1
+FROM github_pull_requests pr
+JOIN github_commits c ON c.repository_id = pr.repository_id
+WHERE pr.github_pull_request_id = 880002
+  AND pr.html_url = 'https://github.com/demo/cnpm-project-support/pull/22'
+  AND c.sha = '2222222222222222222222222222222222222222'
   AND '${demoSeedEnabled}' = 'true'
   AND NOT EXISTS (
-      SELECT 1
-      FROM github_pull_request_commits pc
-      WHERE pc.sha = c.sha
-        AND pc.pull_request_id = pr.id
+      SELECT 1 FROM github_pull_request_commits pc
+      WHERE pc.pull_request_id = pr.id AND pc.commit_id = c.id
   );
 
 INSERT INTO task_commit_links (

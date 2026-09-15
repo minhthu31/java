@@ -25,7 +25,7 @@ Website không thay thế Jira hoặc GitHub:
 
 Ứng dụng chạy trực tiếp trên máy Windows. Môi trường đã kiểm tra:
 
-- JDK 21 trở lên; máy hiện tại dùng Java 26.0.2.
+- JDK 21 trở lên.
 - Node.js 22 trở lên; máy hiện tại dùng Node.js 24.18.1 và npm 11.16.0.
 - MySQL Server 8.4; máy hiện tại dùng Windows service `MySQL84`.
 - Git và trình duyệt web.
@@ -114,6 +114,17 @@ vn.edu.cnpm.projectsupport
 
 Mỗi module nên tổ chức tiếp thành `controller`, `service`, `domain`, `repository`, `dto` và `mapper` khi bắt đầu phát triển. Không tạo một thư mục controller/service khổng lồ dùng chung cho mọi nghiệp vụ.
 
+## CNPM-114 — Tài liệu kỹ thuật và Postman
+
+Tài liệu final đã được đối chiếu với controller/DTO hiện tại:
+
+- [Tài liệu kỹ thuật + hướng dẫn chạy/config](docs/technical/CNPM-114-technical-and-postman.md)
+- [Postman Final API Collection](docs/postman/CNPM-Final-API-Collection.json)
+- [Postman Environment Example](docs/postman/CNPM-Final-API-Environment.example.json)
+
+Collection dùng `{{baseUrl}}`, `{{projectId}}` và các placeholder token/secret; không chứa credential thật hoặc URL Jira/GitHub riêng tư.
+Các endpoint Jira/GitHub, Task, Requirement và Reporting trong collection được lấy từ API hiện tại của backend.
+
 ## Tài liệu thiết kế
 
 Bộ tài liệu thiết kế đã đối chiếu với source code và Flyway migration hiện tại:
@@ -131,7 +142,7 @@ Flyway là nguồn chuẩn của schema. Không dùng `spring.jpa.hibernate.ddl-
 
 - `V1__create_core_schema.sql`: schema theo Data Dictionary baseline 2.0.
 - `V2__seed_roles.sql`: bốn role nghiệp vụ.
-- `V3` đến `V11`: dữ liệu demo và schema phục vụ Jira/GitHub Integration.
+- `V3` đến `V13`: các migration bổ sung schema/dữ liệu phục vụ các module và tích hợp hiện tại.
 - Mỗi thay đổi schema tạo migration mới; không sửa migration đã merge vào `main`.
 
 ## Quy tắc kiến trúc

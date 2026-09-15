@@ -379,11 +379,13 @@ Kiểm tra quan hệ commit – Pull Request:
 SELECT
     pr.github_pull_request_id AS github_pr_id,
     pr.number AS pr_number,
-    pc.sha AS commit_sha
+    c.sha AS commit_sha,
+    pc.commit_order
 FROM github_pull_request_commits pc
 JOIN github_pull_requests pr ON pr.id = pc.pull_request_id
+JOIN github_commits c ON c.id = pc.commit_id
 WHERE pr.github_pull_request_id IN (880001, 880002)
-ORDER BY pr.github_pull_request_id, pc.sha;
+ORDER BY pr.github_pull_request_id, pc.commit_order;
 ```
 
 Kiểm tra task:
