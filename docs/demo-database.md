@@ -382,7 +382,7 @@ SELECT
     t.status,
     u.username AS assignee
 FROM tasks t
-LEFT JOIN users u ON u.id = t.assignee_id
+LEFT JOIN users u ON u.id = t.assignee_user_id
 ORDER BY t.id;
 ```
 
