@@ -1,0 +1,582 @@
+# Demo Database
+
+Tài liệu hướng dẫn khởi tạo và sử dụng database demo cho project **CNPM Project Support Backend**.
+
+## 1. Mục đích
+
+Database demo được chuẩn bị để phục vụ:
+
+- Kiểm thử luồng đăng nhập.
+- Demo 4 vai trò: Admin, Lecturer, Team Leader và Team Member.
+- Demo Project, Requirement, Feature, Sprint và Task.
+- Demo dữ liệu Jira.
+- Demo dữ liệu GitHub.
+- Kiểm tra API báo cáo và thống kê.
+
+Database demo sử dụng Flyway. Các migration schema chạy theo thứ tự; dữ liệu demo được seed bởi migration lặp `R__seed_final_demo_data.sql` để có thể bật demo cả sau khi database đã khởi tạo bình thường.
+
+---
+
+## 2. Các tài khoản demo
+
+| Vai trò | Username | Password |
+|---|---|---|
+| Admin | `admin.test` | `password` |
+| Lecturer | `lecturer.test` | `password` |
+| Team Leader | `leader.test` | `password` |
+| Team Member | `member.test` | `password` |
+
+Đây là tài khoản dành cho môi trường demo/local. Không sử dụng các thông tin này cho môi trường production.
+
+Password của các tài khoản được lưu trong database dưới dạng BCrypt hash. Không lưu password dạng plaintext trong migration.
+
+---
+
+## 3. Tạo database sạch
+
+Đăng nhập MySQL bằng tài khoản có quyền quản trị, ví dụ `root`.
+
+Nếu muốn khởi tạo lại database demo từ đầu, chạy:
+
+```sql
+DROP DATABASE IF EXISTS cnpm_project_support;
+
+CREATE DATABASE cnpm_project_support
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+CREATE USER IF NOT EXISTS 'cnpm_user'@'localhost'
+  IDENTIFIED BY 'change-me';
+
+GRANT ALL PRIVILEGES ON cnpm_project_support.* TO 'cnpm_user'@'localhost';
+
+FLUSH PRIVILEGES;
+```
+
+Nếu `cnpm_user` đã tồn tại nhưng password không phải `change-me`, có thể cập nhật:
+
+```sql
+ALTER USER 'cnpm_user'@'localhost'
+IDENTIFIED BY 'change-me';
+
+GRANT ALL PRIVILEGES ON cnpm_project_support.* TO 'cnpm_user'@'localhost';
+
+FLUSH PRIVILEGES;
+```
+
+Kiểm tra database:
+
+```sql
+SHOW DATABASES;
+```
+
+Phải có:
+
+```text
+cnpm_project_support
+```
+
+---
+
+## 4. Cấu hình kết nối database và biến môi trường
+
+File cấu hình ứng dụng là:
+
+```text
+src/main/resources/application.yml
+```
+
+Các biến **bắt buộc** khi chạy ứng dụng:
+
+```text
+DB_USERNAME
+DB_PASSWORD
+JWT_SECRET
+INTEGRATION_ENCRYPTION_KEY
+```
+
+Các biến có giá trị mặc định nên không bắt buộc:
+
+```text
+DB_NAME=cnpm_project_support
+APP_PORT=8080
+JWT_EXPIRATION_MS=3600000
+```
+
+File mẫu:
+
+```text
+.env.example
+```
+
+Ví dụ thiết lập trong PowerShell (mở terminal mới hoặc chạy lại các lệnh này khi cần):
+
+```powershell
+$env:DB_NAME = "cnpm_project_support"
+$env:DB_USERNAME = "cnpm_user"
+$env:DB_PASSWORD = "change-me"
+$env:JWT_SECRET = "demo-jwt-secret-key-with-at-least-32-characters"
+$env:INTEGRATION_ENCRYPTION_KEY = "demo-encryption-key-with-at-least-32-characters"
+$env:JWT_EXPIRATION_MS = "3600000"
+$env:APP_PORT = "8080"
+```
+
+Lưu ý: project hiện không tự đọc file `.env`; cần khai báo các biến môi trường trong terminal/IDE trước khi chạy. Không dùng các giá trị mẫu này cho production.
+
+Mật khẩu database ở ví dụ trên là `change-me`, đúng với `.env.example`. Mật khẩu của **tài khoản demo ứng dụng** vẫn là `password` và là hai loại mật khẩu khác nhau.
+
+## 5. Chạy migration và seed dữ liệu demo
+
+Không bắt buộc phải bật chế độ demo ngay lần đầu. Có thể khởi tạo database và chạy ứng dụng bình thường trước, sau đó bật demo ở một lần chạy sau. Chỉ cần bật biến môi trường `DEMO_SEED_ENABLED=true` khi chạy lần mà bạn muốn có dữ liệu demo. Không cần profile `demo` và không có yêu cầu phải bật demo ngay lần đầu.
+
+### Chạy bình thường
+
+```powershell
+$env:DEMO_SEED_ENABLED = "false"
+.\mvnw.cmd clean spring-boot:run
+```
+
+Hoặc bỏ biến `DEMO_SEED_ENABLED` nếu cấu hình mặc định của project là `false`.
+
+### Bật seed demo
+
+```powershell
+$env:DEMO_SEED_ENABLED = "true"
+.\mvnw.cmd clean spring-boot:run
+```
+
+Không sử dụng `application-demo.yml` và không cần `SPRING_PROFILES_ACTIVE=demo`; chế độ seed demo được điều khiển trực tiếp bằng `DEMO_SEED_ENABLED`.
+
+### Trường hợp đã chạy bình thường trước đó
+
+Nếu database đã khởi tạo bình thường trước đó, không cần chạy lại các migration versioned đã được ghi nhận trong `flyway_schema_history`. Dữ liệu demo hiện được tách sang migration lặp:
+
+```text
+src/main/resources/db/migration/R__seed_final_demo_data.sql
+```
+
+`R__seed_final_demo_data.sql` dùng placeholder `demoSeedEnabled`. Khi chạy với `DEMO_SEED_ENABLED=true`, Flyway thực thi migration lặp này để bổ sung hoặc cập nhật dữ liệu demo. Vì đây là repeatable migration, nội dung thay đổi sẽ làm Flyway thực thi lại migration ở lần chạy phù hợp; không nên dựa vào việc chạy lại một migration versioned cũ để seed demo.
+
+Vì vậy có thể làm:
+
+```powershell
+# Lần đầu: chạy bình thường
+$env:DEMO_SEED_ENABLED = "false"
+.\mvnw.cmd clean spring-boot:run
+
+# Sau đó muốn bật demo
+$env:DEMO_SEED_ENABLED = "true"
+.\mvnw.cmd clean spring-boot:run
+```
+
+Seed demo sử dụng `INSERT ... SELECT` + `NOT EXISTS` và các cập nhật Jira dùng `COALESCE`, nên không tự ghi đè cấu hình Jira đã tồn tại của project mẫu.
+
+Sau khi seed demo xong, lần chạy thông thường có thể bỏ `DEMO_SEED_ENABLED` hoặc đặt lại `false`.
+
+### Nếu database đã chạy V13 của bản CNPM-113 cũ
+
+Nếu database cũ đã chạy `V13__seed_final_demo_data.sql` của bản 113 trước khi các branch được ghép, **không xóa file V13 và không sửa V13 để làm cho checksum khớp**. Khi nội dung migration versioned đã được ghi vào `flyway_schema_history`, thay đổi nội dung file có thể làm Flyway báo:
+
+```text
+Migration checksum mismatch for migration version 13
+```
+
+Cách xử lý phụ thuộc vào loại database. Với dữ liệu demo CNPM-113 cũ, nếu `sync_logs.direction` còn giá trị `INBOUND`, migration lặp mới sẽ chuyển các bản ghi đó sang `IMPORT` trước khi seed dữ liệu hiện tại, tránh lỗi JPA `No enum constant SyncDirection.INBOUND`.
+
+**Database demo/local có thể tạo lại:** đây là cách an toàn và đơn giản nhất. Sao lưu nếu cần, sau đó xóa database và tạo lại database sạch theo mục 3. Tiếp theo dùng đúng bộ migration của branch/main đã thống nhất version và chạy với `DEMO_SEED_ENABLED=true` nếu cần dữ liệu demo.
+
+**Database có dữ liệu thật cần giữ:** không tự ý `DROP DATABASE`, không xóa dòng trong `flyway_schema_history` và không chạy `flyway repair` chỉ để che lỗi checksum. Trước tiên phải thống nhất với branch chứa migration còn lại (`V13__github_check_runs.sql`) cách phân bổ version migration. Sau khi bộ migration trên main đã có version duy nhất, đánh giá checksum của database cũ và thực hiện quy trình Flyway migration/repair theo quyết định của nhóm. `repair` chỉ nên dùng khi nhóm đã xác nhận nội dung migration trong database là nội dung được chấp nhận; nó không giải quyết lỗi trùng version 13.
+
+**Quan trọng:** nếu main đang chứa cả `V13__github_check_runs.sql` và `V13__seed_final_demo_data.sql`, database sẽ không khởi động được với lỗi `Found more than one migration with version 13`. Phải giải quyết xung đột version trước khi nâng cấp database cũ. Không đổi tùy tiện tên hoặc nội dung của một migration V13 đã chạy trên database chỉ để vượt qua kiểm tra.
+
+
+### Lưu ý khi ghép các branch có migration Flyway
+
+Trước khi đưa cả hai nhánh vào `main`, cần kiểm tra toàn bộ thư mục migration để bảo đảm mỗi version chỉ xuất hiện một lần. Ví dụ, nếu một nhánh có:
+
+```text
+V13__github_check_runs.sql
+```
+
+và nhánh khác có:
+
+```text
+V13__seed_final_demo_data.sql
+```
+
+thì khi ghép cả hai, Flyway sẽ báo lỗi:
+
+```text
+Found more than one migration with version 13
+```
+
+**Không tự ý đổi tên hoặc sửa nội dung một migration versioned đã được chạy trên database.** Việc thống nhất version phải được thực hiện trong quá trình chuẩn bị merge/rebase của các branch, theo quy ước migration của nhóm và có kế hoạch xử lý database đã tồn tại. Sau khi hai branch đã thống nhất version, mới đưa cả hai migration vào `main`.
+
+Có thể kiểm tra nhanh trước khi merge bằng:
+
+```powershell
+Get-ChildItem src/main/resources/db/migration -Filter "V*.sql" |
+  Select-Object -ExpandProperty Name |
+  Sort-Object
+```
+
+Nếu phát hiện hai file cùng version (ví dụ cùng bắt đầu bằng `V13__`), **dừng merge và thống nhất với branch chứa migration còn lại trước**. Không sửa V13 đã chạy chỉ để làm cho Git merge được.
+
+## 6. Dữ liệu demo được tạo
+
+Sau khi Flyway chạy thành công, database có dữ liệu mẫu cho:
+
+### Người dùng và nhóm
+
+- `admin.test`
+- `lecturer.test`
+- `leader.test`
+- `member.test`
+- Nhóm demo `CNPM_DEMO`
+
+### Project
+
+Project demo:
+
+```text
+CNPM Project Management Tool
+```
+
+Project có thông tin Jira mẫu:
+
+```text
+Jira site: https://demo.atlassian.net
+Jira project key: CNPM
+Jira project id: 10001
+```
+
+Các thông tin Jira trên chỉ phục vụ demo, không phải thông tin kết nối Jira thật.
+
+### Requirement
+
+Có các requirement mẫu, trong đó có:
+
+```text
+CNPM-201
+CNPM-202
+```
+
+### Feature
+
+Có feature mẫu:
+
+```text
+CNPM-EPIC-2
+Authentication and Reporting
+```
+
+### Sprint
+
+Có sprint demo:
+
+```text
+Sprint 2 - Requirements and Local
+```
+
+### Task
+
+Có task mẫu được giao cho:
+
+```text
+member.test
+```
+
+Task có dữ liệu để trình diễn luồng Requirement → Feature → Sprint → Task.
+
+---
+
+## 7. Dữ liệu Jira demo
+
+Database có dữ liệu Jira giả lập để phục vụ trình diễn:
+
+- Jira issue.
+- Jira issue snapshot.
+- Jira backlog snapshot.
+- Thời gian đồng bộ.
+- Sync log thành công.
+
+---
+
+## 8. Dữ liệu GitHub demo
+
+Database có dữ liệu GitHub giả lập:
+
+- GitHub repository demo.
+- Commit mẫu.
+- Pull Request mẫu.
+- Task → Commit link.
+- Task → Pull Request link.
+- Sync log GitHub.
+
+Repository demo:
+
+```text
+demo/cnpm-project-support
+```
+
+Có các Pull Request mẫu với trạng thái:
+
+```text
+MERGED
+OPEN
+```
+
+Dữ liệu commit và Pull Request được dùng để kiểm tra thống kê GitHub và báo cáo.
+
+---
+
+## 9. Kiểm tra dữ liệu sau khi chạy
+
+Đăng nhập MySQL:
+
+```sql
+USE cnpm_project_support;
+```
+
+Kiểm tra người dùng:
+
+```sql
+SELECT username, full_name
+FROM users;
+```
+
+Kiểm tra project:
+
+```sql
+SELECT id, name, jira_project_key
+FROM projects;
+```
+
+Kiểm tra requirement:
+
+```sql
+SELECT id, jira_issue_key, title
+FROM requirements;
+```
+
+Kiểm tra feature:
+
+```sql
+SELECT id, jira_epic_key, name
+FROM features;
+```
+
+Kiểm tra sprint:
+
+```sql
+SELECT id, name
+FROM sprints;
+```
+
+Kiểm tra quan hệ commit – Pull Request:
+
+```sql
+SELECT
+    pr.github_pull_request_id AS github_pr_id,
+    pr.number AS pr_number,
+    c.sha AS commit_sha,
+    pc.commit_order
+FROM github_pull_request_commits pc
+JOIN github_pull_requests pr ON pr.id = pc.pull_request_id
+JOIN github_commits c ON c.id = pc.commit_id
+WHERE pr.github_pull_request_id IN (880001, 880002)
+ORDER BY pr.github_pull_request_id, pc.commit_order;
+```
+
+Kiểm tra task:
+
+```sql
+SELECT
+    t.id,
+    t.title,
+    t.status,
+    u.username AS assignee
+FROM tasks t
+LEFT JOIN users u ON u.id = t.assignee_user_id
+ORDER BY t.id;
+```
+
+Kiểm tra GitHub commit:
+
+```sql
+SELECT sha, message, committed_at
+FROM github_commits;
+```
+
+Kiểm tra Pull Request:
+
+```sql
+SELECT number, title, state, remote_created_at
+FROM github_pull_requests;
+```
+
+Kiểm tra sync log:
+
+```sql
+SELECT provider, entity_type, direction, status, started_at, completed_at
+FROM sync_logs
+ORDER BY started_at DESC;
+```
+
+---
+
+## 10. Kiểm tra ứng dụng
+
+Sau khi ứng dụng khởi động thành công, server mặc định chạy tại:
+
+```text
+http://localhost:8080
+```
+
+Kiểm tra health:
+
+```text
+http://localhost:8080/actuator/health
+```
+
+Nếu ứng dụng hoạt động bình thường, kết quả sẽ có:
+
+```json
+{
+  "status": "UP"
+}
+```
+
+---
+
+## 11. Đăng nhập
+
+Endpoint đăng nhập:
+
+```text
+POST /api/v1/auth/login
+```
+
+Ví dụ:
+
+```json
+{
+  "usernameOrEmail": "admin.test",
+  "password": "password"
+}
+```
+
+Có thể kiểm tra lần lượt 4 tài khoản:
+
+```text
+admin.test
+lecturer.test
+leader.test
+member.test
+```
+
+với password:
+
+```text
+password
+```
+
+---
+
+## 12. Demo báo cáo
+
+Sau khi đăng nhập và lấy JWT token, có thể sử dụng token để gọi các API yêu cầu xác thực.
+
+Ví dụ endpoint báo cáo tổng quan:
+
+```text
+GET /api/v1/projects/{projectId}/reports/summary
+```
+
+Thay `{projectId}` bằng ID project demo trong database.
+
+Dữ liệu GitHub demo cho phép kiểm tra các thống kê:
+
+- Số commit theo thành viên.
+- Pull Request mở.
+- Pull Request đóng.
+- Pull Request đã merge.
+- Lọc theo project.
+- Lọc theo khoảng thời gian.
+
+Khoảng thời gian báo cáo sử dụng quy tắc:
+
+```text
+[from, to)
+```
+
+Tức là:
+
+```text
+>= from
+< to
+```
+
+---
+
+## 13. GitHub account demo
+
+Trong dữ liệu demo, GitHub external account được tạo cho `leader.test`.
+
+`member.test` được giữ ở trạng thái chưa liên kết GitHub để có thể trình diễn trường hợp thành viên chưa liên kết tài khoản GitHub.
+
+Điều này giúp kiểm tra yêu cầu báo cáo phải thể hiện rõ thành viên chưa liên kết GitHub.
+
+---
+
+## 14. Integration config và secret
+
+Migration demo không seed secret Jira/GitHub thật vào bảng `integration_configs`.
+
+Lý do:
+
+- Không đưa token thật vào source code.
+- Không đưa API key thật vào migration.
+- Secret phải được cấu hình ở môi trường local/development.
+- Nếu ứng dụng sử dụng cơ chế mã hóa secret, khóa mã hóa phải được cung cấp qua biến môi trường `INTEGRATION_ENCRYPTION_KEY`.
+
+---
+
+## 15. Reset database demo
+
+Khi cần làm lại database demo từ đầu:
+
+### Bước 1
+
+Dừng ứng dụng bằng:
+
+```text
+Ctrl + C
+```
+
+### Bước 2
+
+Trong MySQL chạy:
+
+```sql
+DROP DATABASE IF EXISTS cnpm_project_support;
+
+CREATE DATABASE cnpm_project_support
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+GRANT ALL PRIVILEGES ON cnpm_project_support.* TO 'cnpm_user'@'localhost';
+
+FLUSH PRIVILEGES;
+```
+
+### Bước 3
+
+Chạy lại project:
+
+```powershell
+.\mvnw.cmd clean spring-boot:run
+```
+
+---
+**Lưu ý:** Các tài khoản và dữ liệu Jira/GitHub trong tài liệu này là dữ liệu demo local. Không sử dụng chúng như thông tin xác thực cho hệ thống thật.

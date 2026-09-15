@@ -8,6 +8,7 @@
 *.postman_environment.json
 *environment*.json
 !jira-sprint3-environment.example.json
+!CNPM-Final-API-Environment.example.json
 
 # IDE & Editor files
 .vscode/

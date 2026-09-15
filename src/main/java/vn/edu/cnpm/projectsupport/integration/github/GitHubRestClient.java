@@ -152,6 +152,32 @@ public class GitHubRestClient {
         return get(config, BASE_URL + path, GitHubPullRequest.class);
     }
 
+    public GitHubPage<GitHubCommit> getPullRequestCommitsPage(
+            GitHubClientConfig config,
+            int pullRequestNumber,
+            int page) {
+
+        if (pullRequestNumber < 1) {
+            throw new IllegalArgumentException(
+                    "GitHub pull request number must be positive");
+        }
+        validatePage(page);
+
+        String url = BASE_URL
+                + "/repos/"
+                + pathSegment(config.owner())
+                + "/"
+                + pathSegment(config.repository())
+                + "/pulls/"
+                + pullRequestNumber
+                + "/commits?per_page="
+                + MAX_PAGE_SIZE
+                + "&page="
+                + page;
+
+        return getPage(config, url, GitHubCommit[].class);
+    }
+
     public List<GitHubCommit> getAllCommits(
             GitHubClientConfig config) {
 
