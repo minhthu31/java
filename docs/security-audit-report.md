@@ -3,59 +3,54 @@
 - **Dự án:** CNPM Project Management Tool
 - **Mã task:** CNPM-111
 - **Người thực hiện:** Nguyễn Thị Minh Thư
-- **Ngày thực hiện:** 14/09/2026 (Cập nhật đối soát thực tế: 15/09/2026)
+- **Ngày thực hiện:** 14/09/2026 (Cập nhật đối soát thực tế: 16/09/2026)
 - **Trạng thái:** Đã hoàn thành rà soát và đối soát theo mã nguồn, kết quả quét thực tế
 
 ---
 
 ## 1. Mục Tiêu & Phạm Vi Rà Soát
-Rà soát toàn diện cơ chế bảo mật backend: mã hóa dữ liệu tích hợp (GitHub PAT, Jira API Token), bảo đảm API contract không rò rỉ secret, kiểm soát phân quyền (RBAC), che giấu thông tin nhạy cảm trong log/thông báo lỗi và phân loại toàn bộ kết quả quét lịch sử Git (`--all`) cùng mã nguồn dự án trước khi nghiệm thu Sprint.
+Rà soát cơ chế bảo mật backend: mã hóa dữ liệu tích hợp (GitHub PAT, Jira API Token), bảo đảm API contract không rò rỉ secret, kiểm soát phân quyền (RBAC), che giấu thông tin nhạy cảm trong log/xử lý ngoại lệ và phân loại toàn bộ kết quả quét lịch sử Git (`--all`) cùng mã nguồn dự án.
 
 ---
 
-## 2. Kết Quả Kiểm Tra Chi Tiết Kèm Triển Khai & Kiểm Thử
+## 2. Kết Quả Kiểm Tra Chi Tiết
 
 ### 2.1. Mã hóa Token trong DB (Database Encryption)
 * **Yêu cầu:** Toàn bộ token tích hợp bên thứ ba (GitHub PAT, Jira API Token) phải được mã hóa trước khi lưu trữ, không lưu dạng plaintext.
 * **File triển khai:** `vn.edu.cnpm.projectsupport.security.AesGcmIntegrationSecretService`
 * **Cơ chế & Cấu hình:**
   * Thuật toán: **AES-256-GCM** kèm Nonce/IV ngẫu nhiên cho mỗi lần mã hóa.
-  * Tên key cấu hình: `app.security.integration-encryption-key` (lấy từ biến môi trường `${INTEGRATION_ENCRYPTION_KEY}`).
-  * Định dạng lưu trữ thực tế trong database: `v1::<ciphertext+tag>`.
-* **Kết quả:** **ĐẠT**. Dữ liệu trong database được mã hóa trước khi lưu, không lưu token dạng bản rõ.
+  * Key cấu hình: `app.security.integration-encryption-key` lấy từ biến môi trường `${INTEGRATION_ENCRYPTION_KEY}` trong `application.yml`.
+  * Định dạng lưu trữ thực tế trong database: `v1::<Base64-ciphertext+tag>`.
+* **Kết quả:** **ĐẠT**. Database lưu trữ dữ liệu dưới dạng mã hóa, không lưu token bản rõ.
 
 ---
 
 ### 2.2. API Response không trả Token về Frontend
-* **Yêu cầu:** Các API trả về thông tin cấu hình tích hợp tuyệt đối không trả lại token gốc về client.
-* **Cơ chế:** Dữ liệu phản hồi cấu hình tích hợp (GitHub, Jira) chỉ chứa các trường thông tin chung (`isConfigured: true/false`, URL kết nối, thời gian cập nhật), loại bỏ hoàn toàn trường `token`/`secret` khỏi payload phản hồi gửi về client.
+* **Yêu cầu:** Các API cấu hình tích hợp tuyệt đối không trả lại token gốc về client.
+* **Cơ chế:** Dữ liệu response cấu hình tích hợp (GitHub, Jira) chỉ trả về các trường thông tin trạng thái (`isConfigured: true/false`, URL cấu hình, thời gian cập nhật), loại bỏ hoàn toàn trường `token`/`secret` khỏi payload trả về client.
 * **Kết quả:** **ĐẠT**.
 
 ---
 
-### 2.3. Rà soát Logging & Không lộ Secret (Masking)
-* **Yêu cầu:** Không ghi log các header xác thực (`Authorization`, `Cookie`, `x-api-key`) hoặc body chứa secret khi giao tiếp nội bộ và bên thứ ba.
-* **Cơ chế thực tế:** Xử lý làm sạch/che giấu (masking) cục bộ tại các vị trí tiếp nhận và xử lý token (`JiraSyncService`, GitHub services) trước khi ghi log hoặc debug.
+### 2.3. Rà soát Logging & Xử lý thông báo lỗi (Masking / Exception)
+* **Yêu cầu:** Không ghi lộ secret trong log và không trả stack trace ra response client.
+* **Cơ chế triển khai thực tế:**
+  * **Jira Integration:** Xử lý làm sạch/masking chuỗi secret trong log ngoại lệ tại `JiraSyncService` trước khi ghi nhận lỗi.
+  * **GitHub Integration:** Các service đồng bộ (`GitHubCheckRunSyncService`, `GitHubCommitSyncService`, `GitHubPullRequestSyncService`) sử dụng phương thức `safeMessage(exception)` để trích xuất thông báo lỗi an toàn vào log entity, không log payload thô chứa token.
+  * **API Exception:** Bắt và chuẩn hóa ngoại lệ tại controller/service, không trả stack trace DB ra ngoài client.
 * **Kết quả:** **ĐẠT**.
 
 ---
 
-### 2.4. Thông báo lỗi & Xử lý ngoại lệ (Exception Handling)
-* **Yêu cầu:** Không trả stack trace, câu lệnh SQL hoặc chi tiết cấu trúc bảng DB ra response khi xảy ra lỗi (4xx, 5xx).
-* **Cơ chế triển khai:** Các exception từ tích hợp Jira/GitHub được bắt và xử lý tại tầng service/controller trước khi trả response, đảm bảo thông tin lỗi trả về client được chuẩn hóa và loại bỏ hoàn toàn chi tiết nhạy cảm.
-* **Kết quả:** **ĐẠT**.
-
----
-
-### 2.5. Phân quyền truy cập cấu hình (RBAC)
+### 2.4. Phân quyền truy cập cấu hình (RBAC)
 * **Quy tắc phân quyền thực tế:**
-  * **Admin (System/Workspace Admin):** Toàn quyền lưu/cập nhật (`POST`/`PUT`) và kiểm tra kết nối (`TEST`) cấu hình tích hợp Jira & GitHub.
-  * **Leader dự án:** Chỉ được quyền xem (`GET`) trạng thái cấu hình trong phạm vi project được phân công; **không** được phép thêm/sửa cấu hình tích hợp.
-  * **Member / Developer / Role khác:** Bị từ chối truy cập toàn bộ (trả về HTTP 403 Forbidden).
-* **File triển khai & kiểm thử:**
+  * **Admin:** Toàn quyền lưu/cập nhật (`POST`/`PUT`) và kiểm tra kết nối (`TEST`) cấu hình tích hợp Jira & GitHub. Không có API xóa cấu hình (DELETE).
+  * **Leader dự án:** Chỉ được xem (`GET`) trạng thái cấu hình trong phạm vi project được phân công; **không** được phép lưu hay cập nhật cấu hình.
+  * **Member / Role khác:** Bị từ chối truy cập (HTTP 403 Forbidden).
+* **File triển khai & Test liên quan:**
   * Triển khai: `vn.edu.cnpm.projectsupport.security.ProjectAuthorizationService`
-  * Annotation `@PreAuthorize` trên các endpoint cấu hình tích hợp.
-  * Test kiểm chứng: `GitHubRbacIntegrationTest.java`, `GitHubIntegrationControllerTest.java`, `JiraSyncRbacControllerTest.java`
+  * Test kiểm chứng cấu hình: `JiraIntegrationControllerTests`, `GitHubIntegrationControllerTest`, `GitHubRbacIntegrationTest`
 * **Kết quả:** **ĐẠT**.
 
 ---
@@ -66,23 +61,23 @@ Rà soát toàn diện cơ chế bảo mật backend: mã hóa dữ liệu tích
 
 | Pattern | Lệnh thực thi kiểm chứng | Kết quả khớp | Phân loại & Giải thích thực tế |
 | :--- | :--- | :---: | :--- |
-| `ghp_` | `git log --all -S "ghp_" --oneline` | **20 commits** | **False Positive:** Placeholder UI (`placeholder="ghp_..."`), mock data trong unit test/RBAC test và tài liệu markdown. Không chứa secret thật. |
-| `gho_` | `git log --all -S "gho_" --oneline` | **3 commits** | **False Positive:** Comment giải thích định dạng token và các commit cập nhật tài liệu audit. |
-| `github_pat_` | `git log --all -S "github_pat_" --oneline` | **5 commits** | **False Positive:** Regex kiểm tra định dạng token và các commit cập nhật tài liệu audit. |
-| `ATATT` | `git log --all -S "ATATT" --oneline` | **3 commits** | **False Positive:** Hướng dẫn định dạng token Jira trong markdown và các commit cập nhật tài liệu audit. |
+| `ghp_` | `git log --all -S "ghp_" --oneline` | **20 commits** | **False Positive:** Placeholder UI (`placeholder="ghp_..."`), mock data trong unit test/RBAC test và các commit cập nhật tài liệu audit. Không chứa secret thật. |
+| `gho_` | `git log --all -S "gho_" --oneline` | **3 commits** | **False Positive:** Các commit cập nhật tài liệu audit (`de641a1`, `03a40d7`, `274cb03`). |
+| `github_pat_` | `git log --all -S "github_pat_" --oneline` | **5 commits** | **False Positive:** Regex kiểm tra định dạng token (`195a2ba`, `e047c70`) và các commit cập nhật tài liệu audit. |
+| `ATATT` | `git log --all -S "ATATT" --oneline` | **3 commits** | **False Positive:** Hướng dẫn định dạng token Jira (`566221a`) và các commit cập nhật tài liệu audit. |
 | `api_token` | `git log --all -S "api_token" --oneline` | **12 commits** | **Non-sensitive / Identifier:** Tên trường DTO, tham số Postman collection, endpoint docs và comment hướng dẫn. |
-| `jwt.secret` | `git log --all -S "jwt.secret" --oneline` | **16 commits** | **Configuration Reference:** Cấu hình Spring Security, code inject biến môi trường `${JWT_SECRET}` và mock key trong test. |
+| `jwt.secret` | `git log --all -S "jwt.secret" --oneline` | **17 commits** | **Configuration Reference:** Cấu hình Spring Security (`CNPM-42`), inject biến môi trường `${JWT_SECRET}` (`application.yml`) và các commit cập nhật docs. |
 | `jira.token=` | `git grep -in "jira.token="` | **1 file** | **Documentation:** File tài liệu `docs/security-audit-report.md`. |
 | `spring.datasource.password` | `git grep -in "spring.datasource.password"` | **1 file** | **Documentation:** File tài liệu `docs/security-audit-report.md`. |
 
 ---
 
-### 3.2. Trích Xuất Chi Tiết Log & Phân Loại Kiểm Chứng
+### 3.2. Trích Xuất Chi Tiết Log Quét Mã Nguồn Thực Tế
 
 ```powershell
 PS D:\java\project\java> git log --all -S "ghp_" --oneline
-3046256 (HEAD -> feature/CNPM-111-security-and-sensitive-data-audit, origin/feature/CNPM-111-security-and-sensitive-data-audit) CNPM-111:fix audit report
-de641a1 CNPM-111: update audit report
+3046256 CNPM-111:fix audit report
+8031a48 CNPM-111: fix audit report
 03a40d7 CNPM-111: fix audit report
 274cb03 CNPM-111 update security audit report
 fbc36d2 feat(CNPM-101): integrate and close Sprint 4
@@ -101,20 +96,24 @@ b57be32 fix(CNPM-92): github-config-admin
 49d82ee CNPM-92 Implement GitHub config admin
 
 PS D:\java\project\java> git log --all -S "gho_" --oneline
+de641a1 CNPM-111: update audit report
 03a40d7 CNPM-111: fix audit report
 274cb03 CNPM-111 update security audit report
 
 PS D:\java\project\java> git log --all -S "github_pat_" --oneline
+de641a1 CNPM-111: update audit report
 03a40d7 CNPM-111: fix audit report
 274cb03 CNPM-111 update security audit report
 195a2ba fix(CNPM-99):github-activity-ui
 e047c70 feat(CNPM-99): implement github activity feature
 
 PS D:\java\project\java> git log --all -S "ATATT" --oneline
+de641a1 CNPM-111: update audit report
 274cb03 CNPM-111 update security audit report
-566221a Fix CNPM-86
+566221a  Fix CNPM-86
 
 PS D:\java\project\java> git log --all -S "api_token" --oneline
+de641a1 CNPM-111: update audit report
 03a40d7 CNPM-111: fix audit report
 da61c19 docs: update technical documentation and Postman collection
 274cb03 CNPM-111 update security audit report
@@ -123,16 +122,30 @@ da61c19 docs: update technical documentation and Postman collection
 a14fc68 CNPM-93 sync GitHub repository information
 7f6f27b feature/CNPM-86-jira-postman
 5011bf5 feature/CNPM-86-jira-postman
-bc70a42 CNPM-46: add role based access control
-3bdd4ff Add Jira Cloud REST API authentication documentation
-8938963 Add Jira Cloud REST API authentication guide
+bc70a42 (origin/feature/CNPM-46-role-based-access-control) CNPM-46: add role based acc
 
-PS D:\java\project\java> git grep -in "jwt.secret"
+PS D:\java\project\java> git log --all -S "jwt.secret" --oneline
+4d5a2cc (origin/feature/CNPM-111-security-and-sensitive-data-audit) CNPM-111: fix audit report
+8031a48 CNPM-111: fix audit report
+de641a1 CNPM-111: update audit report
+03a40d7 CNPM-111: fix audit report
+274cb03 CNPM-111 update security audit report
+a14fc68 CNPM-93 sync GitHub repository information
+d3ba54f CNPM-40 CNPM-41 CNPM-42 CNPM-45 CNPM-46 CNPM-47 CNPM-48 CNPM-49 complete authentication flow
+bc70a42 (origin/feature/CNPM-46-role-based-access-control) CNPM-46: add role based acc
+
+PS D:\java\project\java> git grep -in "jwt.secret" src/main/resources/
 src/main/resources/application.yml:42:    secret: ${JWT_SECRET}
 
-PS D:\java\project\java> git grep -in "integration-encryption-key"
+PS D:\java\project\java> git grep -in "integration-encryption-key" src/main/resources/
 src/main/resources/application.yml:45:    integration-encryption-key: ${INTEGRATION_ENCRYPTION_KEY}
-src/main/java/vn/edu/cnpm/projectsupport/security/AesGcmIntegrationSecretService.java:24:            @Value("${app.security.integration-encryption-key}") String encryptionKey)
+
+PS D:\java\project\java> git grep -in "safeMessage" src/main/java/
+src/main/java/vn/edu/cnpm/projectsupport/integration/github/GitHubCheckRunSyncService.java:370:            log.setErrorMessage(safeMessage(exception));
+src/main/java/vn/edu/cnpm/projectsupport/integration/github/GitHubCheckRunSyncService.java:514:    private String safeMessage(RuntimeException exception) {
+src/main/java/vn/edu/cnpm/projectsupport/integration/github/GitHubCommitSyncService.java:155:            log.setErrorMessage(safeMessage(exception));
+src/main/java/vn/edu/cnpm/projectsupport/integration/github/GitHubCommitSyncService.java:244:    private String safeMessage(RuntimeException exception) {
+src/main/java/vn/edu/cnpm/projectsupport/integration/github/GitHubPullRequestSyncService.java:171:            log.setErrorMessage(safeMessage(exception));
 
 PS D:\java\project\java> ./mvnw clean test
 [INFO] Results:
