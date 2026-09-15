@@ -244,6 +244,23 @@ API chính:
 | PUT | `/projects/{projectId}/integrations/github/members/{userId}/account-link` | Link tài khoản GitHub |
 | GET | `/projects/{projectId}/integrations/github/members/unlinked` | Thành viên chưa link |
 
+### Link tài khoản GitHub cho thành viên
+
+Request `PUT /projects/{projectId}/integrations/github/members/{userId}/account-link` yêu cầu hai trường bắt buộc `externalAccountId` và `username`.
+
+Mẫu request:
+
+```json
+{
+  "externalAccountId": "9001",
+  "username": "octocat"
+}
+```
+
+Trong đó:
+- `externalAccountId`: GitHub User ID dạng số, truyền dưới dạng chuỗi theo contract của API.
+- `username`: tên đăng nhập GitHub của tài khoản cần liên kết.
+
 Các API phân trang dùng `page` và `size`; size của GitHub activity hiện giới hạn 1–100.
 
 ## 8. Task và Requirement

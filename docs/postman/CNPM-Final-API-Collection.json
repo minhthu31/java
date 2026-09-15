@@ -755,7 +755,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"githubUsername\": \"<github-username>\"\n}"
+              "raw": "{\n  \"externalAccountId\": \"9001\",\n  \"username\": \"octocat\"\n}"
             }
           }
         }
