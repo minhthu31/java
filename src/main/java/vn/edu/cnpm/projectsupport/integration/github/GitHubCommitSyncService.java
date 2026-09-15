@@ -191,7 +191,7 @@ public class GitHubCommitSyncService {
         return repositoryRepository.saveAndFlush(local);
     }
 
-    private GitHubCommit upsertCommit(Long repositoryId, vn.edu.cnpm.projectsupport.integration.github.GitHubCommit remote) {
+    GitHubCommit upsertCommit(Long repositoryId, vn.edu.cnpm.projectsupport.integration.github.GitHubCommit remote) {
         if (remote.sha() == null || remote.sha().isBlank()
                 || remote.commit() == null || remote.commit().message() == null
                 || remote.commit().author() == null || remote.commit().author().date() == null

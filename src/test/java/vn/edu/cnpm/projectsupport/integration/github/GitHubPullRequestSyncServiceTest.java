@@ -2,6 +2,7 @@ package vn.edu.cnpm.projectsupport.integration.github;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -22,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import vn.edu.cnpm.projectsupport.integration.github.domain.GitHubPullRequestState;
 import vn.edu.cnpm.projectsupport.integration.github.domain.GitHubRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubIntegrationConfigRepository;
+import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubPullRequestCommitRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubPullRequestRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubRepositoryRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.UserExternalAccountRepository;
@@ -40,6 +42,8 @@ class GitHubPullRequestSyncServiceTest {
     @Mock GitHubIntegrationConfigRepository configRepository;
     @Mock IntegrationSecretService secretService;
     @Mock GitHubTaskLinkService taskLinkService;
+    @Mock GitHubCommitSyncService commitSyncService;
+    @Mock GitHubPullRequestCommitRepository pullRequestCommitRepository;
 
     private GitHubPullRequestSyncService service;
     private GitHubClientConfig config;
@@ -55,7 +59,9 @@ class GitHubPullRequestSyncServiceTest {
                 syncLogRepository,
                 configRepository,
                 secretService,
-                taskLinkService);
+                taskLinkService,
+                commitSyncService,
+                pullRequestCommitRepository);
         config = new GitHubClientConfig(
                 "octocat", "Hello-World", "token", "2026-03-10", Duration.ofSeconds(5));
         localRepository = mock(GitHubRepository.class);
@@ -66,6 +72,10 @@ class GitHubPullRequestSyncServiceTest {
         when(syncLogRepository.save(any(SyncLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(taskLinkService.linkPullRequest(eq(1L), any()))
                 .thenReturn(new GitHubTaskLinkResult(0, 0, 0, List.of()));
+        lenient().when(client.getPullRequestCommitsPage(eq(config), anyInt(), eq(1)))
+                .thenReturn(new GitHubPage<>(List.of(), null, null));
+        lenient().when(pullRequestCommitRepository.findByPullRequestIdOrderByCommitOrderAsc(any()))
+                .thenReturn(List.of());
     }
 
     @Test
@@ -74,6 +84,7 @@ class GitHubPullRequestSyncServiceTest {
         GitHubPullRequest second = pullRequest(11, "closed", Instant.parse("2026-09-08T12:00:00Z"));
         vn.edu.cnpm.projectsupport.integration.github.domain.GitHubPullRequest persisted =
                 mock(vn.edu.cnpm.projectsupport.integration.github.domain.GitHubPullRequest.class);
+        when(persisted.getId()).thenReturn(30L);
 
         when(client.getRepository(config)).thenReturn(remoteRepository());
         when(client.getPullRequestsPage(config, "all", 1))
@@ -110,6 +121,7 @@ class GitHubPullRequestSyncServiceTest {
                 null, null, null, null, null, null, null, null, null, null);
         vn.edu.cnpm.projectsupport.integration.github.domain.GitHubPullRequest persisted =
                 mock(vn.edu.cnpm.projectsupport.integration.github.domain.GitHubPullRequest.class);
+        when(persisted.getId()).thenReturn(30L);
 
         when(client.getRepository(config)).thenReturn(remoteRepository());
         when(client.getPullRequestsPage(config, "all", 1))
@@ -126,6 +138,71 @@ class GitHubPullRequestSyncServiceTest {
         ArgumentCaptor<SyncLog> logCaptor = ArgumentCaptor.forClass(SyncLog.class);
         verify(syncLogRepository, times(2)).save(logCaptor.capture());
         assertThat(logCaptor.getAllValues().getLast().getErrorCode()).isEqualTo("PARTIAL_SYNC");
+    }
+
+    @Test
+    void mapsClosedPullRequestWithoutMergedTimestamp() {
+        GitHubPullRequest closed = pullRequest(12, "closed", null);
+        vn.edu.cnpm.projectsupport.integration.github.domain.GitHubPullRequest persisted =
+                mock(vn.edu.cnpm.projectsupport.integration.github.domain.GitHubPullRequest.class);
+        when(persisted.getId()).thenReturn(31L);
+        when(client.getRepository(config)).thenReturn(remoteRepository());
+        when(client.getPullRequestsPage(config, "all", 1))
+                .thenReturn(new GitHubPage<>(List.of(closed), null, null));
+        when(client.getPullRequest(config, 12)).thenReturn(closed);
+        when(pullRequestRepository.findByRepositoryIdAndNumber(20L, 12)).thenReturn(Optional.empty());
+        when(pullRequestRepository.saveAndFlush(any())).thenReturn(persisted);
+
+        GitHubPullRequestSyncResult result = service.syncPullRequests(1L, config);
+
+        assertThat(result.errors()).isZero();
+        ArgumentCaptor<vn.edu.cnpm.projectsupport.integration.github.domain.GitHubPullRequest> captor =
+                ArgumentCaptor.forClass(vn.edu.cnpm.projectsupport.integration.github.domain.GitHubPullRequest.class);
+        verify(pullRequestRepository).saveAndFlush(captor.capture());
+        assertThat(captor.getValue().getState()).isEqualTo(GitHubPullRequestState.CLOSED);
+    }
+
+    @Test
+    void syncsPullRequestCommitPagesAndReusesExistingRelationOnRetry() {
+        GitHubPullRequest pullRequest = pullRequest(15, "open", null);
+        vn.edu.cnpm.projectsupport.integration.github.domain.GitHubPullRequest persistedPullRequest =
+                mock(vn.edu.cnpm.projectsupport.integration.github.domain.GitHubPullRequest.class);
+        vn.edu.cnpm.projectsupport.integration.github.domain.GitHubCommit persistedCommit =
+                mock(vn.edu.cnpm.projectsupport.integration.github.domain.GitHubCommit.class);
+        GitHubCommit listedCommit = commit("0123456789abcdef0123456789abcdef01234567");
+        when(persistedPullRequest.getId()).thenReturn(35L);
+        when(persistedCommit.getId()).thenReturn(45L);
+        when(client.getRepository(config)).thenReturn(remoteRepository());
+        when(client.getPullRequestsPage(config, "all", 1))
+                .thenReturn(new GitHubPage<>(List.of(pullRequest), null, null));
+        when(client.getPullRequest(config, 15)).thenReturn(pullRequest);
+        when(pullRequestRepository.findByRepositoryIdAndNumber(20L, 15)).thenReturn(Optional.empty());
+        when(pullRequestRepository.saveAndFlush(any())).thenReturn(persistedPullRequest);
+        when(client.getPullRequestCommitsPage(config, 15, 1))
+                .thenReturn(new GitHubPage<>(List.of(listedCommit), "https://api.github.com/next", null));
+        when(client.getPullRequestCommitsPage(config, 15, 2))
+                .thenReturn(new GitHubPage<>(List.of(), null, null));
+        when(client.getCommit(config, listedCommit.sha())).thenReturn(listedCommit);
+        when(commitSyncService.upsertCommit(20L, listedCommit)).thenReturn(persistedCommit);
+        when(taskLinkService.linkCommit(1L, persistedCommit))
+                .thenReturn(new GitHubTaskLinkResult(0, 0, 0, List.of()));
+
+        service.syncPullRequests(1L, config);
+
+        ArgumentCaptor<vn.edu.cnpm.projectsupport.integration.github.domain.GitHubPullRequestCommit> relationCaptor =
+                ArgumentCaptor.forClass(vn.edu.cnpm.projectsupport.integration.github.domain.GitHubPullRequestCommit.class);
+        verify(pullRequestCommitRepository).saveAndFlush(relationCaptor.capture());
+        var persistedRelation = relationCaptor.getValue();
+        assertThat(persistedRelation.getPullRequestId()).isEqualTo(35L);
+        assertThat(persistedRelation.getCommitId()).isEqualTo(45L);
+        assertThat(persistedRelation.getCommitOrder()).isEqualTo(1);
+        verify(client).getPullRequestCommitsPage(config, 15, 2);
+
+        when(pullRequestCommitRepository.findByPullRequestIdOrderByCommitOrderAsc(35L))
+                .thenReturn(List.of(persistedRelation));
+        service.syncPullRequests(1L, config);
+
+        verify(pullRequestCommitRepository, times(2)).saveAndFlush(persistedRelation);
     }
 
     private GitHubPullRequest pullRequest(int number, String state, Instant mergedAt) {
@@ -149,6 +226,21 @@ class GitHubPullRequestSyncServiceTest {
                 Instant.parse("2026-09-08T10:00:00Z"),
                 Instant.parse("2026-09-08T11:00:00Z"),
                 mergedAt);
+    }
+
+    private GitHubCommit commit(String sha) {
+        Instant committedAt = Instant.parse("2026-09-08T09:00:00Z");
+        return new GitHubCommit(
+                sha,
+                new GitHubCommit.CommitMetadata(
+                        "CNPM-95 sync commit",
+                        new GitHubCommit.GitAuthor("Member", "member@example.com", committedAt),
+                        new GitHubCommit.GitAuthor("Member", "member@example.com", committedAt)),
+                new GitHubUser(77L, "member", null, null, null, null),
+                "https://github.com/octocat/Hello-World/commit/" + sha,
+                null,
+                List.of(),
+                List.of());
     }
 
     private vn.edu.cnpm.projectsupport.integration.github.GitHubRepository remoteRepository() {

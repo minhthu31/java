@@ -1,11 +1,18 @@
 package vn.edu.cnpm.projectsupport.integration.github;
 
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import vn.edu.cnpm.projectsupport.integration.github.domain.GitHubPullRequestCommit;
 import vn.edu.cnpm.projectsupport.integration.github.domain.GitHubPullRequestState;
 import vn.edu.cnpm.projectsupport.integration.github.domain.UserExternalAccount;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubIntegrationConfigRepository;
+import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubPullRequestCommitRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubPullRequestRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubRepositoryRepository;
 import vn.edu.cnpm.projectsupport.integration.github.repository.UserExternalAccountRepository;
@@ -31,6 +38,8 @@ public class GitHubPullRequestSyncService {
     private final GitHubIntegrationConfigRepository configRepository;
     private final IntegrationSecretService secretService;
     private final GitHubTaskLinkService taskLinkService;
+    private final GitHubCommitSyncService commitSyncService;
+    private final GitHubPullRequestCommitRepository pullRequestCommitRepository;
 
     public GitHubPullRequestSyncService(
             GitHubRestClient gitHubRestClient,
@@ -40,7 +49,9 @@ public class GitHubPullRequestSyncService {
             SyncLogRepository syncLogRepository,
             GitHubIntegrationConfigRepository configRepository,
             IntegrationSecretService secretService,
-            GitHubTaskLinkService taskLinkService) {
+            GitHubTaskLinkService taskLinkService,
+            GitHubCommitSyncService commitSyncService,
+            GitHubPullRequestCommitRepository pullRequestCommitRepository) {
         this.gitHubRestClient = gitHubRestClient;
         this.pullRequestRepository = pullRequestRepository;
         this.repositoryRepository = repositoryRepository;
@@ -49,6 +60,8 @@ public class GitHubPullRequestSyncService {
         this.configRepository = configRepository;
         this.secretService = secretService;
         this.taskLinkService = taskLinkService;
+        this.commitSyncService = commitSyncService;
+        this.pullRequestCommitRepository = pullRequestCommitRepository;
     }
 
     public GitHubPullRequestSyncResult syncPullRequests(Long projectId) {
@@ -123,6 +136,14 @@ public class GitHubPullRequestSyncService {
                         if (linkResult.linksCreated() == 0 && linkResult.duplicateLinks() == 0) {
                             unlinkedActivities++;
                         }
+                        CommitLinkSyncResult commitResult = syncPullRequestCommits(
+                                projectId,
+                                localRepository.getId(),
+                                local.getId(),
+                                remote.number(),
+                                config);
+                        linksCreated += commitResult.linksCreated();
+                        unlinkedActivities += commitResult.unlinkedActivities();
                         synced++;
                     } catch (RuntimeException pullRequestException) {
                         errors++;
@@ -244,6 +265,83 @@ public class GitHubPullRequestSyncService {
         return pullRequestRepository.saveAndFlush(local);
     }
 
+    private CommitLinkSyncResult syncPullRequestCommits(
+            Long projectId,
+            Long repositoryId,
+            Long pullRequestId,
+            Integer pullRequestNumber,
+            GitHubClientConfig config) {
+        if (pullRequestId == null) {
+            throw new IllegalStateException("Pull Request must be persisted before its commits are synchronized");
+        }
+
+        List<GitHubPullRequestCommit> existingLinks =
+                pullRequestCommitRepository.findByPullRequestIdOrderByCommitOrderAsc(pullRequestId);
+        Map<Long, GitHubPullRequestCommit> existingByCommitId = new HashMap<>();
+        for (GitHubPullRequestCommit link : existingLinks) {
+            existingByCommitId.put(link.getCommitId(), link);
+        }
+
+        Set<Long> retainedCommitIds = new HashSet<>();
+        int linksCreated = 0;
+        int unlinkedActivities = 0;
+        int commitOrder = 0;
+        int page = 1;
+        String nextUrl;
+        do {
+            if (page > MAX_PAGES) {
+                throw new GitHubApiException(
+                        org.springframework.http.HttpStatus.BAD_GATEWAY,
+                        "GITHUB_PROVIDER_UNAVAILABLE",
+                        false,
+                        null,
+                        "GitHub Pull Request commit pagination exceeded the safety limit",
+                        null);
+            }
+
+            GitHubPage<vn.edu.cnpm.projectsupport.integration.github.GitHubCommit> pageResult =
+                    gitHubRestClient.getPullRequestCommitsPage(config, pullRequestNumber, page);
+            for (vn.edu.cnpm.projectsupport.integration.github.GitHubCommit listedCommit : pageResult.items()) {
+                if (listedCommit == null || listedCommit.sha() == null || listedCommit.sha().isBlank()) {
+                    throw new IllegalArgumentException("GitHub Pull Request commit list item has no SHA");
+                }
+
+                vn.edu.cnpm.projectsupport.integration.github.GitHubCommit remoteCommit =
+                        gitHubRestClient.getCommit(config, listedCommit.sha());
+                vn.edu.cnpm.projectsupport.integration.github.domain.GitHubCommit localCommit =
+                        commitSyncService.upsertCommit(repositoryId, remoteCommit);
+                if (localCommit.getId() == null) {
+                    throw new IllegalStateException("Commit must be persisted before it is linked to a Pull Request");
+                }
+
+                retainedCommitIds.add(localCommit.getId());
+                GitHubPullRequestCommit relation = existingByCommitId.get(localCommit.getId());
+                if (relation == null) {
+                    relation = new GitHubPullRequestCommit(pullRequestId, localCommit.getId(), ++commitOrder);
+                } else {
+                    relation.setCommitOrder(++commitOrder);
+                }
+                pullRequestCommitRepository.saveAndFlush(relation);
+
+                GitHubTaskLinkResult taskLinkResult = taskLinkService.linkCommit(projectId, localCommit);
+                linksCreated += taskLinkResult.linksCreated();
+                if (taskLinkResult.linksCreated() == 0 && taskLinkResult.duplicateLinks() == 0) {
+                    unlinkedActivities++;
+                }
+            }
+            nextUrl = pageResult.nextUrl();
+            page++;
+        } while (nextUrl != null);
+
+        List<GitHubPullRequestCommit> staleLinks = existingLinks.stream()
+                .filter(link -> !retainedCommitIds.contains(link.getCommitId()))
+                .toList();
+        if (!staleLinks.isEmpty()) {
+            pullRequestCommitRepository.deleteAll(staleLinks);
+        }
+        return new CommitLinkSyncResult(linksCreated, unlinkedActivities);
+    }
+
     private void mapExternalAuthor(
             vn.edu.cnpm.projectsupport.integration.github.domain.GitHubPullRequest local,
             GitHubUser author) {
@@ -270,5 +368,8 @@ public class GitHubPullRequestSyncService {
         }
         String message = exception.getMessage();
         return message == null || message.isBlank() ? "GitHub pull request sync failed" : message;
+    }
+
+    private record CommitLinkSyncResult(int linksCreated, int unlinkedActivities) {
     }
 }
