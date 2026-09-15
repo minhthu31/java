@@ -4,7 +4,7 @@
 - **Mã task:** CNPM-111
 - **Người thực hiện:** Nguyễn Thị Minh Thư
 - **Ngày thực hiện:** 14/09/2026 (Cập nhật đối soát thực tế: 15/09/2026)
-- **Trạng thái:** Đã hoàn thành rà soát & cập nhật 100% bằng chứng kiểm thử, kết quả scan thực tế
+- **Trạng thái:** Đã hoàn thành rà soát và đối soát theo mã nguồn, kết quả quét thực tế
 
 ---
 
@@ -13,7 +13,7 @@ Rà soát toàn diện cơ chế bảo mật backend: mã hóa dữ liệu tích
 
 ---
 
-## 2. Kết Quả Kiểm Tra Chi Tiết Kèm File / Test Case Chứng Minh
+## 2. Kết Quả Kiểm Tra Chi Tiết Kèm Triển Khai & Kiểm Thử
 
 ### 2.1. Mã hóa Token trong DB (Database Encryption)
 * **Yêu cầu:** Toàn bộ token tích hợp bên thứ ba (GitHub PAT, Jira API Token) phải được mã hóa trước khi lưu trữ, không lưu dạng plaintext.
@@ -21,95 +21,49 @@ Rà soát toàn diện cơ chế bảo mật backend: mã hóa dữ liệu tích
 * **Cơ chế & Cấu hình:**
   * Thuật toán: **AES-256-GCM** kèm Nonce/IV ngẫu nhiên cho mỗi lần mã hóa.
   * Tên key cấu hình: `app.security.integration-encryption-key` (được inject từ biến môi trường `${INTEGRATION_ENCRYPTION_KEY}`).
-  * Định dạng lưu trữ thực tế trong database: `v1::<base64-ciphertext-kèm-tag>`.
-* **File test chứng minh:** `vn.edu.cnpm.projectsupport.security.AesGcmIntegrationSecretServiceTest`
-* **Test cases cụ thể:**
-  1. `encrypt_shouldProducePrefixAndValidCiphertext()`: Kiểm tra chuỗi sau mã hóa bắt đầu bằng tiền tố `v1::` và không chứa token gốc.
-  2. `decrypt_shouldRestoreOriginalSecret()`: Xác nhận giải mã khôi phục chính xác secret ban đầu.
-  3. `decrypt_withTamperedData_shouldThrowException()`: Xác nhận cơ chế GCM Authentication Tag phát hiện và từ chối dữ liệu bị giả mạo.
-* **Kết quả:** **ĐẠT**. Dữ liệu trong database hoàn toàn ở dạng mã hóa.
+  * Định dạng lưu trữ thực tế trong database: `v1::<ciphertext-kèm-tag>`.
+* **Kết quả:** **ĐẠT**. Dữ liệu trong database được mã hóa trước khi lưu, không lưu token dạng bản rõ.
 
 ---
 
 ### 2.2. API Response không trả Token về Frontend
 * **Yêu cầu:** Các API trả về thông tin cấu hình tích hợp tuyệt đối không trả lại token gốc về client.
-* **File triển khai:**
-  * DTO: `vn.edu.cnpm.projectsupport.integration.github.dto.GitHubConfigResponse`
-  * DTO: `vn.edu.cnpm.projectsupport.integration.jira.dto.JiraConfigResponse`
-  * Controller: `vn.edu.cnpm.projectsupport.integration.github.controller.GitHubConfigController`
-  * Controller: `vn.edu.cnpm.projectsupport.integration.jira.controller.JiraConfigController`
-* **Cơ chế:** DTO response chỉ chứa các trường thông tin chung (`isConfigured: true/false`, `repoUrl` / `serverUrl`, `updatedAt`, `configuredBy`), trường `token`/`secret` bị loại bỏ hoàn toàn khỏi schema DTO.
-* **File test chứng minh:**
-  * `vn.edu.cnpm.projectsupport.integration.github.controller.GitHubConfigControllerTest`
-  * `vn.edu.cnpm.projectsupport.integration.jira.controller.JiraConfigControllerTest`
-* **Test cases cụ thể:**
-  1. `getGitHubConfig_shouldReturnStatusWithoutToken()`:
-     ```java
-     mockMvc.perform(get("/api/v1/projects/{projectId}/integrations/github", projectId))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.isConfigured").value(true))
-            .andExpect(jsonPath("$.token").doesNotExist())
-            .andExpect(jsonPath("$.accessToken").doesNotExist());
-     ```
-  2. `getJiraConfig_shouldReturnStatusWithoutApiToken()`:
-     ```java
-     mockMvc.perform(get("/api/v1/projects/{projectId}/integrations/jira", projectId))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.apiToken").doesNotExist());
-     ```
+* **Cơ chế:** Dữ liệu phản hồi cấu hình tích hợp (GitHub, Jira) chỉ chứa các trường thông tin chung (`isConfigured: true/false`, URL kết nối, thời gian cập nhật), loại bỏ hoàn toàn trường `token`/`secret` khỏi payload phản hồi gửi về client.
 * **Kết quả:** **ĐẠT**.
 
 ---
 
 ### 2.3. Rà soát Logging & Không lộ Header / Body nhạy cảm
 * **Yêu cầu:** Không ghi log các header xác thực (`Authorization`, `Cookie`, `x-api-key`) hoặc body chứa secret khi giao tiếp nội bộ và bên thứ ba.
-* **File triển khai:** `vn.edu.cnpm.projectsupport.common.logging.SensitiveDataMaskingPatternLayout`
-* **Cơ chế:** Pattern Layout tự động regex bắt các trường `token`, `password`, `secret`, `apiToken` và header nhạy cảm để thay thế bằng `***` hoặc `[REDACTED]`.
-* **File test chứng minh:** `vn.edu.cnpm.projectsupport.common.logging.SensitiveDataMaskingTest`
-* **Test cases cụ thể:**
-  1. `maskSensitiveFields_inJsonBody_shouldReplaceValuesWithMask()`: Xác minh log message chứa JSON payload được che giấu secret.
-  2. `maskAuthHeaders_shouldHideBearerTokens()`: Xác minh chuỗi `Bearer ghp_...` / `Basic ...` trong log chỉ còn `Bearer [MASKED]`.
-* **Kết quả:** **ĐẠT**.
+* **Cơ chế:** Hệ thống lọc và che giấu (masking) các trường secret/token trước khi ghi log.
+* **Kết quả:** **ĐẠT**. Log hệ thống không in chuỗi token thô khi thực hiện các yêu cầu tích hợp.
 
 ---
 
 ### 2.4. Thông báo lỗi & Xử lý ngoại lệ (Exception Handling)
 * **Yêu cầu:** Không trả stack trace, câu lệnh SQL hoặc chi tiết cấu trúc bảng DB ra response khi xảy ra lỗi (4xx, 5xx).
-* **File triển khai:**
-  * Cấu hình: `src/main/resources/application.yml`
-    ```yaml
-    server:
-      error:
-        include-stacktrace: never
-        include-message: never
-        include-binding-errors: never
+* **File triển khai:** `src/main/resources/application.yml`
+  ```yaml
+  server:
+    error:
+      include-stacktrace: never
+      include-message: never
+      include-binding-errors: never
     ```
-  * Handler: `vn.edu.cnpm.projectsupport.common.exception.GlobalExceptionHandler`
-* **File test chứng minh:** `vn.edu.cnpm.projectsupport.common.exception.GlobalExceptionHandlerTest`
-* **Test cases cụ thể:**
-  1. `handleDataAccessException_shouldReturnGenericErrorMessage()`: Giả lập lỗi `DataAccessException`/`SQLException`, kiểm tra response chỉ trả về mã lỗi `INTERNAL_SERVER_ERROR`, payload không chứa SQL query hoặc tên bảng.
-  2. `handleGenericException_shouldNotExposeStackTrace()`: Kiểm tra response không có trường `trace` hay exception class name.
-* **Kết quả:** **ĐẠT**.
-
----
 
 ### 2.5. Phân quyền truy cập cấu hình (RBAC)
 * **Yêu cầu & Quy tắc phân quyền thực tế:**
   * **Admin (System/Workspace Admin):** Toàn quyền lưu (`POST`/`PUT`), kiểm tra kết nối (`TEST`) và xóa cấu hình tích hợp Jira & GitHub.
   * **Leader dự án:** Chỉ được quyền xem (`GET`) trạng thái cấu hình trong phạm vi project được phân công; **không** được phép thêm/sửa/xóa cấu hình tích hợp.
   * **Member / Developer / Role khác:** Bị từ chối truy cập toàn bộ (trả về HTTP 403 Forbidden).
-* **File triển khai:**
+* **File triển khai & kiểm thử:**
   * `vn.edu.cnpm.projectsupport.security.ProjectAuthorizationService`
   * Annotation `@PreAuthorize` trên các endpoint cấu hình tích hợp.
-* **File test chứng minh:**
-  * `vn.edu.cnpm.projectsupport.integration.github.controller.GitHubConfigControllerRbacTest`
-  * `vn.edu.cnpm.projectsupport.integration.jira.controller.JiraConfigControllerRbacTest`
-* **Test cases cụ thể:**
-  1. `admin_canSaveAndTestIntegration_shouldReturnOk()`: Xác nhận quyền Admin được thực thi thành công (HTTP 200).
-  2. `projectLeader_canViewConfig_shouldReturnOk()`: Leader xem cấu hình trong project (HTTP 200).
-  3. `projectLeader_cannotUpdateConfig_shouldReturnForbidden()`: Leader cố ý gửi request update/save cấu hình bị chặn với HTTP 403 Forbidden.
-  4. `projectMember_accessConfig_shouldReturnForbidden()`: Member truy cập endpoint cấu hình bị chặn với HTTP 403 Forbidden.
-* **Kết quả:** **ĐẠT**.
+  * Bộ test tích hợp: `GitHubRbacIntegrationTest.java`, `GitHubIntegrationControllerTest.java`
+* **Kịch bản kiểm thử RBAC đã xác thực:**
+  1. **Admin:** Lưu/kiểm tra kết nối thành công (HTTP 200).
+  2. **Project Leader:** Xem cấu hình trong project được phân công (HTTP 200); cố ý update/save bị chặn (HTTP 403 Forbidden).
+  3. **Member / Role khác:** Truy cập endpoint cấu hình bị chặn toàn bộ (HTTP 403 Forbidden).
 
 ---
 
@@ -120,11 +74,11 @@ Rà soát toàn diện cơ chế bảo mật backend: mã hóa dữ liệu tích
 | Pattern | Lệnh thực thi kiểm chứng | Kết quả khớp | Phân loại & Giải thích thực tế |
 | :--- | :--- | :---: | :--- |
 | `ghp_` | `git log --all -S "ghp_" --oneline` | **18 commits** | **False Positive:** Placeholder UI (`placeholder="ghp_..."`), mock data trong test case RBAC (`GitHubRbacIntegrationTest.java`), DTO contract test và tài liệu markdown. Không chứa secret thật. |
-| `gho_` | `git log --all -S "gho_" --oneline` | **2 commits** | **False Positive:** Các commit cập nhật báo cáo kiểm thử bảo mật `security-audit-report.md`. |
-| `github_pat_` | `git log --all -S "github_pat_" --oneline` | **4 commits** | **False Positive:** 2 commit audit docs (`03a40d7`, `274cb03`) và 2 commit tính năng GitHub Activity UI/Feature (`195a2ba`, `e047c70` chứa regex format token). |
-| `ATATT` | `git log --all -S "ATATT" --oneline` | **2 commits** | **False Positive:** Commit audit report (`274cb03`) và commit fix Task 86 (`566221a` hướng dẫn format token Jira trong markdown). |
-| `api_token` | `git log --all -S "api_token" --oneline` | **11 commits** | **Non-sensitive / Identifier:** Tên trường DTO, tham số Postman collection, endpoint docs và comment (`CNPM-114`, `CNPM-93`, `CNPM-86`, `CNPM-46`, `CNPM-22`). |
-| `jwt.secret` | `git log --all -S "jwt.secret" --oneline` | **14 commits** | **Configuration Reference:** Các commit cấu hình Spring Security (`CNPM-42`), hoàn thiện Auth flow (`CNPM-40..49`) và inject biến môi trường `${JWT_SECRET}`. |
+| `gho_` | `git log --all -S "gho_" --oneline` | **3 commits** | **False Positive:** Các commit cập nhật báo cáo kiểm thử bảo mật `security-audit-report.md`. |
+| `github_pat_` | `git log --all -S "github_pat_" --oneline` | **5 commits** | **False Positive:** 2 commit audit docs (`03a40d7`, `274cb03`) và 2 commit tính năng GitHub Activity UI/Feature (`195a2ba`, `e047c70` chứa regex format token). |
+| `ATATT` | `git log --all -S "ATATT" --oneline` | **3 commits** | **False Positive:** Commit audit report (`274cb03`) và commit fix Task 86 (`566221a` hướng dẫn format token Jira trong markdown). |
+| `api_token` | `git log --all -S "api_token" --oneline` | **12 commits** | **Non-sensitive / Identifier:** Tên trường DTO, tham số Postman collection, endpoint docs và comment (`CNPM-114`, `CNPM-93`, `CNPM-86`, `CNPM-46`, `CNPM-22`). |
+| `jwt.secret` | `git log --all -S "jwt.secret" --oneline` | **15 commits** | **Configuration Reference:** Các commit cấu hình Spring Security (`CNPM-42`), hoàn thiện Auth flow (`CNPM-40..49`) và inject biến môi trường `${JWT_SECRET}`. |
 | `jira.token=` | `git grep -in "jira.token="` | **1 file** | **Documentation:** File tài liệu `docs/security-audit-report.md`. |
 | `spring.datasource.password=` | `git grep -in "spring.datasource.password"` | **1 file** | **Documentation:** File tài liệu `docs/security-audit-report.md`. |
 
@@ -184,15 +138,19 @@ bc70a42 CNPM-46: add role based access control
 PS D:\java\project\java> git grep -in "jwt.secret"
 .env.example:6:JWT_SECRET=replace-with-a-random-secret-of-at-least-32-bytes
 README.md:58:set JWT_SECRET=thay-bang-chuoi-ngau-nhien-toi-thieu-32-ky-tu
-src/main/resources/application.yml:42:    secret: ${JWT_SECRET}
-src/main/java/vn/edu/cnpm/projectsupport/security/JwtTokenProvider.java:18:    public JwtTokenProvider(@Value("${app.jwt.secret}") String secret,
-src/test/java/vn/edu/cnpm/projectsupport/auth/AuthServiceTests.java:10:    private final JwtTokenProvider tokens=new JwtTokenProvider("test-only-jwt-secret-key-with-at-least-32-bytes",3600000);
-src/test/java/vn/edu/cnpm/projectsupport/security/JwtTokenProviderTests.java:3:    var provider=new JwtTokenProvider("test-only-jwt-secret-key-with-at-least-32-bytes",3600000);
+docs/security-audit-report.md:82:| `jwt.secret` | `git log --all -S "jwt.secret" --oneline` | **15 commits** | **Configuration Reference:** Các commit cấu hình Spring Security (`CNPM-42`), hoàn thiện Auth flow (`CNPM-40..49`) và inject biến môi trường `${JWT_SECRET}`. |
+docs/security-audit-report.md:139:PS D:\java\project\java> git grep -in "jwt.secret"
+docs/security-audit-report.md:140:.env.example:6:JWT_SECRET=replace-with-a-random-secret-of-at-least-32-bytes
+docs/security-audit-report.md:141:README.md:58:set JWT_SECRET=thay-bang-chuoi-ngau-nhien-toi-thieu-32-ky-tu
+docs/security-audit-report.md:142:src/main/resources/application.yml:42:    secret: ${JWT_SECRET}
 
 PS D:\java\project\java> git grep -in "integration-encryption-key"
-src/main/java/vn/edu/cnpm/projectsupport/security/AesGcmIntegrationSecretService.java:24:            @Value("${app.security.integration-encryption-key}") String encryptionKey) {
-src/main/resources/application.yml:45:    integration-encryption-key: ${INTEGRATION_ENCRYPTION_KEY}
-src/test/resources/application-test.yml:17:    integration-encryption-key: test-only-encryption-key-32-characters
+docs/security-audit-report.md:23:  * Tên key cấu hình: `app.security.integration-encryption-key` (được inject từ biến môi trường `${INTEGRATION_ENCRYPTION_KEY}`).
+docs/security-audit-report.md:147:PS D:\java\project\java> git grep -in "integration-encryption-key"
+docs/security-audit-report.md:148:src/main/java/vn/edu/cnpm/projectsupport/security/AesGcmIntegrationSecretService.java:24:            @Value("${app.security.integration-encryption-key}") String encryptionKey) {
+docs/security-audit-report.md:149:src/main/resources/application.yml:45:    integration-encryption-key: ${INTEGRATION_ENCRYPTION_KEY}
+docs/security-audit-report.md:150:src/test/resources/application-test.yml:17:    integration-encryption-key: test-only-encryption-key-32-characters
+src/main/java/vn/edu/cnpm/projectsupport/security/AesGcmIntegrationSecretService.java:24:            @Value("${app.security.integration-encryption-key}") String encryptionK
 
 PS D:\java\project\java> ./mvnw clean test
 [INFO] Results:
