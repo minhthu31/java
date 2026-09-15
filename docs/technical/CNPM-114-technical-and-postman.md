@@ -420,3 +420,13 @@ Checklist:
 - [x] Placeholder thay cho token/password/private URL.
 - [x] Endpoint lấy từ controller hiện tại.
 - [x] Request examples khớp DTO chính.
+
+### Postman authentication variables
+
+The Postman environment provides separate credentials for each application role. Fill these values in your local Postman environment before running the login requests:
+
+- `login_admin_username` / `login_admin_password` → **ADMIN** → saved automatically as `token_admin`.
+- `login_leader_username` / `login_leader_password` → **TEAM_LEADER** → saved automatically as `token_leader`.
+- `login_member_username` / `login_member_password` → **TEAM_MEMBER** → saved automatically as `token_member`.
+
+The three login requests send `Content-Type: application/json`. Do not put real passwords or tokens into the committed example environment file.

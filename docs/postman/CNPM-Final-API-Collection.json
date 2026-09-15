@@ -18,11 +18,11 @@
                 "value": "application/json"
               }
             ],
-            "description": "Login bằng tài khoản ADMIN. Access token được lưu vào token_admin.",
+            "description": "Login bằng tài khoản ADMIN. Điền login_admin_username/login_admin_password trong Postman Environment; access token được lưu vào token_admin.",
             "url": "{{baseUrl}}/auth/login",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"usernameOrEmail\": \"<username-or-email>\",\n  \"password\": \"<password>\"\n}"
+              "raw": "{\n  \"usernameOrEmail\": \"{{login_admin_username}}\",\n  \"password\": \"{{login_admin_password}}\"\n}"
             }
           },
           "event": [
@@ -44,11 +44,16 @@
           "name": "Login as Team Leader",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "description": "Login bằng tài khoản TEAM_LEADER. Access token được lưu vào token_leader.",
             "body": {
               "mode": "raw",
-              "raw": "{\"usernameOrEmail\": \"{{login_leader_username}}\", \"password\": \"{{login_leader_password}}\"}"
+              "raw": "{\n  \"usernameOrEmail\": \"{{login_leader_username}}\",\n  \"password\": \"{{login_leader_password}}\"\n}"
             },
             "url": "{{baseUrl}}/auth/login"
           },
@@ -71,11 +76,16 @@
           "name": "Login as Team Member",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "description": "Login bằng tài khoản TEAM_MEMBER. Access token được lưu vào token_member.",
             "body": {
               "mode": "raw",
-              "raw": "{\"usernameOrEmail\": \"{{login_member_username}}\", \"password\": \"{{login_member_password}}\"}"
+              "raw": "{\n  \"usernameOrEmail\": \"{{login_member_username}}\",\n  \"password\": \"{{login_member_password}}\"\n}"
             },
             "url": "{{baseUrl}}/auth/login"
           },
