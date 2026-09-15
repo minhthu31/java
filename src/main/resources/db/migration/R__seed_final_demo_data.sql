@@ -13,8 +13,17 @@ SET jira_site_url = COALESCE(jira_site_url, 'https://demo.atlassian.net'),
 WHERE name = 'CNPM Project Management Tool'
   AND '${demoSeedEnabled}' = 'true';
 
--- Older CNPM-113 demo seeds used DONE, but RequirementStatus does not contain DONE.
-UPDATE requirements SET status = 'COMPLETED' WHERE status = 'DONE';
+-- Older CNPM-113 demo seeds used invalid RequirementStatus values.
+-- Keep this cleanup limited to the CNPM-113 demo project/issues and only run when demo seed is enabled.
+UPDATE requirements
+SET status = 'APPROVED'
+WHERE project_id IN (
+    SELECT id FROM projects
+    WHERE name = 'CNPM Project Management Tool'
+)
+  AND jira_issue_key IN ('CNPM-201', 'CNPM-202')
+  AND status IN ('DONE', 'COMPLETED')
+  AND '${demoSeedEnabled}' = 'true';
 
 INSERT INTO requirements (
     project_id, jira_issue_key, title, description, actor, priority,
@@ -27,7 +36,7 @@ SELECT p.id, 'CNPM-201', 'Đăng nhập theo bốn vai trò',
        'Nhập username/email và mật khẩu, hệ thống xác thực rồi cấp JWT.',
        'Cho phép dùng username hoặc email.',
        'Sai thông tin thì từ chối đăng nhập.',
-       'Người dùng vào được màn hình phù hợp với vai trò.', 'COMPLETED'
+       'Người dùng vào được màn hình phù hợp với vai trò.', 'APPROVED'
 FROM projects p
 WHERE p.name = 'CNPM Project Management Tool'
   AND NOT EXISTS (SELECT 1 FROM requirements r
@@ -45,7 +54,7 @@ SELECT p.id, 'CNPM-202', 'Xem báo cáo tiến độ từ Jira và GitHub',
        'Chọn project và khoảng thời gian, sau đó xem thống kê.',
        'Có thể lọc theo thành viên.',
        'Nếu nguồn chưa đồng bộ thì hiển thị trạng thái tương ứng.',
-       'Báo cáo có số liệu task, commit và Pull Request.', 'COMPLETED'
+       'Báo cáo có số liệu task, commit và Pull Request.', 'APPROVED'
 FROM projects p
 WHERE p.name = 'CNPM Project Management Tool'
   AND NOT EXISTS (SELECT 1 FROM requirements r
