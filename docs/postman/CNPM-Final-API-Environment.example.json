@@ -12,6 +12,36 @@
       "enabled": true
     },
     {
+      "key": "login_admin_username",
+      "value": "",
+      "enabled": true
+    },
+    {
+      "key": "login_admin_password",
+      "value": "",
+      "enabled": true
+    },
+    {
+      "key": "login_leader_username",
+      "value": "",
+      "enabled": true
+    },
+    {
+      "key": "login_leader_password",
+      "value": "",
+      "enabled": true
+    },
+    {
+      "key": "login_member_username",
+      "value": "",
+      "enabled": true
+    },
+    {
+      "key": "login_member_password",
+      "value": "",
+      "enabled": true
+    },
+    {
       "key": "token_admin",
       "value": "",
       "enabled": true
