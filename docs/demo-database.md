@@ -373,6 +373,19 @@ SELECT id, name
 FROM sprints;
 ```
 
+Kiểm tra quan hệ commit – Pull Request:
+
+```sql
+SELECT
+    pr.github_pull_request_id AS github_pr_id,
+    pr.number AS pr_number,
+    pc.sha AS commit_sha
+FROM github_pull_request_commits pc
+JOIN github_pull_requests pr ON pr.id = pc.pull_request_id
+WHERE pr.github_pull_request_id IN (880001, 880002)
+ORDER BY pr.github_pull_request_id, pc.sha;
+```
+
 Kiểm tra task:
 
 ```sql

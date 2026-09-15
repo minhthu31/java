@@ -285,6 +285,37 @@ WHERE r.github_repository_id = 990001
   AND NOT EXISTS (SELECT 1 FROM github_pull_requests pr WHERE pr.github_pull_request_id = 880002)
   AND '${demoSeedEnabled}' = 'true';
 
+-- Demo relationship data for CNPM-95: GitHub Pull Request <-> commit.
+-- Only links the synthetic CNPM-113 demo PR/commits and only runs when demo seed is enabled.
+INSERT INTO github_pull_request_commits (sha, pull_request_id)
+SELECT c.sha, pr.id
+FROM github_commits c
+JOIN github_pull_requests pr ON pr.github_pull_request_id = 880001
+WHERE c.sha IN (
+    '1111111111111111111111111111111111111111',
+    '2222222222222222222222222222222222222222'
+)
+  AND '${demoSeedEnabled}' = 'true'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM github_pull_request_commits pc
+      WHERE pc.sha = c.sha
+        AND pc.pull_request_id = pr.id
+  );
+
+INSERT INTO github_pull_request_commits (sha, pull_request_id)
+SELECT c.sha, pr.id
+FROM github_commits c
+JOIN github_pull_requests pr ON pr.github_pull_request_id = 880002
+WHERE c.sha = '2222222222222222222222222222222222222222'
+  AND '${demoSeedEnabled}' = 'true'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM github_pull_request_commits pc
+      WHERE pc.sha = c.sha
+        AND pc.pull_request_id = pr.id
+  );
+
 INSERT INTO task_commit_links (
     task_id, commit_id, link_source, linked_by_user_id, reason, matched_from
 )
