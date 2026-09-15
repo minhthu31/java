@@ -36,11 +36,11 @@ Rà soát cơ chế bảo mật backend: mã hóa dữ liệu tích hợp (GitHu
 ### 2.3. Rà soát Logging & Xử lý thông báo lỗi (Masking / Exception)
 * **Yêu cầu:** Đánh giá việc lộ secret trong log và kiểm soát stack trace trả về client.
 * **Hiện trạng triển khai thực tế:**
-  * **Jira Integration:** Có xử lý làm sạch/masking chuỗi secret trong log ngoại lệ tại `JiraSyncService` trước khi ghi nhận lỗi.
-  * **GitHub Integration:** Các hàm `safeMessage(exception)` trong các service đồng bộ (`GitHubCheckRunSyncService`, `GitHubCommitSyncService`, `GitHubPullRequestSyncService`) **đang trả trực tiếp chuỗi `exception.getMessage()` và chưa có thao tác che/masking secret chuyên biệt** nếu nội dung exception có chứa token. Tuy nhiên hệ thống không log toàn bộ payload thô chứa request header/secret.
+  * **Jira Integration:** Đã có xử lý làm sạch/masking chuỗi secret trong log ngoại lệ tại `JiraSyncService` trước khi ghi nhận lỗi.
+  * **GitHub Integration:** Trong `GitHubCheckRunSyncService`, `GitHubCommitSyncService` và `GitHubPullRequestSyncService`, hàm `safeMessage()` vẫn lấy trực tiếp `exception.getMessage()` để lưu vào `SyncLog`. Nếu nội dung lỗi chứa token hoặc Authorization header, dữ liệu nhạy cảm có nguy cơ bị lưu vào log; hiện chưa có xử lý che secret.
+  * **Kiểm thử (Test):** Test hiện có kiểm tra trạng thái đồng bộ và log, nhưng chưa giả lập lỗi chứa token/Authorization header để xác nhận nội dung `SyncLog` và response API không làm lộ chúng hoặc stack trace.
   * **API Exception:** Bắt và chuẩn hóa ngoại lệ tại controller/service, không trả stack trace DB ra ngoài response client.
-* **Kết luận & Đánh giá:** **ĐẠT THEO HIỆN TRẠNG MÃ NGUỒN** (Khuyến nghị tạo task cải tiến ở sprint sau để bổ sung hàm regex masking cho `safeMessage()` trong các GitHub services tương tự như Jira).
-
+* **Kết luận & Đánh giá:** **CHƯA ĐẠT**. Tiêu chí về log và thông báo lỗi của GitHub chưa được chứng minh đạt yêu cầu an toàn.
 ---
 
 ### 2.4. Phân quyền truy cập cấu hình (RBAC)
@@ -91,9 +91,9 @@ e5d6d0c Update GitHubRbacIntegrationTest.java
 5db7f12 Create GitHubRbacIntegrationTest.java
 b1ea555 Create GitHubIntegrationControllerTest.java
 a14fc68 CNPM-93 sync GitHub repository information
-154974d fix(CNPM-91): github-config-api
+154974d (origin/feature/CNPM-91-github-config-api, feature/CNPM-91-github-config-api) fix(CNPM-91): github-config-api
 5145385 (CNPM-91):github-config-api
-1d9abef fix(CNPM-92): github-config-admin
+1d9abef (origin/feature/CNPM-92-github-config-admin) fix(CNPM-92): github-config-admin
 c4cedc2 feat(CNPM-91): add github config api
 b57be32 fix(CNPM-92): github-config-admin
 49d82ee CNPM-92 Implement GitHub config admin
@@ -125,17 +125,29 @@ da61c19 docs: update technical documentation and Postman collection
 a14fc68 CNPM-93 sync GitHub repository information
 7f6f27b feature/CNPM-86-jira-postman
 5011bf5 feature/CNPM-86-jira-postman
-bc70a42 (origin/feature/CNPM-46-role-based-access-control) CNPM-46: add role based acc
+bc70a42 (origin/feature/CNPM-46-role-based-access-control) CNPM-46: add role based access control
+3bdd4ff (origin/docs/CNPM-22-jira-authentication) Add Jira Cloud REST API authentication documentation
+8938963 Add Jira Cloud REST API authentication guide
 
 PS D:\java\project\java> git log --all -S "jwt.secret" --oneline
-4d5a2cc (origin/feature/CNPM-111-security-and-sensitive-data-audit) CNPM-111: fix audit report
+be7f020 CNPM-111: fix audit report
+4d5a2cc CNPM-111: fix audit report
 8031a48 CNPM-111: fix audit report
 de641a1 CNPM-111: update audit report
 03a40d7 CNPM-111: fix audit report
 274cb03 CNPM-111 update security audit report
 a14fc68 CNPM-93 sync GitHub repository information
 d3ba54f CNPM-40 CNPM-41 CNPM-42 CNPM-45 CNPM-46 CNPM-47 CNPM-48 CNPM-49 complete authentication flow
-bc70a42 (origin/feature/CNPM-46-role-based-access-control) CNPM-46: add role based acc
+bc70a42 (origin/feature/CNPM-46-role-based-access-control) CNPM-46: add role based access control
+dd8e6bf CNPM-42 Spring Security Configuration
+1ac2f64 CNPM-42 Spring Security Configuration
+d1751ec CNPM-42 Spring Security Configuration
+9c9e5f7 CNPM-42 Spring Security Configuration
+c7c2adf CNPM-42 Spring Security Configuration
+43981e6 CNPM-42 Spring Security Configuration
+fcd9326 CNPM-42 Spring Security Configuration
+48a5503 CNPM-42 Spring Security Configuration
+8948e5a CNPM-42 Spring Security Configuration
 
 PS D:\java\project\java> git grep -in "jwt.secret" src/main/resources/
 src/main/resources/application.yml:42:    secret: ${JWT_SECRET}
@@ -143,12 +155,18 @@ src/main/resources/application.yml:42:    secret: ${JWT_SECRET}
 PS D:\java\project\java> git grep -in "integration-encryption-key" src/main/resources/
 src/main/resources/application.yml:45:    integration-encryption-key: ${INTEGRATION_ENCRYPTION_KEY}
 
+
 PS D:\java\project\java> git grep -in "safeMessage" src/main/java/
 src/main/java/vn/edu/cnpm/projectsupport/integration/github/GitHubCheckRunSyncService.java:370:            log.setErrorMessage(safeMessage(exception));
 src/main/java/vn/edu/cnpm/projectsupport/integration/github/GitHubCheckRunSyncService.java:514:    private String safeMessage(RuntimeException exception) {
 src/main/java/vn/edu/cnpm/projectsupport/integration/github/GitHubCommitSyncService.java:155:            log.setErrorMessage(safeMessage(exception));
 src/main/java/vn/edu/cnpm/projectsupport/integration/github/GitHubCommitSyncService.java:244:    private String safeMessage(RuntimeException exception) {
 src/main/java/vn/edu/cnpm/projectsupport/integration/github/GitHubPullRequestSyncService.java:171:            log.setErrorMessage(safeMessage(exception));
+src/main/java/vn/edu/cnpm/projectsupport/integration/github/GitHubPullRequestSyncService.java:365:    private String safeMessage(RuntimeException exception) {
+src/main/java/vn/edu/cnpm/projectsupport/integration/github/service/GitHubRepositorySyncService.java:116:            syncLog.setErrorMessage(safeMessage(exception));
+src/main/java/vn/edu/cnpm/projectsupport/integration/github/service/GitHubRepositorySyncService.java:180:    private String safeMessage(RuntimeException exception) {
+src/main/java/vn/edu/cnpm/projectsupport/integration/jira/service/JiraSyncService.java:235:                safeMessage(e));
+src/main/java/vn/edu/cnpm/projectsupport/integration/jira/service/JiraSyncService.java:598:            safeMessage(e));
 
 PS D:\java\project\java> ./mvnw clean test
 [INFO] Results:
