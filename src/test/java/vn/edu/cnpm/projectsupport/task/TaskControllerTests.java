@@ -30,6 +30,7 @@ import vn.edu.cnpm.projectsupport.common.api.PageResponse;
 import vn.edu.cnpm.projectsupport.common.exception.GlobalExceptionHandler;
 import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
 import vn.edu.cnpm.projectsupport.security.JwtTokenProvider;
+import vn.edu.cnpm.projectsupport.security.ProjectAuthorizationService;
 import vn.edu.cnpm.projectsupport.task.domain.SyncStatus;
 import vn.edu.cnpm.projectsupport.task.domain.TaskIssueType;
 import vn.edu.cnpm.projectsupport.task.domain.TaskPriority;
@@ -60,6 +61,9 @@ class TaskControllerTests {
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
 
+    @MockitoBean(name = "projectAuthorization")
+    private ProjectAuthorizationService projectAuthorization;
+
     @MockitoBean(name = "jpaMappingContext")
     private JpaMetamodelMappingContext jpaMappingContext;
 
@@ -67,6 +71,11 @@ class TaskControllerTests {
 
     @BeforeEach
     void setUp() {
+        when(projectAuthorization.canViewTasks(PROJECT_ID)).thenReturn(true);
+        when(projectAuthorization.canManageTasks(PROJECT_ID)).thenReturn(true);
+        when(projectAuthorization.canViewTask(eq(PROJECT_ID), any())).thenReturn(true);
+        when(projectAuthorization.canUpdateTask(eq(PROJECT_ID), any())).thenReturn(true);
+
         response = new TaskResponse();
         response.setId(TASK_ID);
         response.setProjectId(PROJECT_ID);
