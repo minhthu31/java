@@ -146,10 +146,10 @@ class GitHubActivityIntegrationTests {
     @Test
     @DisplayName("1. Lọc exact issueKey CNPM-9 không bị ăn sang CNPM-98")
     void listCommits_exactIssueKey_shouldNotIncludeOthers() throws Exception {
-        when(projectAuthorization.canViewTasks(PROJECT_ID)).thenReturn(true);
+        when(projectAuthorization.canViewRequirements(PROJECT_ID)).thenReturn(true);
 
         mockMvc.perform(get(BASE_URL + "/repositories/{repositoryId}/commits", PROJECT_ID, savedRepo.getId())
-                        .with(user("member").roles("TEAM_MEMBER"))
+                        .with(user("lecturer").roles("LECTURER"))
                         .param("issueKey", "CNPM-9"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content.length()").value(1))
@@ -159,10 +159,10 @@ class GitHubActivityIntegrationTests {
     @Test
     @DisplayName("2. Lấy danh sách Pull Request có filter state và pagination thành công")
     void listPullRequests_shouldReturnPagedData() throws Exception {
-        when(projectAuthorization.canViewTasks(PROJECT_ID)).thenReturn(true);
+        when(projectAuthorization.canViewRequirements(PROJECT_ID)).thenReturn(true);
 
         mockMvc.perform(get(BASE_URL + "/repositories/{repositoryId}/pull-requests", PROJECT_ID, savedRepo.getId())
-                        .with(user("member").roles("TEAM_MEMBER"))
+                        .with(user("lecturer").roles("LECTURER"))
                         .param("state", "OPEN")
                         .param("page", "0")
                         .param("size", "10"))
@@ -246,10 +246,10 @@ class GitHubActivityIntegrationTests {
     @Test
     @DisplayName("7. Giới hạn page size tối đa 100")
     void listCommits_sizeExceeding100_shouldReturnBadRequest() throws Exception {
-        when(projectAuthorization.canViewTasks(PROJECT_ID)).thenReturn(true);
+        when(projectAuthorization.canViewRequirements(PROJECT_ID)).thenReturn(true);
 
         mockMvc.perform(get(BASE_URL + "/repositories/{repositoryId}/commits", PROJECT_ID, savedRepo.getId())
-                        .with(user("member").roles("TEAM_MEMBER"))
+                        .with(user("lecturer").roles("LECTURER"))
                         .param("size", "101"))
                 .andExpect(status().isBadRequest());
     }

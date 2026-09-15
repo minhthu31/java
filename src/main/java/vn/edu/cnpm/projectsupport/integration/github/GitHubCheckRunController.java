@@ -34,7 +34,7 @@ public class GitHubCheckRunController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN') or @projectAuthorization.canViewTasks(#projectId)")
+    @PreAuthorize("hasRole('ADMIN') or @projectAuthorization.canViewRequirements(#projectId)")
     public ResponseEntity<Map<String, Object>> list(
             @PathVariable Long projectId,
             @org.springframework.web.bind.annotation.RequestParam Long repositoryId) {

@@ -24,7 +24,8 @@ public class TaskController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('TEAM_LEADER', 'LECTURER', 'TEAM_MEMBER')")
+    @PreAuthorize("hasAnyRole('TEAM_LEADER', 'LECTURER', 'TEAM_MEMBER')"
+            + " and @projectAuthorization.canViewTasks(#projectId)")
     public ApiResponse<PageResponse<TaskResponse>> getTasks(
             @PathVariable("projectId") Long projectId,
             @ModelAttribute TaskFilterRequest filter) {
@@ -33,7 +34,7 @@ public class TaskController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('TEAM_LEADER')")
+    @PreAuthorize("hasRole('TEAM_LEADER') and @projectAuthorization.canManageTasks(#projectId)")
     public ApiResponse<TaskResponse> createTask(
             @PathVariable("projectId") Long projectId,
             @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
@@ -42,7 +43,8 @@ public class TaskController {
     }
 
     @GetMapping("/{taskId}")
-    @PreAuthorize("hasAnyRole('TEAM_LEADER', 'LECTURER', 'TEAM_MEMBER')")
+    @PreAuthorize("hasAnyRole('TEAM_LEADER', 'LECTURER', 'TEAM_MEMBER')"
+            + " and @projectAuthorization.canViewTask(#projectId, #taskId)")
     public ApiResponse<TaskResponse> getTaskById(
             @PathVariable("projectId") Long projectId,
             @PathVariable("taskId") Long taskId) {
@@ -50,7 +52,7 @@ public class TaskController {
     }
 
     @PutMapping("/{taskId}")
-    @PreAuthorize("hasRole('TEAM_LEADER')")
+    @PreAuthorize("hasRole('TEAM_LEADER') and @projectAuthorization.canManageTasks(#projectId)")
     public ApiResponse<TaskResponse> updateTask(
             @PathVariable("projectId") Long projectId,
             @PathVariable("taskId") Long taskId,
@@ -59,7 +61,8 @@ public class TaskController {
     }
 
     @PatchMapping("/{taskId}/status")
-    @PreAuthorize("hasAnyRole('TEAM_LEADER', 'TEAM_MEMBER')")
+    @PreAuthorize("hasAnyRole('TEAM_LEADER', 'TEAM_MEMBER')"
+            + " and @projectAuthorization.canUpdateTask(#projectId, #taskId)")
     public ApiResponse<TaskResponse> updateTaskStatus(
             @PathVariable("projectId") Long projectId,
             @PathVariable("taskId") Long taskId,
@@ -68,7 +71,7 @@ public class TaskController {
     }
 
     @PatchMapping("/{taskId}/assignee")
-    @PreAuthorize("hasRole('TEAM_LEADER')")
+    @PreAuthorize("hasRole('TEAM_LEADER') and @projectAuthorization.canManageTasks(#projectId)")
     public ApiResponse<TaskResponse> updateTaskAssignee(
             @PathVariable("projectId") Long projectId,
             @PathVariable("taskId") Long taskId,
@@ -78,7 +81,7 @@ public class TaskController {
 
     @DeleteMapping("/{taskId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasRole('TEAM_LEADER')")
+    @PreAuthorize("hasRole('TEAM_LEADER') and @projectAuthorization.canManageTasks(#projectId)")
     public ResponseEntity<Void> deleteTask(
             @PathVariable("projectId") Long projectId,
             @PathVariable("taskId") Long taskId) {

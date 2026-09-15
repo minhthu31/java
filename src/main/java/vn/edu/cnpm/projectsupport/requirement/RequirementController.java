@@ -31,54 +31,60 @@ public class RequirementController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('LECTURER', 'TEAM_LEADER')")
+    @PreAuthorize("hasAnyRole('LECTURER', 'TEAM_LEADER')"
+            + " and @projectAuthorization.canViewRequirements(#projectId)")
     public ApiResponse<PageResponse<RequirementResponse>> getRequirements(
-            @PathVariable Long projectId,
+            @PathVariable("projectId") Long projectId,
             @ModelAttribute RequirementFilterRequest filter) {
         return ApiResponse.success(requirementService.getRequirements(projectId, filter));
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('TEAM_LEADER')")
+    @PreAuthorize("hasRole('TEAM_LEADER')"
+            + " and @projectAuthorization.canManageRequirements(#projectId)")
     public ApiResponse<RequirementResponse> createRequirement(
-            @PathVariable Long projectId,
+            @PathVariable("projectId") Long projectId,
             @Valid @RequestBody RequirementCreateRequest request) {
         return ApiResponse.success(requirementService.createRequirement(projectId, request));
     }
 
     @GetMapping("/{requirementId}")
-    @PreAuthorize("hasAnyRole('LECTURER', 'TEAM_LEADER')")
+    @PreAuthorize("hasAnyRole('LECTURER', 'TEAM_LEADER')"
+            + " and @projectAuthorization.canViewRequirements(#projectId)")
     public ApiResponse<RequirementResponse> getRequirementById(
-            @PathVariable Long projectId,
-            @PathVariable Long requirementId) {
+            @PathVariable("projectId") Long projectId,
+            @PathVariable("requirementId") Long requirementId) {
         return ApiResponse.success(requirementService.getRequirementById(projectId, requirementId));
     }
 
     @PutMapping("/{requirementId}")
-    @PreAuthorize("hasRole('TEAM_LEADER')")
+    @PreAuthorize("hasRole('TEAM_LEADER')"
+            + " and @projectAuthorization.canManageRequirements(#projectId)")
     public ApiResponse<RequirementResponse> updateRequirement(
-            @PathVariable Long projectId,
-            @PathVariable Long requirementId,
+            @PathVariable("projectId") Long projectId,
+            @PathVariable("requirementId") Long requirementId,
             @Valid @RequestBody RequirementUpdateRequest request) {
         return ApiResponse.success(requirementService.updateRequirement(projectId, requirementId, request));
     }
 
     @PatchMapping("/{requirementId}/status")
-    @PreAuthorize("hasRole('TEAM_LEADER')")
+    @PreAuthorize("hasRole('TEAM_LEADER')"
+            + " and @projectAuthorization.canManageRequirements(#projectId)")
     public ApiResponse<RequirementResponse> updateRequirementStatus(
-            @PathVariable Long projectId,
-            @PathVariable Long requirementId,
+            @PathVariable("projectId") Long projectId,
+            @PathVariable("requirementId") Long requirementId,
             @Valid @RequestBody RequirementStatusUpdateRequest request) {
         return ApiResponse.success(requirementService.updateStatus(projectId, requirementId, request));
     }
 
     @DeleteMapping("/{requirementId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasRole('TEAM_LEADER')")
+    @PreAuthorize("hasRole('TEAM_LEADER')"
+            + " and @projectAuthorization.canManageRequirements(#projectId)")
     public ResponseEntity<Void> deleteRequirement(
-            @PathVariable Long projectId,
-            @PathVariable Long requirementId) {
+            @PathVariable("projectId") Long projectId,
+            @PathVariable("requirementId") Long requirementId) {
         requirementService.deleteRequirement(projectId, requirementId);
         return ResponseEntity.noContent().build();
     }

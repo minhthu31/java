@@ -31,7 +31,7 @@ public class GitHubActivityController {
     }
 
     @GetMapping("/repositories/{repositoryId}/commits")
-    @PreAuthorize("hasRole('ADMIN') or @projectAuthorization.canViewTasks(#projectId)")
+    @PreAuthorize("hasRole('ADMIN') or @projectAuthorization.canViewRequirements(#projectId)")
     public ResponseEntity<Map<String, Object>> listCommits(
             @PathVariable Long projectId,
             @PathVariable Long repositoryId,
@@ -44,7 +44,7 @@ public class GitHubActivityController {
     }
 
     @GetMapping("/repositories/{repositoryId}/pull-requests")
-    @PreAuthorize("hasRole('ADMIN') or @projectAuthorization.canViewTasks(#projectId)")
+    @PreAuthorize("hasRole('ADMIN') or @projectAuthorization.canViewRequirements(#projectId)")
     public ResponseEntity<Map<String, Object>> listPullRequests(
             @PathVariable Long projectId,
             @PathVariable Long repositoryId,
