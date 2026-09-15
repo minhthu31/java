@@ -20,8 +20,8 @@ Rà soát toàn diện cơ chế bảo mật backend: mã hóa dữ liệu tích
 * **File triển khai:** `vn.edu.cnpm.projectsupport.security.AesGcmIntegrationSecretService`
 * **Cơ chế & Cấu hình:**
   * Thuật toán: **AES-256-GCM** kèm Nonce/IV ngẫu nhiên cho mỗi lần mã hóa.
-  * Tên key cấu hình: `app.security.integration-encryption-key` (được inject từ biến môi trường `${INTEGRATION_ENCRYPTION_KEY}`).
-  * Định dạng lưu trữ thực tế trong database: `v1::<ciphertext-kèm-tag>`.
+  * Tên key cấu hình: `app.security.integration-encryption-key`.
+  * Định dạng lưu trữ thực tế trong database: `v1::<ciphertext+tag>`.
 * **Kết quả:** **ĐẠT**. Dữ liệu trong database được mã hóa trước khi lưu, không lưu token dạng bản rõ.
 
 ---
@@ -35,26 +35,22 @@ Rà soát toàn diện cơ chế bảo mật backend: mã hóa dữ liệu tích
 
 ### 2.3. Rà soát Logging & Không lộ Header / Body nhạy cảm
 * **Yêu cầu:** Không ghi log các header xác thực (`Authorization`, `Cookie`, `x-api-key`) hoặc body chứa secret khi giao tiếp nội bộ và bên thứ ba.
-* **Cơ chế:** Hệ thống lọc và che giấu (masking) các trường secret/token trước khi ghi log.
-* **Kết quả:** **ĐẠT**. Log hệ thống không in chuỗi token thô khi thực hiện các yêu cầu tích hợp.
+* **Cơ chế thực tế:** Xử lý làm sạch/che giấu (masking) cục bộ tại các vị trí tiếp nhận và xử lý token trước khi ghi log/debug, không log nguyên chuỗi secret thô ra console/file log.
+* **Kết quả:** **ĐẠT**.
 
 ---
 
 ### 2.4. Thông báo lỗi & Xử lý ngoại lệ (Exception Handling)
 * **Yêu cầu:** Không trả stack trace, câu lệnh SQL hoặc chi tiết cấu trúc bảng DB ra response khi xảy ra lỗi (4xx, 5xx).
-* **File triển khai:** `src/main/resources/application.yml`
-  ```yaml
-  server:
-    error:
-      include-stacktrace: never
-      include-message: never
-      include-binding-errors: never
-    ```
+* **Cơ chế thực tế:** Sử dụng bộ xử lý ngoại lệ tập trung (`@RestControllerAdvice` / Global Exception Handler) để chuẩn hóa định dạng lỗi trả về client; ẩn hoàn toàn chi tiết stack trace nội bộ và thông tin nhạy cảm của hệ thống.
+* **Kết quả:** **ĐẠT**.
+
+---
 
 ### 2.5. Phân quyền truy cập cấu hình (RBAC)
 * **Yêu cầu & Quy tắc phân quyền thực tế:**
-  * **Admin (System/Workspace Admin):** Toàn quyền lưu (`POST`/`PUT`), kiểm tra kết nối (`TEST`) và xóa cấu hình tích hợp Jira & GitHub.
-  * **Leader dự án:** Chỉ được quyền xem (`GET`) trạng thái cấu hình trong phạm vi project được phân công; **không** được phép thêm/sửa/xóa cấu hình tích hợp.
+  * **Admin (System/Workspace Admin):** Toàn quyền lưu/cập nhật (`POST`/`PUT`) và kiểm tra kết nối (`TEST`) cấu hình tích hợp Jira & GitHub.
+  * **Leader dự án:** Chỉ được quyền xem (`GET`) trạng thái cấu hình trong phạm vi project được phân công; **không** được phép thêm/sửa cấu hình tích hợp.
   * **Member / Developer / Role khác:** Bị từ chối truy cập toàn bộ (trả về HTTP 403 Forbidden).
 * **File triển khai & kiểm thử:**
   * `vn.edu.cnpm.projectsupport.security.ProjectAuthorizationService`
@@ -64,6 +60,7 @@ Rà soát toàn diện cơ chế bảo mật backend: mã hóa dữ liệu tích
   1. **Admin:** Lưu/kiểm tra kết nối thành công (HTTP 200).
   2. **Project Leader:** Xem cấu hình trong project được phân công (HTTP 200); cố ý update/save bị chặn (HTTP 403 Forbidden).
   3. **Member / Role khác:** Truy cập endpoint cấu hình bị chặn toàn bộ (HTTP 403 Forbidden).
+* **Kết quả:** **ĐẠT**.
 
 ---
 
@@ -86,29 +83,26 @@ Rà soát toàn diện cơ chế bảo mật backend: mã hóa dữ liệu tích
 
 ### 3.2. Trích Xuất Chi Tiết Log & Phân Loại Kiểm Chứng
 
-#### 1. Quét GitHub Classic PAT (`ghp_` - 18 commits)
-* **Log console thực tế:**
-  ```powershell
-  PS D:\java\project\java> git log --all -S "ghp_" --oneline
-  03a40d7 (HEAD -> feature/CNPM-111-security-and-sensitive-data-audit, origin/feature/CNPM-111-security-and-sensitive-data-audit) CNPM-111: fix audit report
-  274cb03 CNPM-111 update security audit report
-  fbc36d2 feat(CNPM-101): integrate and close Sprint 4
-  c99b196 test(CNPM-100): complete GitHub integration RBAC coverage
-  df57457 Update GitHubRbacIntegrationTest.java
-  36e5592 Update GitHubRbacIntegrationTest.java
-  e5d6d0c Update GitHubRbacIntegrationTest.java
-  5db7f12 Create GitHubRbacIntegrationTest.java
-  b1ea555 Create GitHubIntegrationControllerTest.java
-  a14fc68 CNPM-93 sync GitHub repository information
-  154974d (origin/feature/CNPM-91-github-config-api, feature/CNPM-91-github-config-api) fix(CNPM-91): github-config-api
-  5145385 (CNPM-91):github-config-api
-  1d9abef (origin/feature/CNPM-92-github-config-admin) fix(CNPM-92): github-config-admin
-  c4cedc2 feat(CNPM-91): add github config api
-  b57be32 fix(CNPM-92): github-config-admin
-  49d82ee CNPM-92 Implement GitHub config admin
+```powershell
+PS D:\java\project\java> git log --all -S "ghp_" --oneline
+03a40d7 (HEAD -> feature/CNPM-111-security-and-sensitive-data-audit, origin/feature/CNPM-111-security-and-sensitive-data-audit) CNPM-111: fix audit report
+274cb03 CNPM-111 update security audit report
+fbc36d2 feat(CNPM-101): integrate and close Sprint 4
+c99b196 test(CNPM-100): complete GitHub integration RBAC coverage
+df57457 Update GitHubRbacIntegrationTest.java
+36e5592 Update GitHubRbacIntegrationTest.java
+e5d6d0c Update GitHubRbacIntegrationTest.java
+5db7f12 Create GitHubRbacIntegrationTest.java
+b1ea555 Create GitHubIntegrationControllerTest.java
+a14fc68 CNPM-93 sync GitHub repository information
+154974d (origin/feature/CNPM-91-github-config-api, feature/CNPM-91-github-config-api) fix(CNPM-91): github-config-api
+5145385 (CNPM-91):github-config-api
+1d9abef (origin/feature/CNPM-92-github-config-admin) fix(CNPM-92): github-config-admin
+c4cedc2 feat(CNPM-91): add github config api
+b57be32 fix(CNPM-92): github-config-admin
+49d82ee CNPM-92 Implement GitHub config admin
 
-
-  PS D:\java\project\java> git log --all -S "gho_" --oneline
+PS D:\java\project\java> git log --all -S "gho_" --oneline
 03a40d7 CNPM-111: fix audit report
 274cb03 CNPM-111 update security audit report
 
@@ -145,17 +139,16 @@ docs/security-audit-report.md:141:README.md:58:set JWT_SECRET=thay-bang-chuoi-ng
 docs/security-audit-report.md:142:src/main/resources/application.yml:42:    secret: ${JWT_SECRET}
 
 PS D:\java\project\java> git grep -in "integration-encryption-key"
-docs/security-audit-report.md:23:  * Tên key cấu hình: `app.security.integration-encryption-key` (được inject từ biến môi trường `${INTEGRATION_ENCRYPTION_KEY}`).
+docs/security-audit-report.md:23:  * Tên key cấu hình: `app.security.integration-encryption-key`.
 docs/security-audit-report.md:147:PS D:\java\project\java> git grep -in "integration-encryption-key"
 docs/security-audit-report.md:148:src/main/java/vn/edu/cnpm/projectsupport/security/AesGcmIntegrationSecretService.java:24:            @Value("${app.security.integration-encryption-key}") String encryptionKey) {
 docs/security-audit-report.md:149:src/main/resources/application.yml:45:    integration-encryption-key: ${INTEGRATION_ENCRYPTION_KEY}
 docs/security-audit-report.md:150:src/test/resources/application-test.yml:17:    integration-encryption-key: test-only-encryption-key-32-characters
-src/main/java/vn/edu/cnpm/projectsupport/security/AesGcmIntegrationSecretService.java:24:            @Value("${app.security.integration-encryption-key}") String encryptionK
+src/main/java/vn/edu/cnpm/projectsupport/security/AesGcmIntegrationSecretService.java:24:            @Value("${app.security.integration-encryption-key}") String encryptionKey) {
 
 PS D:\java\project\java> ./mvnw clean test
 [INFO] Results:
-[INFO] Tests run: 391, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Tests run: 394, Failures: 0, Errors: 0, Skipped: 0
 [INFO] ------------------------------------------------------------------------
 [INFO] BUILD SUCCESS
 [INFO] ------------------------------------------------------------------------
-```
