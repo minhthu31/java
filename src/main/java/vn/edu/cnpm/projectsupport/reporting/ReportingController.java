@@ -2,6 +2,7 @@ package vn.edu.cnpm.projectsupport.reporting;
 
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,6 +23,7 @@ public class ReportingController {
     }
 
     @GetMapping("/progress")
+    @PreAuthorize("@projectAuthorization.canViewReports(#projectId)")
     public ResponseEntity<ApiResponse<ProjectProgressResponse>> progress(
             @PathVariable Long projectId,
             @Valid @ModelAttribute ReportFilterRequest filter) {
