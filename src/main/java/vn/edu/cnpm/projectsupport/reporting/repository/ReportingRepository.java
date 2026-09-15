@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import vn.edu.cnpm.projectsupport.task.domain.TaskStatus;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationProvider;
+import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLogStatus;
 
 /** Read-only aggregate queries used by the project report. */
 public interface ReportingRepository extends JpaRepository<vn.edu.cnpm.projectsupport.task.domain.Task, Long> {
@@ -205,25 +206,28 @@ public interface ReportingRepository extends JpaRepository<vn.edu.cnpm.projectsu
             @Param("projectId") Long projectId,
             @Param("provider") String provider);
 
-    @Query(value = """
-            SELECT MAX(s.completed_at)
-              FROM sync_logs s
-             WHERE s.project_id = :projectId
+    // Native MAX(timestamp) is returned as LocalDateTime by H2, which cannot
+    // be cast to Instant. Querying the mapped entity preserves its Instant type.
+    @Query("""
+            SELECT MAX(s.completedAt)
+              FROM SyncLog s
+             WHERE s.projectId = :projectId
                AND s.provider = :provider
-               AND s.status = 'SUCCESS'
-            """, nativeQuery = true)
-    Instant findLastSuccessfulSync(
+               AND s.status = :status
+            """)
+    Instant findLastSuccessfulSyncTimestamp(
             @Param("projectId") Long projectId,
-            @Param("provider") String provider);
+            @Param("provider") IntegrationProvider provider,
+            @Param("status") SyncLogStatus status);
 
-    @Query(value = """
-            SELECT MAX(s.completed_at)
-              FROM sync_logs s
-             WHERE s.project_id = :projectId
-               AND s.provider = 'GITHUB'
-               AND s.status = 'SUCCESS'
-            """, nativeQuery = true)
-    Instant findLastSuccessfulGithubSync(@Param("projectId") Long projectId);
+    default Instant findLastSuccessfulSync(Long projectId, String provider) {
+        return findLastSuccessfulSyncTimestamp(
+                projectId, IntegrationProvider.valueOf(provider), SyncLogStatus.SUCCESS);
+    }
+
+    default Instant findLastSuccessfulGithubSync(Long projectId) {
+        return findLastSuccessfulSync(projectId, IntegrationProvider.GITHUB.name());
+    }
 
     @Query(value = """
             SELECT COUNT(DISTINCT t.id)
