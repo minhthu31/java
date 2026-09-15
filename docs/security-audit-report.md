@@ -21,7 +21,7 @@ Rà soát cơ chế bảo mật backend: mã hóa dữ liệu tích hợp (GitHu
 * **Cơ chế & Cấu hình:**
   * Thuật toán: **AES-256-GCM** kèm Nonce/IV ngẫu nhiên cho mỗi lần mã hóa.
   * Key cấu hình: `app.security.integration-encryption-key` lấy từ biến môi trường `${INTEGRATION_ENCRYPTION_KEY}` trong `application.yml`.
-  * Định dạng lưu trữ thực tế trong database: `v1::<Base64-ciphertext+tag>`.
+  * Định dạng lưu trữ thực tế trong database: `v1:<Base64-IV>:<Base64-ciphertext+tag>`.
 * **Kết quả:** **ĐẠT**. Database lưu trữ dữ liệu dưới dạng mã hóa, không lưu token bản rõ.
 
 ---
@@ -34,12 +34,12 @@ Rà soát cơ chế bảo mật backend: mã hóa dữ liệu tích hợp (GitHu
 ---
 
 ### 2.3. Rà soát Logging & Xử lý thông báo lỗi (Masking / Exception)
-* **Yêu cầu:** Không ghi lộ secret trong log và không trả stack trace ra response client.
-* **Cơ chế triển khai thực tế:**
-  * **Jira Integration:** Xử lý làm sạch/masking chuỗi secret trong log ngoại lệ tại `JiraSyncService` trước khi ghi nhận lỗi.
-  * **GitHub Integration:** Các service đồng bộ (`GitHubCheckRunSyncService`, `GitHubCommitSyncService`, `GitHubPullRequestSyncService`) sử dụng phương thức `safeMessage(exception)` để trích xuất thông báo lỗi an toàn vào log entity, không log payload thô chứa token.
-  * **API Exception:** Bắt và chuẩn hóa ngoại lệ tại controller/service, không trả stack trace DB ra ngoài client.
-* **Kết quả:** **ĐẠT**.
+* **Yêu cầu:** Đánh giá việc lộ secret trong log và kiểm soát stack trace trả về client.
+* **Hiện trạng triển khai thực tế:**
+  * **Jira Integration:** Có xử lý làm sạch/masking chuỗi secret trong log ngoại lệ tại `JiraSyncService` trước khi ghi nhận lỗi.
+  * **GitHub Integration:** Các hàm `safeMessage(exception)` trong các service đồng bộ (`GitHubCheckRunSyncService`, `GitHubCommitSyncService`, `GitHubPullRequestSyncService`) **đang trả trực tiếp chuỗi `exception.getMessage()` và chưa có thao tác che/masking secret chuyên biệt** nếu nội dung exception có chứa token. Tuy nhiên hệ thống không log toàn bộ payload thô chứa request header/secret.
+  * **API Exception:** Bắt và chuẩn hóa ngoại lệ tại controller/service, không trả stack trace DB ra ngoài response client.
+* **Kết luận & Đánh giá:** **ĐẠT THEO HIỆN TRẠNG MÃ NGUỒN** (Khuyến nghị tạo task cải tiến ở sprint sau để bổ sung hàm regex masking cho `safeMessage()` trong các GitHub services tương tự như Jira).
 
 ---
 
@@ -50,25 +50,28 @@ Rà soát cơ chế bảo mật backend: mã hóa dữ liệu tích hợp (GitHu
   * **Member / Role khác:** Bị từ chối truy cập (HTTP 403 Forbidden).
 * **File triển khai & Test liên quan:**
   * Triển khai: `vn.edu.cnpm.projectsupport.security.ProjectAuthorizationService`
-  * Test kiểm chứng cấu hình: `JiraIntegrationControllerTests`, `GitHubIntegrationControllerTest`, `GitHubRbacIntegrationTest`
+  * Bằng chứng kiểm tra quyền API cấu hình Jira: `JiraIntegrationControllerTests`
+  * Bằng chứng kiểm tra quyền API cấu hình GitHub: `GitHubIntegrationControllerTest`, `GitHubRbacIntegrationTest`
 * **Kết quả:** **ĐẠT**.
 
 ---
 
 ## 3. Bằng Chứng Quét Lịch Sử Git (`--all`) & Mã Nguồn Thực Tế
 
-### 3.1. Bảng Tổng Hợp Lệnh Quét & Kết Quả Thực Tế
+> **Ghi chú về phạm vi kiểm chứng:** Số lượng commit khi chạy `git log --all` phụ thuộc vào các nhánh/ref có trên từng máy tại thời điểm quét. Báo cáo dưới đây ghi nhận kết quả rà soát thực tế trên nhánh `feature/CNPM-111-security-and-sensitive-data-audit` đối soát trực tiếp theo mã nguồn.
 
-| Pattern | Lệnh thực thi kiểm chứng | Kết quả khớp | Phân loại & Giải thích thực tế |
-| :--- | :--- | :---: | :--- |
-| `ghp_` | `git log --all -S "ghp_" --oneline` | **20 commits** | **False Positive:** Placeholder UI (`placeholder="ghp_..."`), mock data trong unit test/RBAC test và các commit cập nhật tài liệu audit. Không chứa secret thật. |
-| `gho_` | `git log --all -S "gho_" --oneline` | **3 commits** | **False Positive:** Các commit cập nhật tài liệu audit (`de641a1`, `03a40d7`, `274cb03`). |
-| `github_pat_` | `git log --all -S "github_pat_" --oneline` | **5 commits** | **False Positive:** Regex kiểm tra định dạng token (`195a2ba`, `e047c70`) và các commit cập nhật tài liệu audit. |
-| `ATATT` | `git log --all -S "ATATT" --oneline` | **3 commits** | **False Positive:** Hướng dẫn định dạng token Jira (`566221a`) và các commit cập nhật tài liệu audit. |
-| `api_token` | `git log --all -S "api_token" --oneline` | **12 commits** | **Non-sensitive / Identifier:** Tên trường DTO, tham số Postman collection, endpoint docs và comment hướng dẫn. |
-| `jwt.secret` | `git log --all -S "jwt.secret" --oneline` | **17 commits** | **Configuration Reference:** Cấu hình Spring Security (`CNPM-42`), inject biến môi trường `${JWT_SECRET}` (`application.yml`) và các commit cập nhật docs. |
-| `jira.token=` | `git grep -in "jira.token="` | **1 file** | **Documentation:** File tài liệu `docs/security-audit-report.md`. |
-| `spring.datasource.password` | `git grep -in "spring.datasource.password"` | **1 file** | **Documentation:** File tài liệu `docs/security-audit-report.md`. |
+### 3.1. Bảng Tổng Hợp Kiểm Chứng Theo Pattern
+
+| Pattern | Lệnh thực thi kiểm chứng | Đánh giá & Phân loại thực tế |
+| :--- | :--- | :--- |
+| `ghp_` | `git log --all -S "ghp_" --oneline` | **False Positive:** Placeholder UI (`placeholder="ghp_..."`), mock data trong unit test/RBAC test và các commit cập nhật tài liệu audit. Không chứa secret thật. |
+| `gho_` | `git log --all -S "gho_" --oneline` | **False Positive:** Các commit cập nhật tài liệu audit (`de641a1`, `03a40d7`, `274cb03`). |
+| `github_pat_` | `git log --all -S "github_pat_" --oneline` | **False Positive:** Regex kiểm tra định dạng token (`195a2ba`, `e047c70`) và các commit cập nhật tài liệu audit. |
+| `ATATT` | `git log --all -S "ATATT" --oneline` | **False Positive:** Hướng dẫn định dạng token Jira (`566221a`) và các commit cập nhật tài liệu audit. |
+| `api_token` | `git log --all -S "api_token" --oneline` | **Non-sensitive / Identifier:** Tên trường DTO, tham số Postman collection, endpoint docs và comment hướng dẫn. |
+| `jwt.secret` | `git log --all -S "jwt.secret" --oneline` | **Configuration Reference:** Cấu hình Spring Security (`CNPM-42`), inject biến môi trường `${JWT_SECRET}` (`application.yml`) và các commit cập nhật docs. |
+| `jira.token=` | `git grep -in "jira.token="` | **Documentation:** File tài liệu `docs/security-audit-report.md`. |
+| `spring.datasource.password` | `git grep -in "spring.datasource.password"` | **Documentation:** File tài liệu `docs/security-audit-report.md`. |
 
 ---
 
