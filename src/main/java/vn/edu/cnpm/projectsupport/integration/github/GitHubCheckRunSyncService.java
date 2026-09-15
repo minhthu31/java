@@ -28,6 +28,7 @@ import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLog;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLogStatus;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.SyncLogRepository;
 import vn.edu.cnpm.projectsupport.security.IntegrationSecretService;
+import vn.edu.cnpm.projectsupport.security.SensitiveDataSanitizer;
 
 @Service
 public class GitHubCheckRunSyncService {
@@ -512,15 +513,8 @@ public class GitHubCheckRunSyncService {
     }
 
     private String safeMessage(RuntimeException exception) {
-
-        if (exception instanceof GitHubApiException) {
-            return exception.getMessage();
-        }
-
-        String message = exception.getMessage();
-
-        return message == null || message.isBlank()
-                ? "GitHub check-run sync failed"
-                : message;
+        return SensitiveDataSanitizer.sanitize(
+                exception,
+                "GitHub check-run sync failed");
     }
 }

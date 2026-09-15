@@ -36,11 +36,12 @@ Rà soát cơ chế bảo mật backend: mã hóa dữ liệu tích hợp (GitHu
 ### 2.3. Rà soát Logging & Xử lý thông báo lỗi (Masking / Exception)
 * **Yêu cầu:** Đánh giá việc lộ secret trong log và kiểm soát stack trace trả về client.
 * **Hiện trạng triển khai thực tế:**
-  * **Jira Integration:** Đã có xử lý làm sạch/masking chuỗi secret trong log ngoại lệ tại `JiraSyncService` trước khi ghi nhận lỗi.
-  * **GitHub Integration:** Trong `GitHubCheckRunSyncService`, `GitHubCommitSyncService` và `GitHubPullRequestSyncService`, hàm `safeMessage()` vẫn lấy trực tiếp `exception.getMessage()` để lưu vào `SyncLog`. Nếu nội dung lỗi chứa token hoặc Authorization header, dữ liệu nhạy cảm có nguy cơ bị lưu vào log; hiện chưa có xử lý che secret.
-  * **Kiểm thử (Test):** Test hiện có kiểm tra trạng thái đồng bộ và log, nhưng chưa giả lập lỗi chứa token/Authorization header để xác nhận nội dung `SyncLog` và response API không làm lộ chúng hoặc stack trace.
-  * **API Exception:** Bắt và chuẩn hóa ngoại lệ tại controller/service, không trả stack trace DB ra ngoài response client.
-* **Kết luận & Đánh giá:** **CHƯA ĐẠT**. Tiêu chí về log và thông báo lỗi của GitHub chưa được chứng minh đạt yêu cầu an toàn.
+  * **Bộ lọc dùng chung:** `SensitiveDataSanitizer` che Authorization Bearer/Basic, password, token, API key, secret, credential, GitHub PAT, Atlassian token, JWT và credential nằm trong URL; thông báo lưu trữ được giới hạn tối đa 1000 ký tự.
+  * **Jira Integration:** `JiraSyncService` sử dụng bộ lọc dùng chung trước khi ghi lỗi vào `SyncLog`.
+  * **GitHub Integration:** `GitHubCheckRunSyncService`, `GitHubCommitSyncService`, `GitHubPullRequestSyncService` và `GitHubRepositorySyncService` đều làm sạch thông báo ngoại lệ trước khi ghi vào `SyncLog`.
+  * **API Exception:** `GlobalExceptionHandler` làm sạch thông báo `GitHubApiException` và `JiraApiException` trước khi tạo response; response không chứa stack trace.
+  * **Kiểm thử (Test):** Có unit test cho từng nhóm pattern nhạy cảm, test lỗi của cả bốn GitHub sync service để kiểm tra dữ liệu thực tế ghi vào `SyncLog`, và test response lỗi GitHub/Jira không trả token về client.
+* **Kết luận & Đánh giá:** **ĐẠT**. Token và Authorization header được che trước khi lưu log hoặc trả qua API, đồng thời đã có test hồi quy cho các đường xử lý lỗi liên quan.
 ---
 
 ### 2.4. Phân quyền truy cập cấu hình (RBAC)
@@ -170,7 +171,7 @@ src/main/java/vn/edu/cnpm/projectsupport/integration/jira/service/JiraSyncServic
 
 PS D:\java\project\java> ./mvnw clean test
 [INFO] Results:
-[INFO] Tests run: 394, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Tests run: 403, Failures: 0, Errors: 0, Skipped: 0
 [INFO] ------------------------------------------------------------------------
 [INFO] BUILD SUCCESS
 [INFO] ------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 package vn.edu.cnpm.projectsupport.integration.github;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -291,6 +292,24 @@ class GitHubCheckRunSyncServiceTest {
 
         verify(syncLogRepository, Mockito.atLeastOnce())
                 .save(any(SyncLog.class));
+    }
+
+    @Test
+    void failedSyncMasksCredentialsBeforeWritingSyncLog() {
+        stubSyncContext();
+        String token = "gho_" + "c".repeat(36);
+        when(gitHubRestClient.getCheckRunsPage(config, "main", 1))
+                .thenThrow(new RuntimeException("Bearer " + token + " secret=unsafe-secret"));
+
+        assertThatThrownBy(() -> service.syncCheckRuns(1L, config))
+                .isInstanceOf(RuntimeException.class);
+
+        var logCaptor = org.mockito.ArgumentCaptor.forClass(SyncLog.class);
+        verify(syncLogRepository, Mockito.times(2)).save(logCaptor.capture());
+        String errorMessage = logCaptor.getAllValues().getLast().getErrorMessage();
+        assertThat(errorMessage)
+                .contains("[REDACTED]")
+                .doesNotContain(token, "unsafe-secret");
     }
 
     @Test

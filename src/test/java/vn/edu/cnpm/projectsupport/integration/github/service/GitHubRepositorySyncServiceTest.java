@@ -153,6 +153,28 @@ class GitHubRepositorySyncServiceTest {
         assertThat(failedLog.getErrorMessage()).doesNotContain("github-token");
     }
 
+    @Test
+    void failedSyncMasksCredentialsBeforeWritingSyncLog() {
+        String token = "ghs_" + "d".repeat(36);
+        when(projectRepository.existsById(PROJECT_ID)).thenReturn(true);
+        when(configRepository.findGitHubConfigByProjectId(PROJECT_ID))
+                .thenReturn(Optional.of(integrationConfig));
+        when(secretService.decrypt("encrypted-token")).thenReturn("github-token");
+        when(syncLogRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(gitHubRestClient.getRepository(any())).thenThrow(
+                new RuntimeException("Authorization=Bearer " + token + "; password=unsafe-password"));
+
+        assertThatThrownBy(() -> service.syncRepository(PROJECT_ID))
+                .isInstanceOf(RuntimeException.class);
+
+        ArgumentCaptor<SyncLog> logCaptor = ArgumentCaptor.forClass(SyncLog.class);
+        verify(syncLogRepository, times(2)).save(logCaptor.capture());
+        String errorMessage = logCaptor.getAllValues().getLast().getErrorMessage();
+        assertThat(errorMessage)
+                .contains("[REDACTED]")
+                .doesNotContain(token, "unsafe-password");
+    }
+
     private vn.edu.cnpm.projectsupport.integration.github.GitHubRepository remoteRepository(String defaultBranch) {
         return new vn.edu.cnpm.projectsupport.integration.github.GitHubRepository(
                 GITHUB_REPOSITORY_ID,

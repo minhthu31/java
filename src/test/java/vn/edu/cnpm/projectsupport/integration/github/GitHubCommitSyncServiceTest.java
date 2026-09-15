@@ -1,6 +1,7 @@
 package vn.edu.cnpm.projectsupport.integration.github;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -52,8 +53,8 @@ class GitHubCommitSyncServiceTest {
         config = new GitHubClientConfig(
                 "octocat", "Hello-World", "token", "2026-03-10", Duration.ofSeconds(5));
         localRepository = mock(GitHubRepository.class);
-        when(localRepository.getId()).thenReturn(20L);
-        when(repositoryRepository.findByProjectIdAndGithubRepositoryId(1L, 123L))
+        lenient().when(localRepository.getId()).thenReturn(20L);
+        lenient().when(repositoryRepository.findByProjectIdAndGithubRepositoryId(1L, 123L))
                 .thenReturn(Optional.of(localRepository));
         when(syncLogRepository.save(any(SyncLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(taskLinkService.linkCommit(eq(1L), any(GitHubCommit.class)))
@@ -158,6 +159,23 @@ class GitHubCommitSyncServiceTest {
         ArgumentCaptor<SyncLog> logCaptor = ArgumentCaptor.forClass(SyncLog.class);
         verify(syncLogRepository, times(2)).save(logCaptor.capture());
         assertThat(logCaptor.getAllValues().getLast().getStatus().name()).isEqualTo("FAILED");
+    }
+
+    @Test
+    void failedSyncMasksCredentialsBeforeWritingSyncLog() {
+        String token = "ghp_" + "a".repeat(36);
+        when(client.getRepository(config)).thenThrow(
+                new RuntimeException("Authorization: Bearer " + token + " password=unsafe-value"));
+
+        assertThatThrownBy(() -> service.syncCommits(1L, config))
+                .isInstanceOf(RuntimeException.class);
+
+        ArgumentCaptor<SyncLog> logCaptor = ArgumentCaptor.forClass(SyncLog.class);
+        verify(syncLogRepository, times(2)).save(logCaptor.capture());
+        String errorMessage = logCaptor.getAllValues().getLast().getErrorMessage();
+        assertThat(errorMessage)
+                .contains("[REDACTED]")
+                .doesNotContain(token, "unsafe-value");
     }
 
     @Test

@@ -18,6 +18,7 @@ import org.springframework.web.context.request.WebRequest;
 import vn.edu.cnpm.projectsupport.common.api.ApiError;
 import vn.edu.cnpm.projectsupport.integration.github.GitHubApiException;
 import vn.edu.cnpm.projectsupport.integration.jira.exception.JiraApiException;
+import vn.edu.cnpm.projectsupport.security.SensitiveDataSanitizer;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -147,7 +148,9 @@ public class GlobalExceptionHandler {
 
         ApiError apiError = new ApiError(
                 exception.getErrorCode(),
-                exception.getMessage(),
+                SensitiveDataSanitizer.sanitize(
+                        exception,
+                        "GitHub API request failed"),
                 exception.getCorrelationId(),
                 Map.of(),
                 Instant.now(),
@@ -169,7 +172,9 @@ public class GlobalExceptionHandler {
         ApiError apiError =
                 new ApiError(
                         exception.getErrorCode(),
-                        exception.getMessage(),
+                        SensitiveDataSanitizer.sanitize(
+                                exception,
+                                "Jira API request failed"),
                         exception.getCorrelationId(),
                         Map.of(),
                         Instant.now(),

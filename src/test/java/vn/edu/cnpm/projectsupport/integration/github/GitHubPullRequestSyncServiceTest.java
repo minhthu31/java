@@ -1,6 +1,7 @@
 package vn.edu.cnpm.projectsupport.integration.github;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -65,10 +66,10 @@ class GitHubPullRequestSyncServiceTest {
         config = new GitHubClientConfig(
                 "octocat", "Hello-World", "token", "2026-03-10", Duration.ofSeconds(5));
         localRepository = mock(GitHubRepository.class);
-        when(localRepository.getId()).thenReturn(20L);
-        when(repositoryRepository.findByProjectIdAndGithubRepositoryId(1L, 123L))
+        lenient().when(localRepository.getId()).thenReturn(20L);
+        lenient().when(repositoryRepository.findByProjectIdAndGithubRepositoryId(1L, 123L))
                 .thenReturn(Optional.of(localRepository));
-        when(repositoryRepository.saveAndFlush(any(GitHubRepository.class))).thenReturn(localRepository);
+        lenient().when(repositoryRepository.saveAndFlush(any(GitHubRepository.class))).thenReturn(localRepository);
         when(syncLogRepository.save(any(SyncLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(taskLinkService.linkPullRequest(eq(1L), any()))
                 .thenReturn(new GitHubTaskLinkResult(0, 0, 0, List.of()));
@@ -138,6 +139,23 @@ class GitHubPullRequestSyncServiceTest {
         ArgumentCaptor<SyncLog> logCaptor = ArgumentCaptor.forClass(SyncLog.class);
         verify(syncLogRepository, times(2)).save(logCaptor.capture());
         assertThat(logCaptor.getAllValues().getLast().getErrorCode()).isEqualTo("PARTIAL_SYNC");
+    }
+
+    @Test
+    void failedSyncMasksCredentialsBeforeWritingSyncLog() {
+        String token = "github_pat_" + "b".repeat(50);
+        when(client.getRepository(config)).thenThrow(
+                new RuntimeException("token=" + token + "; Authorization: Basic unsafe-basic-value"));
+
+        assertThatThrownBy(() -> service.syncPullRequests(1L, config))
+                .isInstanceOf(RuntimeException.class);
+
+        ArgumentCaptor<SyncLog> logCaptor = ArgumentCaptor.forClass(SyncLog.class);
+        verify(syncLogRepository, times(2)).save(logCaptor.capture());
+        String errorMessage = logCaptor.getAllValues().getLast().getErrorMessage();
+        assertThat(errorMessage)
+                .contains("[REDACTED]")
+                .doesNotContain(token, "unsafe-basic-value");
     }
 
     @Test
