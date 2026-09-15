@@ -202,6 +202,25 @@ class GitHubRestClientTest {
     }
 
     @Test
+    void readsPullRequestCommitPageAndPaginationLink() throws Exception {
+        String url = "https://api.github.com/repos/octocat/Hello-World/pulls/12/commits?per_page=100&page=1";
+        String nextUrl = "https://api.github.com/repos/octocat/Hello-World/pulls/12/commits?per_page=100&page=2";
+        when(transport.get(eq(url), any(), any()))
+                .thenReturn(new GitHubHttpResponse(200, """
+                        [{"sha":"0123456789abcdef0123456789abcdef01234567",
+                          "html_url":"https://github.com/octocat/Hello-World/commit/0123456789abcdef0123456789abcdef01234567",
+                          "commit":{"message":"CNPM-95 sync"}}]
+                        """, Map.of("link", "<" + nextUrl + ">; rel=\"next\"")));
+
+        GitHubPage<GitHubCommit> page = client.getPullRequestCommitsPage(config, 12, 1);
+
+        assertThat(page.items()).singleElement()
+                .extracting(GitHubCommit::sha)
+                .isEqualTo("0123456789abcdef0123456789abcdef01234567");
+        assertThat(page.nextUrl()).isEqualTo(nextUrl);
+    }
+
+    @Test
     void maps401ToAuthenticationErrorWithoutProviderBody() throws Exception {
         when(transport.get(any(), any(), any()))
                 .thenReturn(new GitHubHttpResponse(401, "{\"message\":\"secret token leaked\"}", Map.of()));
