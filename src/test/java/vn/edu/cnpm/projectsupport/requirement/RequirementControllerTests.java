@@ -31,6 +31,7 @@ import vn.edu.cnpm.projectsupport.common.api.PageResponse;
 import vn.edu.cnpm.projectsupport.common.exception.GlobalExceptionHandler;
 import vn.edu.cnpm.projectsupport.common.exception.ResourceNotFoundException;
 import vn.edu.cnpm.projectsupport.security.JwtTokenProvider;
+import vn.edu.cnpm.projectsupport.security.ProjectAuthorizationService;
 
 @WebMvcTest(RequirementController.class)
 @Import(GlobalExceptionHandler.class)
@@ -50,6 +51,9 @@ class RequirementControllerTests {
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
 
+    @MockitoBean(name = "projectAuthorization")
+    private ProjectAuthorizationService projectAuthorization;
+
     @MockitoBean(name = "jpaMappingContext")
     private JpaMetamodelMappingContext jpaMappingContext;
 
@@ -57,6 +61,9 @@ class RequirementControllerTests {
 
     @BeforeEach
     void setUp() {
+        when(projectAuthorization.canViewRequirements(PROJECT_ID)).thenReturn(true);
+        when(projectAuthorization.canManageRequirements(PROJECT_ID)).thenReturn(true);
+
         response = new RequirementResponse();
         response.setId(REQUIREMENT_ID);
         response.setProjectId(PROJECT_ID);

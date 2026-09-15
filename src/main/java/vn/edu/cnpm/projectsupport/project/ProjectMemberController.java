@@ -19,7 +19,7 @@ public class ProjectMemberController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('TEAM_LEADER')")
+    @PreAuthorize("hasRole('TEAM_LEADER') and @projectAuthorization.canManageTasks(#projectId)")
     public ApiResponse<List<ProjectMemberResponse>> getActiveMembers(
             @PathVariable Long projectId) {
         return ApiResponse.success(projectMemberService.getActiveMembers(projectId));
