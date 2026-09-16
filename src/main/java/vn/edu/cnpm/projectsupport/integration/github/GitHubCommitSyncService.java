@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import vn.edu.cnpm.projectsupport.integration.github.repository.GitHubIntegrationConfigRepository;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.IntegrationConfig;
 import vn.edu.cnpm.projectsupport.security.IntegrationSecretService;
+import vn.edu.cnpm.projectsupport.security.SensitiveDataSanitizer;
 import vn.edu.cnpm.projectsupport.integration.github.domain.GitHubCommit;
 import vn.edu.cnpm.projectsupport.integration.github.domain.GitHubRepository;
 import vn.edu.cnpm.projectsupport.integration.github.domain.UserExternalAccount;
@@ -242,10 +243,8 @@ public class GitHubCommitSyncService {
     }
 
     private String safeMessage(RuntimeException exception) {
-        if (exception instanceof GitHubApiException) {
-            return exception.getMessage();
-        }
-        String message = exception.getMessage();
-        return message == null || message.isBlank() ? "GitHub commit sync failed" : message;
+        return SensitiveDataSanitizer.sanitize(
+                exception,
+                "GitHub commit sync failed");
     }
 }

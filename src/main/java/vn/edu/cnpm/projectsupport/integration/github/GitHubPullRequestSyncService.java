@@ -23,6 +23,7 @@ import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLog;
 import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLogStatus;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.SyncLogRepository;
 import vn.edu.cnpm.projectsupport.security.IntegrationSecretService;
+import vn.edu.cnpm.projectsupport.security.SensitiveDataSanitizer;
 
 @Service
 public class GitHubPullRequestSyncService {
@@ -363,11 +364,9 @@ public class GitHubPullRequestSyncService {
     }
 
     private String safeMessage(RuntimeException exception) {
-        if (exception instanceof GitHubApiException) {
-            return exception.getMessage();
-        }
-        String message = exception.getMessage();
-        return message == null || message.isBlank() ? "GitHub pull request sync failed" : message;
+        return SensitiveDataSanitizer.sanitize(
+                exception,
+                "GitHub pull request sync failed");
     }
 
     private record CommitLinkSyncResult(int linksCreated, int unlinkedActivities) {

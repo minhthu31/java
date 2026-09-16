@@ -40,6 +40,7 @@ import vn.edu.cnpm.projectsupport.project.domain.Project;
 import vn.edu.cnpm.projectsupport.project.repository.ProjectRepository;
 import vn.edu.cnpm.projectsupport.sprint.domain.Sprint;
 import vn.edu.cnpm.projectsupport.sprint.repository.SprintRepository;
+import vn.edu.cnpm.projectsupport.security.SensitiveDataSanitizer;
 
 @Service
 public class JiraSyncService {
@@ -758,34 +759,9 @@ private String extractErrorCode(
 
 private String safeMessage(
         Exception e) {
-
-    String message =
-            e.getMessage();
-
-    if (message == null
-            || message.isBlank()) {
-
-        return e.getClass()
-                .getSimpleName();
-    }
-
-    String sanitized =
-            message
-                    .replaceAll(
-                            "(?i)authorization\\s*[:=]\\s*bearer\\s+[^\\s,;]+",
-                            "authorization: Bearer [REDACTED]")
-                    .replaceAll(
-                            "(?i)bearer\\s+[^\\s,;]+",
-                            "Bearer [REDACTED]")
-                    .replaceAll(
-                            "(?i)(password|token|api[-_]?key|secret|credentials?)\\s*[:=]\\s*[^\\s,;]+",
-                            "[REDACTED]");
-
-    return sanitized.substring(
-            0,
-            Math.min(
-                    sanitized.length(),
-                    1000));
+    return SensitiveDataSanitizer.sanitize(
+            e,
+            e == null ? "Jira sync failed" : e.getClass().getSimpleName());
 }
 
 }

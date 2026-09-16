@@ -17,6 +17,7 @@ import vn.edu.cnpm.projectsupport.integration.jira.domain.SyncLogStatus;
 import vn.edu.cnpm.projectsupport.integration.jira.repository.SyncLogRepository;
 import vn.edu.cnpm.projectsupport.project.repository.ProjectRepository;
 import vn.edu.cnpm.projectsupport.security.IntegrationSecretService;
+import vn.edu.cnpm.projectsupport.security.SensitiveDataSanitizer;
 
 @Service
 public class GitHubRepositorySyncService {
@@ -178,13 +179,9 @@ public class GitHubRepositorySyncService {
     }
 
     private String safeMessage(RuntimeException exception) {
-        if (exception instanceof GitHubApiException) {
-            return exception.getMessage();
-        }
-        if (exception instanceof IllegalArgumentException) {
-            return exception.getMessage();
-        }
-        return "Không thể đồng bộ GitHub repository";
+        return SensitiveDataSanitizer.sanitize(
+                exception,
+                "Không thể đồng bộ GitHub repository");
     }
 
     private record RepositoryCoordinates(String owner, String repository) {
