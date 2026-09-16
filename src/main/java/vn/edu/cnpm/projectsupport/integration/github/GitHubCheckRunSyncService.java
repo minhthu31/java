@@ -10,6 +10,7 @@ import java.util.UUID;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 import vn.edu.cnpm.projectsupport.integration.github.domain.GitHubCheckRun;
@@ -32,6 +33,8 @@ import vn.edu.cnpm.projectsupport.security.SensitiveDataSanitizer;
 
 @Service
 public class GitHubCheckRunSyncService {
+    @Autowired(required = false)
+    private vn.edu.cnpm.projectsupport.autotest.AutomationIncidentService automationIncidentService;
 
     private static final String ENTITY_TYPE = "GITHUB_CHECK_RUN_SYNC";
     private static final int PAGE_SIZE = 100;
@@ -291,6 +294,12 @@ public class GitHubCheckRunSyncService {
                                             remoteCheckRun.completedAt());
 
                                     updated++;
+                                }
+
+                                if (automationIncidentService != null) {
+                                    automationIncidentService.recordCheckResult(
+                                            projectId, remoteCheckRun.id(), remoteCheckRun.name(),
+                                            remoteCheckRun.headSha(), remoteCheckRun.htmlUrl(), status);
                                 }
 
                                 synced++;

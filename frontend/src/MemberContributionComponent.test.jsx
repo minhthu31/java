@@ -101,6 +101,9 @@ describe("CNPM-107 MemberContributionComponent Tests", () => {
 
         await waitFor(() => {
             expect(screen.getByText("Sprint 1")).toBeInTheDocument();
+            expect(
+                screen.getByText(/Chưa ghi nhận thông tin đóng góp nào/),
+            ).toBeInTheDocument();
         });
 
         service.getMemberContributions.mockClear();
@@ -113,7 +116,12 @@ describe("CNPM-107 MemberContributionComponent Tests", () => {
         });
         fireEvent.click(screen.getByRole("button", { name: /Áp dụng/i }));
 
-        expect(service.getMemberContributions).toHaveBeenCalledTimes(1);
+        await waitFor(() => {
+            expect(service.getMemberContributions).toHaveBeenCalledTimes(1);
+            expect(
+                screen.getByText(/Chưa ghi nhận thông tin đóng góp nào/),
+            ).toBeInTheDocument();
+        });
 
         fireEvent.change(screen.getByLabelText("Từ ngày"), {
             target: { value: "2026-09-16" },

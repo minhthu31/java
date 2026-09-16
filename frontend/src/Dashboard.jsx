@@ -9,6 +9,7 @@ import { GitHubConfigComponent } from "./GitHubConfigComponent";
 import { GitHubActivityComponent } from "./GitHubActivityComponent";
 import { ProjectProgressComponent } from "./ProjectProgressComponent";
 import MemberContributionComponent from "./MemberContributionComponent";
+import OrganizationManagement from "./OrganizationManagement";
 
 const getRoleTitle = (role) => {
     switch (role) {
@@ -204,7 +205,7 @@ export default function Dashboard({ title }) {
                 </div>
 
                 {selectedProjectId && (
-                    <div
+                <div
                         style={{
                             padding: "8px 18px",
                             backgroundColor: "rgba(255, 255, 255, 0.12)",
@@ -258,6 +259,14 @@ export default function Dashboard({ title }) {
                         boxShadow: "0 2px 10px rgba(37, 99, 235, 0.03)",
                     }}
                 >
+                    {(userRole === "ADMIN" || userRole === "LECTURER") && (
+                        <button type="button" onClick={() => setActiveTab("organization")}
+                            style={{padding:"10px 14px",marginBottom:"8px",width:"100%",textAlign:"left",
+                                background:activeTab === "organization" ? "#2563eb" : "transparent",
+                                color:activeTab === "organization" ? "white" : "#334155"}}>
+                            {userRole === "ADMIN" ? "Nhóm & Giảng viên" : "Quản lý sinh viên"}
+                        </button>
+                    )}
                     <button
                         type="button"
                         onClick={() => setActiveTab("requirements")}
@@ -465,6 +474,9 @@ export default function Dashboard({ title }) {
                         minHeight: "480px",
                     }}
                 >
+                    {activeTab === "organization" && (
+                        <OrganizationManagement role={userRole} />
+                    )}
                     {activeTab === "github-config" && (
                         <div style={{ padding: "24px" }}>
                             <GitHubConfigComponent
