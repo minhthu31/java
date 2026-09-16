@@ -5,6 +5,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +24,9 @@ import vn.edu.cnpm.projectsupport.security.SensitiveDataSanitizer;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger LOGGER =
+            LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiError> handleValidation(
@@ -201,12 +206,23 @@ public class GlobalExceptionHandler {
             Exception exception,
             WebRequest request) {
 
-        return error(
-                HttpStatus.INTERNAL_SERVER_ERROR,
-                "INTERNAL_ERROR",
-                "Hệ thống gặp lỗi ngoài dự kiến",
-                Map.of(),
-                request);
+        String correlationId = correlationId(request);
+        LOGGER.error(
+                "Unhandled request failure correlationId={} type={} message={}",
+                correlationId,
+                exception.getClass().getName(),
+                SensitiveDataSanitizer.sanitize(
+                        exception,
+                        "Unexpected request failure"));
+
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiError(
+                        "INTERNAL_ERROR",
+                        "Hệ thống gặp lỗi ngoài dự kiến",
+                        correlationId,
+                        Map.of(),
+                        Instant.now()));
     }
 
     private ResponseEntity<ApiError> error(

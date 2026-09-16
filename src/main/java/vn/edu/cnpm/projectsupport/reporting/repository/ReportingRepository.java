@@ -177,12 +177,22 @@ public interface ReportingRepository extends JpaRepository<vn.edu.cnpm.projectsu
             @Param("asOf") Instant asOf);
 
     @Query(value = """
-            SELECT CASE WHEN COUNT(a.id) > 0 THEN TRUE ELSE FALSE END
+            SELECT COUNT(a.id)
               FROM user_external_accounts a
              WHERE a.user_id = :memberId
                AND a.provider = 'GITHUB'
             """, nativeQuery = true)
-    boolean isGithubLinked(@Param("memberId") Long memberId);
+    long countGithubAccounts(@Param("memberId") Long memberId);
+
+    /**
+     * Do not project a native SQL boolean here. MySQL exposes the result of a
+     * CASE/boolean expression as a numeric value while H2 exposes a Boolean,
+     * which caused the production report endpoint to fail with a
+     * Long-to-Boolean ClassCastException.
+     */
+    default boolean isGithubLinked(Long memberId) {
+        return countGithubAccounts(memberId) > 0L;
+    }
 
 
 

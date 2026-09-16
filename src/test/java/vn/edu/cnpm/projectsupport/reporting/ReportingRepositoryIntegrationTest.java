@@ -203,6 +203,16 @@ class ReportingRepositoryIntegrationTest {
         assertThat(members).extracting(ProjectRepository.ActiveMemberProjection::getId).contains(leaderId, memberId);
     }
 
+    @Test
+    void githubLinkCheckUsesPortableNumericCount() {
+        assertThat(reportingRepository.isGithubLinked(memberId)).isFalse();
+
+        insertAccount();
+
+        assertThat(reportingRepository.countGithubAccounts(memberId)).isEqualTo(1L);
+        assertThat(reportingRepository.isGithubLinked(memberId)).isTrue();
+    }
+
     private long insertAccount() {
         jdbcTemplate.update("""
                 INSERT INTO user_external_accounts
