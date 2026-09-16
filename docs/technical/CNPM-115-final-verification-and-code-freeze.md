@@ -21,6 +21,8 @@ Kết quả chạy ngày 16/09/2026 trên nhánh release candidate:
 - Frontend production build: biên dịch thành công.
 - Flyway: áp dụng đủ 15 migration lên schema test rỗng.
 - Sprint API mới: 2 integration test pass, bao gồm dữ liệu và RBAC.
+- MySQL 8.4.11 smoke test: Flyway nâng schema thật từ V11 lên V14 thành công, backend
+  báo `UP`, đăng nhập `leader.test` thành công và Sprint API trả đúng Sprint của project.
 
 | Hạng mục | Cách kiểm tra | Kết quả mong đợi |
 | --- | --- | --- |
@@ -49,11 +51,13 @@ Flyway migrate và xác nhận ứng dụng đăng nhập được.
 - [x] Backend full suite pass trên release candidate (`417/417`).
 - [x] Frontend test (`113/113`) và production build pass trên release candidate.
 - [x] Migration tự động chạy được từ schema test rỗng.
+- [x] Release candidate khởi động và chạy API thành công trên MySQL 8.4.11 đã nâng lên V14.
 - [x] Luồng Jira–GitHub–Report có integration test cho happy path, idempotency và partial failure.
 - [x] Không phát hiện secret thật trong cây mã nguồn hiện tại.
 - [x] Không còn lỗi chặn đã biết trong contract frontend–backend của màn hình tiến độ.
 - [x] Các vấn đề còn lại được ghi tại mục 5.
-- [ ] N xác nhận smoke test trên schema MySQL mới của máy demo.
+- [ ] N xác nhận thêm một lượt migration trên schema MySQL hoàn toàn mới của máy demo
+  (tài khoản `cnpm_user` hiện chỉ có quyền trên database hiện hữu nên không thể tự tạo schema mới).
 - [ ] MT ghi commit SHA cuối cùng và xác nhận đóng băng trên Jira/PR.
 
 ## 5. Vấn đề còn lại sau đóng băng

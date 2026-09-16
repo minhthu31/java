@@ -102,6 +102,7 @@ Kết quả đạt: Sprint tải được, Task thuộc đúng project/Sprint v�
 - [x] GitHub repository/commit/PR sync và liên kết Task có test.
 - [x] Báo cáo tiến độ và đóng góp thành viên có test.
 - [x] Backend verify (`417/417`), frontend test (`113/113`) và production build chạy thành công trên release candidate.
+- [x] Backend khởi động trên MySQL 8.4.11, health `UP`, đăng nhập và tải Sprint thành công.
 - [x] Có kịch bản dự phòng khi Jira/GitHub không truy cập được.
 - [x] Đã phân người trình bày từng phần.
 
