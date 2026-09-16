@@ -2,6 +2,11 @@
 
 Ứng dụng web hỗ trợ quản lý yêu cầu và tiến độ đồ án CNPM thông qua Jira và GitHub.
 
+Tài liệu chuẩn bị phiên bản cuối:
+
+- [CNPM-115 — Tổng kiểm thử và đóng băng code](docs/technical/CNPM-115-final-verification-and-code-freeze.md)
+- [CNPM-118 — Kịch bản diễn tập demo và chốt Sprint 5](docs/technical/CNPM-118-final-demo-rehearsal.md)
+
 ## Phạm vi
 
 Website không thay thế Jira hoặc GitHub:
