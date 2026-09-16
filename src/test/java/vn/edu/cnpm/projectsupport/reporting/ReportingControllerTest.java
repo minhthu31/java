@@ -22,19 +22,22 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import vn.edu.cnpm.projectsupport.reporting.dto.ProjectProgressResponse;
 import vn.edu.cnpm.projectsupport.reporting.dto.ReportFilterRequest;
 import vn.edu.cnpm.projectsupport.reporting.service.ProgressReportService;
+import vn.edu.cnpm.projectsupport.reporting.service.CommitQualityService;
 
 @ExtendWith(MockitoExtension.class)
 class ReportingControllerTest {
 
     @Mock
     private ProgressReportService service;
+    @Mock
+    private CommitQualityService commitQualityService;
 
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new ReportingController(service))
+                .standaloneSetup(new ReportingController(service, commitQualityService))
                 .build();
     }
 
